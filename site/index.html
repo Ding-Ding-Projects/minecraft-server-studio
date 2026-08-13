@@ -104,19 +104,20 @@
           <aside class="local-boundary-card"><strong>Static local-only page</strong><span>No account, analytics, page-initiated network operation, installer service, server process, or file upload happens here. The verified installer link hands off to the browser.</span></aside>
         </section>
 
-        <nav class="feature-tabs" aria-label="Feature preview destinations">
-          <a class="feature-tab" href="#status-preview">Status</a>
-          <a class="feature-tab" href="#settings-preview">Settings</a>
-          <a class="feature-tab" href="#docs-preview">Docs</a>
-          <a class="feature-tab" href="#converter-preview">Converter</a>
-          <a class="feature-tab" href="#authenticator-preview">Authenticator</a>
-          <a class="feature-tab" href="#ollama-preview">Ollama</a>
-          <a class="feature-tab" href="#history-preview">History</a>
-          <a class="feature-tab" href="#notifications-preview">Notifications</a>
-          <a class="feature-tab" href="#downloads-preview">Downloads</a>
-        </nav>
+        <section class="tabbed-preview-workspace" data-mss-tab-workspace="true">
+          <nav class="feature-tabs" aria-label="Feature preview destinations">
+            <a class="feature-tab" data-mss-tab-id="feature-status" href="#status-preview">Status</a>
+            <a class="feature-tab" data-mss-tab-id="feature-settings" href="#settings-preview">Settings</a>
+            <a class="feature-tab" data-mss-tab-id="feature-docs" href="#docs-preview">Docs</a>
+            <a class="feature-tab" data-mss-tab-id="feature-converter" href="#converter-preview">Converter</a>
+            <a class="feature-tab" data-mss-tab-id="feature-authenticator" href="#authenticator-preview">Authenticator</a>
+            <a class="feature-tab" data-mss-tab-id="feature-ollama" href="#ollama-preview">Ollama</a>
+            <a class="feature-tab" data-mss-tab-id="feature-history" href="#history-preview">History</a>
+            <a class="feature-tab" data-mss-tab-id="feature-notifications" href="#notifications-preview">Notifications</a>
+            <a class="feature-tab" data-mss-tab-id="feature-downloads" href="#downloads-preview">Downloads</a>
+          </nav>
 
-        <section class="preview-grid" aria-label="Browser-local feature previews">
+          <section class="preview-grid" aria-label="Browser-local feature previews">
           <article class="preview-panel" id="status-preview" data-contract-id="status-preview" data-contract-surface="status" tabindex="-1" aria-labelledby="status-preview-heading">
             <div class="panel-heading"><div><p class="eyebrow">Browser-local status</p><h2 id="status-preview-heading">Current public-page state</h2></div><span class="preview-status">No host connection</span></div>
             <p data-contract-hook="status-summary">This status panel reports browser-local page state and the static verified release metadata embedded in this page. It does not inspect a server, desktop app, release workflow, installer download, local runtime, or user account.</p>
@@ -140,10 +141,26 @@
               <label data-contract-hook="english-funny-level" data-mss-suppressed-by-school="true"><span data-mss-copy="english-funny-label">English tone</span><input type="range" min="1" max="5" value="2" aria-describedby="english-funny-help" /><output aria-live="polite">2 of 5</output><small id="english-funny-help" data-mss-copy="english-funny-help">1 is fully serious; 5 is maximum playfulness. Warnings stay factual at every level.</small></label>
               <label data-contract-hook="cantonese-funny-level" data-mss-suppressed-by-school="true"><span data-mss-copy="cantonese-funny-label">Cantonese tone</span><input type="range" min="1" max="5" value="2" aria-describedby="cantonese-funny-help" /><output aria-live="polite">2 of 5</output><small id="cantonese-funny-help" data-mss-copy="cantonese-funny-help">This independent setting changes Cantonese presentation only.</small></label>
               <label data-contract-hook="emoji-toggle"><span data-mss-copy="emoji-label">Show emojis in browser-local notices</span><input type="checkbox" checked /><small data-mss-copy="emoji-help">Emojis decorate notices only; labels, actions, and factual messages stay unchanged.</small></label>
-              <label data-contract-hook="appearance-theme"><span>Theme</span><select><option>System default</option><option>Light</option><option>Dark</option></select></label>
+              <label data-contract-hook="appearance-theme"><span>Theme</span><select><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select><small>Use the browser preference, a light surface, or a dark surface for this public page.</small></label>
+              <label data-contract-hook="density"><span>Density</span><select><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select><small>Changes spacing on this public page only.</small></label>
+              <label data-contract-hook="appearance-accent"><span>Accent color</span><input type="color" value="#3f7cff" data-mss-page-accent="true" /><output data-mss-page-accent-value="true">#3f7cff</output><small>Choose a local page accent. It is not an application identity or installer setting.</small></label>
+              <label data-contract-hook="appearance-font-family"><span>Typography family</span><select data-mss-page-font-family="true"><option value="system-ui">System interface</option><option value="ui-sans-serif">Generic sans serif</option><option value="ui-serif">Generic serif</option><option value="ui-monospace">Generic monospace</option></select><small>Only browser-provided generic families are offered; this page does not download fonts.</small></label>
+              <label data-contract-hook="appearance-font-scale"><span>Typography scale</span><input type="range" min="0.75" max="2" step="0.05" value="1" data-mss-page-font-scale="true" /><output data-mss-page-font-scale-value="true">100%</output><small>Changes readable browser-local page text without changing desktop-app text.</small></label>
+              <label data-contract-hook="appearance-font-weight"><span>Typography weight</span><select data-mss-page-font-weight="true"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select><small>Uses a safe browser font-weight value for this public page.</small></label>
               <label data-contract-hook="app-logo-upload"><span>Custom app logo</span><input type="file" accept="image/*" /><small>Preview input only; no image leaves this page.</small></label>
               <label data-contract-hook="personal-vocabulary-upload" data-mss-suppressed-by-school="true"><span data-mss-copy="vocabulary-label">Personal vocabulary JSON</span><input type="file" accept="application/json,.json" aria-describedby="personal-vocabulary-help" /><small id="personal-vocabulary-help" data-mss-copy="vocabulary-help">Version 1 JSON is checked locally before a bounded cache can be applied. The source file name and path are not retained.</small><button type="button" data-mss-vocabulary-clear="true">Clear local vocabulary</button><output data-mss-vocabulary-status="true" aria-live="polite">No validated vocabulary JSON is loaded in this browser.</output></label>
             </div>
+            <section class="appearance-editor" data-contract-hook="appearance-editor" aria-labelledby="appearance-editor-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Browser-local appearance editor</p><h3 id="appearance-editor-heading">Edit the page or a feature tab</h3></div><span class="preview-status">Foundation controls</span></div>
+              <p>Choose a target, then apply an accent, text scale, and text weight. The selected three values persist locally. This foundation does not yet edit every visual property or every rendered element.</p>
+              <fieldset class="appearance-target-picker"><legend>Appearance target</legend><div class="segmented-controls" role="group" aria-label="Appearance editor target"><button type="button" data-mss-appearance-target="page" aria-pressed="true">Entire public page</button><button type="button" data-mss-appearance-target="tab-strip" aria-pressed="false">Feature tab strip</button><button type="button" data-mss-appearance-target="selected-tab" aria-pressed="false">Selected feature tab</button></div></fieldset>
+              <div class="appearance-editor-grid">
+                <label><span>Accent color</span><input type="color" value="#3f7cff" data-mss-editor-accent="true" /><output data-mss-editor-accent-value="true">#3f7cff</output></label>
+                <label><span>Text scale</span><input type="range" min="0.75" max="2" step="0.05" value="1" data-mss-editor-font-scale="true" /><output data-mss-editor-font-scale-value="true">100%</output></label>
+                <label><span>Text weight</span><select data-mss-editor-font-weight="true"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></label>
+              </div>
+              <div class="inline-controls"><button type="button" data-mss-editor-apply="true">Apply local appearance</button><button type="button" data-mss-editor-reset="true">Reset selected target</button><output data-mss-editor-status="true" role="status" aria-live="polite">The entire public page is selected.</output></div>
+            </section>
             <section class="school-mode-card" data-contract-hook="school-mode" aria-labelledby="school-mode-heading">
               <div><p class="eyebrow" data-mss-copy="school-eyebrow">Browser-local presentation lock</p><h3 id="school-mode-heading"><span data-mss-school-name="true">School mode</span></h3></div>
               <p data-mss-school-summary="true">This browser-local mode temporarily forces English and hides the language, funny-level, and personal-vocabulary controls. It is a user-experience lock, not security protection.</p>
@@ -222,6 +239,7 @@
             <div class="download-state-grid" data-contract-hook="download-states"><article><strong>Start</strong><span><a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.72.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" rel="noopener">Direct installer link available</a> for Windows x64 version 0.1.0.</span></article><article><strong>Progress</strong><span>No transfer is in progress or monitored on this static page.</span></article><article><strong>Completion</strong><span>This page cannot confirm whether a download or installation completed.</span></article></div>
             <a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.72.1" rel="noopener">View release v0.1.0-build.72.1</a>
           </article>
+          </section>
         </section>
 
         <section class="install-section" id="install">

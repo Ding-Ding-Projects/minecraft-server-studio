@@ -19,6 +19,7 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
   var main = document.getElementById("main-content") || document.querySelector("main");
   var contract = window.MinecraftServerStudioContract || null;
   var dialog = null;
+  var tabWorkspace = null;
   var generated = "data-mss-generated";
   var originals = new Map();
   var state = {
@@ -242,15 +243,19 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
   function activate(targetId, source) {
     var target = document.getElementById(targetId);
     if (!target) return;
-    all(".feature-tab").forEach(function (tab) {
-      var active = tab.getAttribute("href") === "#" + targetId;
-      tab.setAttribute("aria-selected", String(active));
-      tab.setAttribute("aria-current", active ? "page" : "false");
-      tab.toggleAttribute("data-mss-active-tab", active);
-    });
-    all("[data-contract-surface]").forEach(function (surface) {
-      surface.toggleAttribute("data-mss-active-surface", surface === target);
-    });
+    var isTabPanel = Boolean(tabWorkspace && typeof tabWorkspace.hasPanel === "function" && tabWorkspace.hasPanel(targetId));
+    if (isTabPanel) {
+      tabWorkspace.selectPanel(targetId);
+      all(".feature-tab").forEach(function (tab) {
+        var active = tab.getAttribute("href") === "#" + targetId;
+        tab.setAttribute("aria-selected", String(active));
+        tab.setAttribute("aria-current", active ? "page" : "false");
+        tab.toggleAttribute("data-mss-active-tab", active);
+      });
+      all("[data-contract-surface]").forEach(function (surface) {
+        surface.toggleAttribute("data-mss-active-surface", surface === target);
+      });
+    }
     focus(target);
     var heading = one("h2, h3", target);
     live("Opened " + ((source && source.textContent) || (heading && heading.textContent) || targetId).trim() + " in this browser-local preview.");
@@ -281,7 +286,33 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
   }
 
   function themeValue(label) {
-    return { "System default": "system", "Light": "light", "Dark": "dark" }[label] || "system";
+    return { system: "system", light: "light", dark: "dark", "System default": "system", Light: "light", Dark: "dark" }[label] || "system";
+  }
+
+  function safeHexColor(value, fallback) {
+    var candidate = typeof value === "string" ? value.trim() : "";
+    return /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/.test(candidate) ? candidate.slice(0, 7).toLowerCase() : fallback;
+  }
+
+  function accentInk(value) {
+    var color = safeHexColor(value, "#3f7cff");
+    var red = parseInt(color.slice(1, 3), 16);
+    var green = parseInt(color.slice(3, 5), 16);
+    var blue = parseInt(color.slice(5, 7), 16);
+    return (red * 299 + green * 587 + blue * 114) / 1000 > 158 ? "#06213b" : "#ffffff";
+  }
+
+  function fontFamily(value) {
+    return {
+      "system-ui": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "ui-sans-serif": "ui-sans-serif, system-ui, sans-serif",
+      "ui-serif": "ui-serif, Georgia, serif",
+      "ui-monospace": "ui-monospace, SFMono-Regular, Consolas, monospace"
+    }[value] || "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  }
+
+  function scaleLabel(value) {
+    return Math.round((Number(value) || 1) * 100) + "%";
   }
 
   function syncSettingsControls(surface) {
@@ -293,12 +324,24 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
     var cantoneseTone = one('[data-contract-hook="cantonese-funny-level"] input[type="range"]', scope);
     var theme = one('[data-contract-hook="appearance-theme"] select', scope);
     var density = one('[data-contract-hook="density"] select', scope);
+    var accent = one('[data-mss-page-accent]', scope);
+    var accentOutput = one('[data-mss-page-accent-value]', scope);
+    var family = one('[data-mss-page-font-family]', scope);
+    var scale = one('[data-mss-page-font-scale]', scope);
+    var scaleOutput = one('[data-mss-page-font-scale-value]', scope);
+    var weight = one('[data-mss-page-font-weight]', scope);
     var emojiToggle = one('[data-contract-hook="emoji-toggle"] input[type="checkbox"]', scope);
     if (language) language.value = settings.languageMode;
     if (englishTone) englishTone.value = String(settings.funnyLevel.english);
     if (cantoneseTone) cantoneseTone.value = String(settings.funnyLevel.cantonese);
-    if (theme) theme.value = themeLabel(settings.appearance.theme);
+    if (theme) theme.value = settings.appearance.theme;
     if (density) density.value = settings.appearance.density;
+    if (accent) accent.value = safeHexColor(settings.appearance.accent, "#3f7cff");
+    if (accentOutput) accentOutput.textContent = safeHexColor(settings.appearance.accent, "#3f7cff");
+    if (family) family.value = settings.appearance.font.family;
+    if (scale) scale.value = String(settings.appearance.font.scale);
+    if (scaleOutput) scaleOutput.textContent = scaleLabel(settings.appearance.font.scale);
+    if (weight) weight.value = String(settings.appearance.font.weight);
     if (emojiToggle) emojiToggle.checked = settings.showDialogEmoji;
     [["english-funny-level", settings.funnyLevel.english], ["cantonese-funny-level", settings.funnyLevel.cantonese]].forEach(function (item) {
       var output = one('[data-contract-hook="' + item[0] + '"] output', scope);
@@ -313,11 +356,21 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
     root.dataset.mssDensity = settings.appearance.density;
     root.dataset.mssEmojis = settings.showDialogEmoji ? "on" : "off";
     root.dataset.mssSchoolMode = settings.schoolMode && settings.schoolMode.active ? "on" : "off";
+    var accent = safeHexColor(settings.appearance.accent, "#3f7cff");
+    root.style.setProperty("--primary", accent);
+    root.style.setProperty("--accent", accent);
+    root.style.setProperty("--primary-ink", accentInk(accent));
+    root.style.setProperty("--mss-page-font-family", fontFamily(settings.appearance.font.family));
+    root.style.setProperty("--mss-page-font-scale", String(settings.appearance.font.scale));
+    root.style.setProperty("--mss-page-font-size", (16 * settings.appearance.font.scale).toFixed(2) + "px");
+    root.style.setProperty("--mss-page-font-weight", String(settings.appearance.font.weight));
     root.lang = settings.languageMode === "cantonese" ? "zh-Hant" : "en";
     renderLocalizedCopy();
     renderSchoolModeControls();
     var output = one("[data-mss-settings-status]");
     if (output) output.textContent = "Browser-local preferences are stored in this browser's local storage: " + languageLabel(settings.languageMode) + ", " + themeLabel(settings.appearance.theme) + " theme, " + settings.appearance.density + " density. Nothing is sent to a server or desktop application.";
+    renderAppearanceEditor();
+    if (tabWorkspace && typeof tabWorkspace.render === "function") tabWorkspace.render();
     emit("settings-changed", settings);
   }
 
@@ -393,19 +446,52 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
       });
     }
 
-    if (!one('[data-contract-hook="density"]', surface)) {
-      var density = made("select");
+    var density = one('[data-contract-hook="density"] select', surface);
+    if (!density) {
+      density = made("select");
       [["comfortable", "Comfortable"], ["compact", "Compact"], ["spacious", "Spacious"]].forEach(function (pair) {
         var option = document.createElement("option");
         option.value = pair[0];
         option.textContent = pair[1];
         density.appendChild(option);
       });
-      density.addEventListener("change", function () {
-        updateSettings({ appearance: { density: density.value } }, "density", "Density preference updated for this browser-local preview.");
-      });
       grid.appendChild(generatedSetting("Density", density, "density"));
     }
+    density.addEventListener("change", function () {
+      updateSettings({ appearance: { density: density.value } }, "density", "Density preference updated for this browser-local preview.");
+    });
+
+    var accent = one('[data-mss-page-accent]', surface);
+    if (accent) {
+      accent.addEventListener("input", function () {
+        var output = one('[data-mss-page-accent-value]', surface);
+        if (output) output.textContent = safeHexColor(accent.value, "#3f7cff");
+      });
+      accent.addEventListener("change", function () {
+        updateSettings({ appearance: { accent: safeHexColor(accent.value, "#3f7cff") } }, "appearance-accent", "Browser-local page accent updated.");
+      });
+    }
+
+    var family = one('[data-mss-page-font-family]', surface);
+    if (family) family.addEventListener("change", function () {
+      updateSettings({ appearance: { font: { family: family.value } } }, "appearance-font-family", "Browser-local typography family updated.");
+    });
+
+    var scale = one('[data-mss-page-font-scale]', surface);
+    if (scale) {
+      scale.addEventListener("input", function () {
+        var output = one('[data-mss-page-font-scale-value]', surface);
+        if (output) output.textContent = scaleLabel(scale.value);
+      });
+      scale.addEventListener("change", function () {
+        updateSettings({ appearance: { font: { scale: Number(scale.value) } } }, "appearance-font-scale", "Browser-local typography scale updated.");
+      });
+    }
+
+    var weight = one('[data-mss-page-font-weight]', surface);
+    if (weight) weight.addEventListener("change", function () {
+      updateSettings({ appearance: { font: { weight: Number(weight.value) } } }, "appearance-font-weight", "Browser-local typography weight updated.");
+    });
 
     var emojiToggle = one('[data-contract-hook="emoji-toggle"] input[type="checkbox"]', surface);
     if (!emojiToggle) {
@@ -457,6 +543,135 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
     syncSettingsControls(surface);
     applySettingsPresentation();
     renderVocabularyStatus();
+  }
+
+  function appearanceEditorElements() {
+    var surface = one('[data-contract-hook="appearance-editor"]');
+    if (!surface) return {};
+    return {
+      surface: surface,
+      accent: one('[data-mss-editor-accent]', surface),
+      accentOutput: one('[data-mss-editor-accent-value]', surface),
+      scale: one('[data-mss-editor-font-scale]', surface),
+      scaleOutput: one('[data-mss-editor-font-scale-value]', surface),
+      weight: one('[data-mss-editor-font-weight]', surface),
+      apply: one('[data-mss-editor-apply]', surface),
+      reset: one('[data-mss-editor-reset]', surface),
+      status: one('[data-mss-editor-status]', surface),
+      targets: all('[data-mss-appearance-target]', surface)
+    };
+  }
+
+  function tabSnapshot() {
+    return hasContractMethod("getAccessibleTabs") ? safely(function () { return contract.getAccessibleTabs(); }, null) : null;
+  }
+
+  function appearanceTargetLabel(target) {
+    return {
+      page: "the entire public page",
+      "tab-strip": "the feature tab strip",
+      "selected-tab": "the selected feature tab"
+    }[target] || "the entire public page";
+  }
+
+  function appearanceValuesForTarget(target) {
+    var settings = state.settings && state.settings.appearance || defaultSettings().appearance;
+    var snapshot = tabSnapshot();
+    if (target === "tab-strip" && snapshot && snapshot.appearance) return snapshot.appearance;
+    if (target === "selected-tab" && snapshot) {
+      var selected = snapshot.tabs.filter(function (tab) { return tab.id === snapshot.activeId; })[0];
+      if (selected && selected.appearance) {
+        return {
+          accent: selected.appearance.accent || snapshot.appearance && snapshot.appearance.accent || settings.accent,
+          fontScale: selected.appearance.fontScale !== 1 ? selected.appearance.fontScale : snapshot.appearance && snapshot.appearance.fontScale || 1,
+          fontWeight: selected.appearance.fontWeight !== 600 ? selected.appearance.fontWeight : snapshot.appearance && snapshot.appearance.fontWeight || 600
+        };
+      }
+    }
+    return { accent: settings.accent, fontScale: settings.font.scale, fontWeight: settings.font.weight };
+  }
+
+  function renderAppearanceEditor() {
+    var elements = appearanceEditorElements();
+    if (!elements.surface) return;
+    var target = elements.surface.getAttribute("data-mss-appearance-target-state") || "page";
+    var snapshot = tabSnapshot();
+    var selected = snapshot && snapshot.tabs.filter(function (tab) { return tab.id === snapshot.activeId; })[0];
+    if (target === "selected-tab" && !selected) target = "page";
+    elements.surface.setAttribute("data-mss-appearance-target-state", target);
+    elements.targets.forEach(function (buttonElement) {
+      buttonElement.setAttribute("aria-pressed", String(buttonElement.getAttribute("data-mss-appearance-target") === target));
+    });
+    var values = appearanceValuesForTarget(target);
+    var accent = safeHexColor(values.accent, "#3f7cff");
+    var scale = Math.max(0.75, Math.min(2, Number(values.fontScale) || 1));
+    var weight = Number(values.fontWeight) || 400;
+    if (elements.accent && document.activeElement !== elements.accent) elements.accent.value = accent;
+    if (elements.accentOutput) elements.accentOutput.textContent = accent;
+    if (elements.scale && document.activeElement !== elements.scale) elements.scale.value = String(scale);
+    if (elements.scaleOutput) elements.scaleOutput.textContent = scaleLabel(scale);
+    if (elements.weight && document.activeElement !== elements.weight) elements.weight.value = String(weight);
+    if (elements.status) {
+      var selectedLabel = selected ? selected.label : "no feature tab";
+      elements.status.textContent = "Editing " + appearanceTargetLabel(target) + (target === "selected-tab" ? ": " + selectedLabel + "." : ".") + " Accent, text scale, and text weight are available in this browser-local foundation.";
+    }
+  }
+
+  function editorValues(elements) {
+    return {
+      accent: safeHexColor(elements.accent && elements.accent.value, "#3f7cff"),
+      fontScale: Math.max(0.75, Math.min(2, Number(elements.scale && elements.scale.value) || 1)),
+      fontWeight: Number(elements.weight && elements.weight.value) || 400
+    };
+  }
+
+  function applyAppearanceEditor(reset) {
+    var elements = appearanceEditorElements();
+    if (!elements.surface) return;
+    var target = elements.surface.getAttribute("data-mss-appearance-target-state") || "page";
+    var values = reset ? { accent: target === "selected-tab" ? "" : "#3f7cff", fontScale: 1, fontWeight: target === "tab-strip" || target === "selected-tab" ? 600 : 400 } : editorValues(elements);
+    var result = null;
+    if (target === "page") {
+      result = hasContractMethod("updateSettings") ? safely(function () {
+        return contract.updateSettings({ appearance: { accent: values.accent, font: { scale: values.fontScale, weight: values.fontWeight } } }, "appearance-editor-page");
+      }, null) : null;
+    } else if (target === "tab-strip") {
+      result = hasContractMethod("setTabAppearance") ? safely(function () { return contract.setTabAppearance(values); }, null) : null;
+    } else {
+      var snapshot = tabSnapshot();
+      var selected = snapshot && snapshot.tabs.filter(function (tab) { return tab.id === snapshot.activeId; })[0];
+      result = selected && hasContractMethod("updateTab") ? safely(function () { return contract.updateTab(selected.id, { appearance: values }); }, null) : null;
+    }
+    if (!result || result.ok !== true) {
+      notify("warning", (result && result.error) || "The browser-local appearance change could not be saved.");
+      return;
+    }
+    hydrateContractState();
+    syncSettingsControls();
+    applySettingsPresentation();
+    renderAppearanceEditor();
+    notify("info", (reset ? "Reset " : "Updated ") + appearanceTargetLabel(target) + " in this browser-local preview.");
+  }
+
+  function installAppearanceEditor() {
+    var elements = appearanceEditorElements();
+    if (!elements.surface || elements.surface.getAttribute("data-mss-appearance-editor-ready") === "true") return;
+    elements.surface.setAttribute("data-mss-appearance-editor-ready", "true");
+    elements.targets.forEach(function (buttonElement) {
+      buttonElement.addEventListener("click", function () {
+        elements.surface.setAttribute("data-mss-appearance-target-state", buttonElement.getAttribute("data-mss-appearance-target") || "page");
+        renderAppearanceEditor();
+      });
+    });
+    if (elements.accent) elements.accent.addEventListener("input", function () {
+      if (elements.accentOutput) elements.accentOutput.textContent = safeHexColor(elements.accent.value, "#3f7cff");
+    });
+    if (elements.scale) elements.scale.addEventListener("input", function () {
+      if (elements.scaleOutput) elements.scaleOutput.textContent = scaleLabel(elements.scale.value);
+    });
+    if (elements.apply) elements.apply.addEventListener("click", function () { applyAppearanceEditor(false); });
+    if (elements.reset) elements.reset.addEventListener("click", function () { applyAppearanceEditor(true); });
+    renderAppearanceEditor();
   }
 
   function escapePattern(value) {
@@ -920,7 +1135,7 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
           status.textContent = matches.length + " matching feature preview" + (matches.length === 1 ? "." : "s.");
           if (!matches.length) globalResults.textContent = "No matching feature preview was found.";
           matches.slice(0, 12).forEach(function (item) {
-            var target = item.id || (item.closest("[id]") && item.closest("[id]").id);
+            var target = typeof options.targetFor === "function" ? options.targetFor(item) : (item.id || (item.closest("[id]") && item.closest("[id]").id));
             var heading = one("h2, h3", item);
             var resultButton = button((heading ? heading.textContent : textOf(item)).trim(), function () {
               if (target) activate(target, resultButton);
@@ -1020,54 +1235,516 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
   }
 
   function installTabsAndArticles() {
-    var tabList = one(".feature-tabs");
-    var tabs = all(".feature-tab", tabList);
-    if (hasContractMethod("setTeleportHandler")) {
-      safely(function () {
-        contract.setTeleportHandler(function (command) {
-          if (!command || !command.elementId) return false;
-          activate(command.elementId);
-          return true;
-        });
-      });
+    var workspace = one("[data-mss-tab-workspace]");
+    var tabList = workspace && one(".feature-tabs", workspace);
+    var sourceTabs = all(".feature-tab", tabList);
+    if (!workspace || !tabList || !sourceTabs.length) return;
+
+    var definitions = sourceTabs.map(function (tab, index) {
+      var panelId = (tab.getAttribute("href") || "").replace(/^#/, "");
+      return {
+        id: tab.getAttribute("data-mss-tab-id") || "feature-tab-" + index,
+        label: (tab.textContent || panelId || "Feature preview").trim(),
+        panelId: panelId,
+        element: tab
+      };
+    }).filter(function (definition) { return definition.panelId && document.getElementById(definition.panelId); });
+    var definitionById = {};
+    var definitionByPanel = {};
+    definitions.forEach(function (definition) {
+      definitionById[definition.id] = definition;
+      definitionByPanel[definition.panelId] = definition;
+    });
+    var groupDefinitions = [
+      { id: "tab-group-workspace", label: "Workspace", color: "#3f7cff", tabs: ["feature-status", "feature-settings", "feature-docs"] },
+      { id: "tab-group-local-tools", label: "Local tools", color: "#2f9a71", tabs: ["feature-converter", "feature-authenticator", "feature-ollama", "feature-history"] },
+      { id: "tab-group-release", label: "Release information", color: "#b97823", tabs: ["feature-notifications", "feature-downloads"] }
+    ];
+    var defaultGroupForTab = {};
+    groupDefinitions.forEach(function (group) {
+      group.tabs.forEach(function (id) { defaultGroupForTab[id] = group.id; });
+    });
+    var controls = null;
+    var dockSelect = null;
+    var overflowList = null;
+    var stripSearch = null;
+    var groupSearch = null;
+    var masterSearch = null;
+    var masterResults = null;
+    var masterSources = null;
+    var groupResults = null;
+    var groupName = null;
+    var manageList = null;
+    var responsiveQuery = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 820px)") : null;
+
+    function snapshot() {
+      return tabSnapshot();
     }
-    if (tabList && tabs.length) {
-      tabList.setAttribute("role", "tablist");
-      tabList.setAttribute("aria-label", "Feature previews");
-      tabs.forEach(function (tab, index) {
-        var targetId = (tab.getAttribute("href") || "").replace(/^#/, "");
-        tab.setAttribute("role", "tab");
-        tab.setAttribute("aria-controls", targetId);
-        tab.setAttribute("aria-selected", String(index === 0));
-        tab.addEventListener("click", function () {
-          if (targetId) window.setTimeout(function () { activate(targetId, tab); }, 0);
-        });
-        tab.addEventListener("keydown", function (event) {
-          var position = tabs.indexOf(tab);
-          var next = null;
-          if (event.key === "ArrowRight" || event.key === "ArrowDown") next = tabs[(position + 1) % tabs.length];
-          if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = tabs[(position - 1 + tabs.length) % tabs.length];
-          if (event.key === "Home") next = tabs[0];
-          if (event.key === "End") next = tabs[tabs.length - 1];
-          if (!next) return;
-          event.preventDefault();
-          next.focus();
-          next.click();
-        });
-        if (hasContractMethod("registerCommand")) {
+
+    function ensureTabState() {
+      if (!hasContractMethod("registerTab")) return;
+      var current = snapshot();
+      if (!current) return;
+      var knownGroups = current.groups.map(function (group) { return group.id; });
+      groupDefinitions.forEach(function (group) {
+        if (knownGroups.indexOf(group.id) === -1 && hasContractMethod("createTabGroup")) {
+          safely(function () { return contract.createTabGroup(group); });
+        }
+      });
+      current = snapshot() || current;
+      definitions.forEach(function (definition) {
+        var existing = current.tabs.filter(function (tab) { return tab.id === definition.id; })[0];
+        if (!existing) {
           safely(function () {
-            contract.registerCommand({
-              id: "destination-" + targetId,
-              title: (tab.textContent || targetId).trim(),
-              description: "Open this browser-local product preview.",
-              group: "Browser-local destinations",
-              elementId: targetId,
-              keywords: [targetId, "preview", "local"]
+            return contract.registerTab({
+              id: definition.id,
+              label: definition.label,
+              panelId: definition.panelId,
+              groupId: defaultGroupForTab[definition.id] || null,
+              pinned: definition.id === "feature-status",
+              closable: false
             });
           });
+        } else if (!existing.groupId && defaultGroupForTab[definition.id]) {
+          safely(function () { return contract.updateTab(definition.id, { groupId: defaultGroupForTab[definition.id] }); });
+        }
+      });
+      hydrateContractState();
+    }
+
+    function responsiveOrientation(tabState) {
+      if (responsiveQuery && responsiveQuery.matches) return "horizontal";
+      return tabState && tabState.orientation || "vertical";
+    }
+
+    function targetPanel(id) {
+      var definition = definitionById[id];
+      return definition && document.getElementById(definition.panelId);
+    }
+
+    function tabRecords(tabState) {
+      return tabState && Array.isArray(tabState.tabs) ? tabState.tabs.filter(function (tab) { return definitionById[tab.id]; }) : [];
+    }
+
+    function selectTab(id, focusPanel) {
+      if (!definitionById[id]) return;
+      if (hasContractMethod("setActiveTab")) {
+        var result = safely(function () { return contract.setActiveTab(id); }, null);
+        if (!result || result.ok !== true) {
+          notify("warning", (result && result.error) || "The selected tab could not be saved locally.");
+          return;
+        }
+        hydrateContractState();
+      }
+      render();
+      if (focusPanel) {
+        var panel = targetPanel(id);
+        if (panel) focus(panel);
+      }
+      var definition = definitionById[id];
+      live("Opened " + definition.label + " in this browser-local preview.");
+    }
+
+    function focusTabFrom(currentId, direction) {
+      var stateSnapshot = snapshot();
+      var records = tabRecords(stateSnapshot).filter(function (record) {
+        var group = stateSnapshot.groups.filter(function (item) { return item.id === record.groupId; })[0];
+        return !(group && group.collapsed && record.id !== stateSnapshot.activeId);
+      });
+      if (!records.length) return;
+      var currentIndex = records.map(function (record) { return record.id; }).indexOf(currentId);
+      var next = records[(currentIndex + direction + records.length) % records.length];
+      if (!next) return;
+      selectTab(next.id, false);
+      var definition = definitionById[next.id];
+      if (definition) definition.element.focus();
+    }
+
+    function wireTab(definition) {
+      var tab = definition.element;
+      if (tab.getAttribute("data-mss-tab-wired") === "true") return;
+      tab.setAttribute("data-mss-tab-wired", "true");
+      tab.addEventListener("click", function (event) {
+        event.preventDefault();
+        selectTab(definition.id, true);
+      });
+      tab.addEventListener("keydown", function (event) {
+        var stateSnapshot = snapshot();
+        var orientation = responsiveOrientation(stateSnapshot);
+        var next = (orientation === "vertical" && event.key === "ArrowDown") || (orientation === "horizontal" && event.key === "ArrowRight");
+        var previous = (orientation === "vertical" && event.key === "ArrowUp") || (orientation === "horizontal" && event.key === "ArrowLeft");
+        if (next || previous) {
+          event.preventDefault();
+          focusTabFrom(definition.id, next ? 1 : -1);
+        } else if (event.key === "Home" || event.key === "End") {
+          event.preventDefault();
+          var records = tabRecords(stateSnapshot);
+          var target = event.key === "Home" ? records[0] : records[records.length - 1];
+          if (target) {
+            selectTab(target.id, false);
+            definitionById[target.id].element.focus();
+          }
+        } else if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectTab(definition.id, true);
         }
       });
     }
+
+    function setDock(value) {
+      var result = hasContractMethod("setTabDock") ? safely(function () { return contract.setTabDock(value); }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The tab dock could not be saved locally.");
+        return;
+      }
+      hydrateContractState();
+      render();
+      notify("info", "Feature tab dock updated for this browser-local preview.");
+    }
+
+    function updateGroup(group) {
+      var result = hasContractMethod("createTabGroup") ? safely(function () { return contract.createTabGroup(group); }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The tab group could not be saved locally.");
+        return;
+      }
+      hydrateContractState();
+      render();
+    }
+
+    function renderOverflow(tabState, records) {
+      if (!overflowList) return;
+      overflowList.replaceChildren();
+      records.forEach(function (record) {
+        var definition = definitionById[record.id];
+        var item = button((record.pinned ? "Pinned · " : "") + definition.label, function () { selectTab(record.id, true); });
+        item.setAttribute("data-mss-overflow-tab", record.id);
+        item.setAttribute("aria-current", String(record.id === tabState.activeId));
+        overflowList.appendChild(item);
+      });
+      if (!records.length) overflowList.textContent = "No feature tabs are registered in this browser-local state.";
+    }
+
+    function renderGroups(tabState, records) {
+      if (!groupResults) return;
+      groupResults.replaceChildren();
+      tabState.groups.forEach(function (group) {
+        var count = records.filter(function (record) { return record.groupId === group.id; }).length;
+        var card = made("article");
+        card.className = "tab-group-result";
+        card.setAttribute("data-mss-tab-group-result", group.id);
+        card.textContent = group.label + " · " + count + " tab" + (count === 1 ? "" : "s") + (group.collapsed ? " · collapsed" : "");
+        groupResults.appendChild(card);
+      });
+      if (!tabState.groups.length) groupResults.textContent = "No browser-local tab groups are configured.";
+    }
+
+    function renderMasterSources(records) {
+      if (!masterSources) return;
+      masterSources.replaceChildren();
+      records.forEach(function (record) {
+        var definition = definitionById[record.id];
+        var source = made("span");
+        source.className = "visually-hidden";
+        source.setAttribute("data-mss-tab-search-source", record.panelId || definition.panelId);
+        source.textContent = definition.label + " " + (record.pinned ? "pinned " : "") + (record.groupId || "ungrouped");
+        masterSources.appendChild(source);
+      });
+    }
+
+    function renderManagement(tabState, records) {
+      if (!manageList) return;
+      manageList.replaceChildren();
+      records.forEach(function (record, index) {
+        var definition = definitionById[record.id];
+        var row = made("li");
+        row.className = "tab-management-row";
+        var opener = button(definition.label, function () { selectTab(record.id, true); });
+        opener.className = "tab-management-open";
+        var pin = button(record.pinned ? "Unpin" : "Pin", function () {
+          var result = hasContractMethod("updateTab") ? safely(function () { return contract.updateTab(record.id, { pinned: !record.pinned }); }, null) : null;
+          if (!result || result.ok !== true) notify("warning", (result && result.error) || "The tab pin state could not be saved locally.");
+          else { hydrateContractState(); render(); }
+        });
+        var previous = button("Move earlier", function () {
+          var result = hasContractMethod("moveTab") ? safely(function () { return contract.moveTab(record.id, Math.max(0, index - 1)); }, null) : null;
+          if (!result || result.ok !== true) notify("warning", (result && result.error) || "The tab could not be reordered locally.");
+          else { hydrateContractState(); render(); }
+        });
+        previous.disabled = index === 0;
+        var next = button("Move later", function () {
+          var result = hasContractMethod("moveTab") ? safely(function () { return contract.moveTab(record.id, Math.min(records.length - 1, index + 1)); }, null) : null;
+          if (!result || result.ok !== true) notify("warning", (result && result.error) || "The tab could not be reordered locally.");
+          else { hydrateContractState(); render(); }
+        });
+        next.disabled = index === records.length - 1;
+        var groupLabel = made("label");
+        groupLabel.textContent = "Group";
+        var groupPicker = made("select");
+        var ungrouped = document.createElement("option");
+        ungrouped.value = "";
+        ungrouped.textContent = "Ungrouped";
+        groupPicker.appendChild(ungrouped);
+        tabState.groups.forEach(function (group) {
+          var option = document.createElement("option");
+          option.value = group.id;
+          option.textContent = group.label;
+          groupPicker.appendChild(option);
+        });
+        groupPicker.value = record.groupId || "";
+        groupPicker.setAttribute("aria-label", "Move " + definition.label + " into a tab group");
+        groupPicker.addEventListener("change", function () {
+          var result = hasContractMethod("updateTab") ? safely(function () { return contract.updateTab(record.id, { groupId: groupPicker.value || null }); }, null) : null;
+          if (!result || result.ok !== true) notify("warning", (result && result.error) || "The tab group could not be saved locally.");
+          else { hydrateContractState(); render(); }
+        });
+        groupLabel.appendChild(groupPicker);
+        row.append(opener, pin, previous, next, groupLabel);
+        manageList.appendChild(row);
+      });
+    }
+
+    function appendGroupHeader(group, tabState) {
+      var header = made("div");
+      header.className = "feature-tab-group-header";
+      header.setAttribute("data-mss-tab-group-header", group.id);
+      header.style.setProperty("--mss-group-color", group.color || "#3f7cff");
+      var toggle = button((group.collapsed ? "Expand " : "Collapse ") + group.label, function () {
+        updateGroup({ id: group.id, label: group.label, color: group.color, collapsed: !group.collapsed });
+      });
+      toggle.setAttribute("aria-expanded", String(!group.collapsed));
+      header.appendChild(toggle);
+      tabList.appendChild(header);
+    }
+
+    function appendTab(record, tabState) {
+      var definition = definitionById[record.id];
+      if (!definition) return;
+      var tab = definition.element;
+      var group = tabState.groups.filter(function (item) { return item.id === record.groupId; })[0];
+      var isActive = record.id === tabState.activeId;
+      var isCollapsed = Boolean(group && group.collapsed && !isActive);
+      var itemAppearance = record.appearance || {};
+      var stripAppearance = tabState.appearance || {};
+      var customAccent = safeHexColor(itemAppearance.accent, "");
+      tab.setAttribute("role", "tab");
+      tab.id = record.tabId || record.id + "-tab";
+      tab.setAttribute("aria-controls", definition.panelId);
+      tab.setAttribute("aria-selected", String(isActive));
+      tab.setAttribute("aria-posinset", String(record.ariaPosInSet || 1));
+      tab.setAttribute("aria-setsize", String(record.ariaSetSize || tabState.tabs.length));
+      tab.setAttribute("aria-current", isActive ? "page" : "false");
+      tab.setAttribute("tabindex", isActive ? "0" : "-1");
+      tab.toggleAttribute("data-mss-active-tab", isActive);
+      tab.toggleAttribute("data-mss-pinned-tab", Boolean(record.pinned));
+      tab.hidden = isCollapsed;
+      tab.style.setProperty("--mss-tab-item-accent", customAccent || stripAppearance.accent || "#3f7cff");
+      var tabScale = itemAppearance.fontScale && itemAppearance.fontScale !== 1 ? itemAppearance.fontScale : stripAppearance.fontScale || 1;
+      var pageScale = state.settings && state.settings.appearance && state.settings.appearance.font ? state.settings.appearance.font.scale : 1;
+      tab.style.setProperty("--mss-tab-item-scale", String(tabScale));
+      tab.style.setProperty("--mss-tab-item-font-size", (16 * pageScale * .82 * tabScale).toFixed(2) + "px");
+      tab.style.setProperty("--mss-tab-item-weight", String(itemAppearance.fontWeight && itemAppearance.fontWeight !== 600 ? itemAppearance.fontWeight : stripAppearance.fontWeight || 600));
+      wireTab(definition);
+      tabList.appendChild(tab);
+    }
+
+    function render() {
+      var tabState = snapshot();
+      if (!tabState) return;
+      var records = tabRecords(tabState);
+      var activeId = tabState.activeId && definitionById[tabState.activeId] ? tabState.activeId : (records[0] && records[0].id);
+      if (activeId && activeId !== tabState.activeId && hasContractMethod("setActiveTab")) {
+        safely(function () { contract.setActiveTab(activeId); });
+        tabState = snapshot() || tabState;
+        records = tabRecords(tabState);
+      }
+      var orientation = responsiveOrientation(tabState);
+      workspace.dataset.mssTabDock = tabState.dock || "left";
+      workspace.dataset.mssTabOrientation = orientation;
+      workspace.dataset.mssTabNarrow = responsiveQuery && responsiveQuery.matches ? "true" : "false";
+      workspace.style.setProperty("--mss-tab-accent", safeHexColor(tabState.appearance && tabState.appearance.accent, "#3f7cff"));
+      workspace.style.setProperty("--mss-tab-font-scale", String(tabState.appearance && tabState.appearance.fontScale || 1));
+      workspace.style.setProperty("--mss-tab-font-weight", String(tabState.appearance && tabState.appearance.fontWeight || 600));
+      tabList.setAttribute("role", "tablist");
+      tabList.setAttribute("aria-label", "Feature previews");
+      tabList.setAttribute("aria-orientation", orientation);
+      tabList.replaceChildren();
+      var pinned = records.filter(function (record) { return record.pinned; });
+      if (pinned.length) {
+        var pinnedHeader = made("div");
+        pinnedHeader.className = "feature-tab-group-header feature-tab-group-header--pinned";
+        pinnedHeader.textContent = "Pinned";
+        tabList.appendChild(pinnedHeader);
+        pinned.forEach(function (record) { appendTab(record, tabState); });
+      }
+      tabState.groups.forEach(function (group) {
+        var grouped = records.filter(function (record) { return !record.pinned && record.groupId === group.id; });
+        if (!grouped.length) return;
+        appendGroupHeader(group, tabState);
+        grouped.forEach(function (record) { appendTab(record, tabState); });
+      });
+      var ungrouped = records.filter(function (record) { return !record.pinned && !record.groupId; });
+      if (ungrouped.length) {
+        var ungroupedHeader = made("div");
+        ungroupedHeader.className = "feature-tab-group-header";
+        ungroupedHeader.textContent = "Ungrouped";
+        tabList.appendChild(ungroupedHeader);
+        ungrouped.forEach(function (record) { appendTab(record, tabState); });
+      }
+      definitions.forEach(function (definition) {
+        var panel = document.getElementById(definition.panelId);
+        var record = records.filter(function (item) { return item.id === definition.id; })[0];
+        if (!panel || !record) return;
+        var selected = record.id === tabState.activeId;
+        panel.setAttribute("role", "tabpanel");
+        panel.setAttribute("aria-labelledby", record.tabId || record.id + "-tab");
+        panel.toggleAttribute("hidden", !selected);
+        panel.toggleAttribute("data-mss-active-surface", selected);
+      });
+      if (dockSelect) dockSelect.value = tabState.dock || "left";
+      renderOverflow(tabState, records);
+      renderGroups(tabState, records);
+      renderMasterSources(records);
+      renderManagement(tabState, records);
+      renderAppearanceEditor();
+    }
+
+    function createControls() {
+      controls = made("section");
+      controls.className = "tab-workspace-controls";
+      controls.setAttribute("aria-label", "Feature tab controls");
+      var dockLabel = made("label");
+      dockLabel.textContent = "Dock feature tabs";
+      dockSelect = made("select");
+      [["left", "Left"], ["right", "Right"], ["top", "Top"], ["bottom", "Bottom"]].forEach(function (pair) {
+        var option = document.createElement("option");
+        option.value = pair[0];
+        option.textContent = pair[1];
+        dockSelect.appendChild(option);
+      });
+      dockSelect.setAttribute("aria-label", "Dock feature tabs at an edge");
+      dockSelect.addEventListener("change", function () { setDock(dockSelect.value); });
+      dockLabel.appendChild(dockSelect);
+
+      var overflow = made("details");
+      overflow.className = "tab-overflow";
+      var overflowSummary = made("summary");
+      overflowSummary.textContent = "All feature tabs";
+      overflowList = made("div");
+      overflowList.className = "tab-overflow-list";
+      overflow.append(overflowSummary, overflowList);
+
+      var discovery = made("section");
+      discovery.className = "tab-discovery";
+      var discoveryHeading = made("h3");
+      discoveryHeading.textContent = "Find and organize feature tabs";
+      var stripLabel = made("label");
+      stripLabel.textContent = "Search this tab strip";
+      stripSearch = made("input");
+      stripSearch.type = "search";
+      stripSearch.placeholder = "Find a visible feature tab";
+      stripLabel.appendChild(stripSearch);
+      var groupsLabel = made("label");
+      groupsLabel.textContent = "Search tab groups";
+      groupSearch = made("input");
+      groupSearch.type = "search";
+      groupSearch.placeholder = "Find a tab group";
+      groupsLabel.appendChild(groupSearch);
+      groupResults = made("div");
+      groupResults.className = "tab-group-results";
+      groupResults.setAttribute("aria-live", "polite");
+      var masterLabel = made("label");
+      masterLabel.textContent = "Search all feature tabs";
+      masterSearch = made("input");
+      masterSearch.type = "search";
+      masterSearch.placeholder = "Find a feature tab across groups";
+      masterLabel.appendChild(masterSearch);
+      masterResults = made("div");
+      masterResults.className = "tab-master-results";
+      masterResults.setAttribute("aria-live", "polite");
+      masterSources = made("div");
+      masterSources.className = "visually-hidden";
+      var createLabel = made("label");
+      createLabel.textContent = "New tab group";
+      groupName = made("input");
+      groupName.type = "text";
+      groupName.maxLength = 120;
+      groupName.placeholder = "Name a browser-local group";
+      createLabel.appendChild(groupName);
+      var createButton = button("Create tab group", function () {
+        var label = (groupName.value || "").trim();
+        if (!label) {
+          notify("warning", "Enter a visible tab-group name before creating it.");
+          groupName.focus();
+          return;
+        }
+        var result = hasContractMethod("createTabGroup") ? safely(function () { return contract.createTabGroup({ label: label, color: "#3f7cff", collapsed: false }); }, null) : null;
+        if (!result || result.ok !== true) notify("warning", (result && result.error) || "The tab group could not be created locally.");
+        else { groupName.value = ""; hydrateContractState(); render(); notify("info", "Browser-local tab group created."); }
+      });
+      discovery.append(discoveryHeading, stripLabel, groupsLabel, groupResults, masterLabel, masterResults, masterSources, createLabel, createButton);
+
+      var manager = made("section");
+      manager.className = "tab-manager";
+      var managerHeading = made("h3");
+      managerHeading.textContent = "Manage feature tabs";
+      var managerCopy = made("p");
+      managerCopy.textContent = "Pin, reorder, or place a browser-local feature tab in a group. These controls do not close a desktop document or act on a server.";
+      manageList = made("ul");
+      manageList.className = "tab-management-list";
+      manager.append(managerHeading, managerCopy, manageList);
+      controls.append(dockLabel, overflow, discovery, manager);
+      workspace.insertBefore(controls, tabList);
+
+      makeRegexBuilder(stripSearch, {
+        label: "this tab strip",
+        scope: discovery,
+        candidates: function () { return sourceTabs.filter(function (tab) { return !tab.hidden; }); }
+      });
+      makeRegexBuilder(groupSearch, {
+        label: "tab groups",
+        scope: discovery,
+        candidates: function () { return all("[data-mss-tab-group-result]", groupResults); }
+      });
+      makeRegexBuilder(masterSearch, {
+        label: "all feature tabs",
+        scope: discovery,
+        globalResults: masterResults,
+        candidates: function () { return all("[data-mss-tab-search-source]", masterSources); },
+        targetFor: function (item) { return item.getAttribute("data-mss-tab-search-source"); }
+      });
+    }
+
+    ensureTabState();
+    createControls();
+    definitions.forEach(function (definition) {
+      if (hasContractMethod("registerCommand")) {
+        safely(function () {
+          contract.registerCommand({
+            id: "destination-" + definition.panelId,
+            title: definition.label,
+            description: "Open this browser-local product preview.",
+            group: "Browser-local destinations",
+            elementId: definition.panelId,
+            keywords: [definition.panelId, "preview", "local", "tab"]
+          });
+        });
+      }
+    });
+    tabWorkspace = {
+      hasPanel: function (panelId) { return Boolean(definitionByPanel[panelId]); },
+      selectPanel: function (panelId) {
+        var definition = definitionByPanel[panelId];
+        if (definition) selectTab(definition.id, false);
+      },
+      render: render
+    };
+    if (responsiveQuery) {
+      var updateResponsive = function () { render(); };
+      if (typeof responsiveQuery.addEventListener === "function") responsiveQuery.addEventListener("change", updateResponsive);
+      else if (typeof responsiveQuery.addListener === "function") responsiveQuery.addListener(updateResponsive);
+    }
+    render();
     all('[data-contract-hook="documentation-tabs"] a[href^="#"], .feature-card a[href^="#"]').forEach(function (link) {
       link.addEventListener("click", function () {
         var targetId = (link.getAttribute("href") || "").replace(/^#/, "");
@@ -2665,6 +3342,7 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
       ] },
       { id: "settings", label: "Settings and appearance preview", route: "#settings-preview", features: [
         inventoryFeature("settings-controls", "Visible browser-local language, independently persisted funny-level, and notice-emoji controls", "in-progress", "These controls operate this public page rather than delegating to the installed application.", universalControlsCore),
+        inventoryFeature("appearance-tab-foundation", "Browser-local appearance and feature-tab foundation", "in-progress", "Theme, density, accent, safe generic typography, docked feature tabs, groups, pins, order, searches, and bounded appearance targets are wired locally. The full per-element and proof contract remains incomplete.", universalControlsCore),
         inventoryFeature("personal-vocabulary", "Personal vocabulary JSON loader", "in-progress", "Strict version-1 parser and revalidation protect the local cache; no file name, path, upload, or telemetry.", universalControlsCore),
         inventoryFeature("renamed-presentation-mode", "Renamed browser-local presentation mode", "in-progress", "The local one-way verifier controls English-only presentation and suppression; it is a user-experience lock, not security protection.", universalControlsCore)
       ] },
@@ -2825,6 +3503,7 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
     installSettings();
     installSchoolMode();
     installTabsAndArticles();
+    installAppearanceEditor();
     installCollapsibleLists();
     installConverterPlanner();
     installOllamaPreview();
