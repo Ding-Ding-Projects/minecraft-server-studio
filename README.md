@@ -13,7 +13,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Configure gameplay, world generation, network/RCON, Java runtime, resource-pack, plugin, and server-property settings with switches, sliders, number steppers, selects, type-ahead version input, file pickers, and browse controls.
 - Start and stop a local Java process safely without a shell, read live output, and send console commands.
 - Inspect, dependency-plan, stage, and atomically promote local Paper/Spigot plugin JARs through a file picker without acquiring third-party downloads.
-- Inspect local files through a bounded byte-based file-converter queue and review an honest offline adapter catalog. The current package lists unavailable PDF, image, audio, video, archive, structured-data, text, and binary adapters without claiming a conversion engine is bundled.
+- Convert a direct local file through bounded app-owned UTF-8 text, validated JSON/CSV/TSV, limited YAML-style, Base64, or hex routes. The native save dialog requires a new output name; the source remains unchanged, persistent converter records retain no full paths or content, and unavailable PDF/media/archive/workbook routes stay visibly disabled.
 - Open a validated selected server folder or an existing application-created export in a discovered Visual Studio Code candidate or an explicitly selected local executable. Visual Studio Code is the preferred generated-export handoff; the application uses direct local process arguments and does not claim cloud editing, a guessed output path, or an editor save.
 - Use the CLI for setup, foreground operation, protected loopback RCON commands, plugin installation, and configuration automation.
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
@@ -133,7 +133,7 @@ The companion site's installer handoff accepts only an embedded fixed, immutable
 - [Local Ollama suite foundation](docs/features/local-ollama-suite.md)
 - [Browser-local Ollama observer](docs/features/browser-local-ollama-observer.md)
 - [Windows release packaging metadata](docs/features/release-packaging.md)
-- [Local file-converter foundation](docs/features/file-converter.md)
+- [Local app-owned file converter](docs/features/file-converter.md)
 - [Browser-local companion-site file converter](docs/features/browser-local-file-converter.md)
 - [Browser-local history and safe exports](docs/features/browser-local-history-and-safe-exports.md)
 - [Browser-local notification center and destructive confirmation](docs/features/browser-local-notifications-and-confirmation.md)

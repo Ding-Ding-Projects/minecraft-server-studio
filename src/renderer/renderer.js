@@ -53,6 +53,7 @@ const state = {
   },
   converterSnapshot: null,
   converterSource: null,
+  converterTargetId: '',
   converterRegexBuilderOpen: false,
   narrationSchedule: null,
   narratorRuntime: null,
@@ -3053,7 +3054,9 @@ function converterAdapterSearchText(adapter) {
 
 function converterStatusState(value) {
   if (value === 'ready') return 'idle';
-  if (value === 'unavailable') return 'failed';
+  if (value === 'converted') return 'complete';
+  if (value === 'converting' || value === 'cancelling') return 'waiting';
+  if (value === 'unavailable' || value === 'failed') return 'failed';
   return value || 'idle';
 }
 
@@ -3067,6 +3070,66 @@ function renderConverterRegexBuilder(evaluation) {
   if (feedback) feedback.textContent = evaluation.feedback;
 }
 
+function renderConverterOutput(snapshot, source) {
+  const host = $('#converter-output-controls');
+  if (!host) return;
+  host.replaceChildren();
+  if (!source) {
+    host.append(statusRecord('No active local source', 'Choose a direct local file first. The converter will not infer a path or begin a conversion automatically.', 'idle'));
+    return;
+  }
+  const targets = Array.isArray(source.availableTargets) ? source.availableTargets : [];
+  if (!targets.length) {
+    host.append(statusRecord('No safe output is available', source.detail || 'This source is outside the declared in-process conversion bounds. The source file was not changed.', converterStatusState(source.state)));
+    return;
+  }
+  if (!targets.some((target) => target.id === state.converterTargetId)) state.converterTargetId = targets[0].id;
+  const target = targets.find((entry) => entry.id === state.converterTargetId) || targets[0];
+  if (source.state === 'converting' || source.state === 'cancelling') {
+    const waiting = statusRecord('Local conversion in progress', source.detail || 'The converter is working only on the selected bounded local source.', 'waiting');
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'outlined-action';
+    cancel.textContent = 'Cancel before write';
+    cancel.addEventListener('click', cancelConverterSource);
+    host.append(waiting, cancel);
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'converter-target-row';
+  const label = document.createElement('label');
+  label.className = 'field';
+  const labelText = document.createElement('span');
+  labelText.textContent = 'Convert to';
+  const select = document.createElement('select');
+  select.id = 'converter-target-select';
+  for (const entry of targets) {
+    const option = document.createElement('option');
+    option.value = entry.id;
+    option.textContent = entry.label;
+    select.append(option);
+  }
+  select.value = target.id;
+  select.addEventListener('change', () => {
+    state.converterTargetId = select.value;
+    renderConverterOutput(snapshot, source);
+  });
+  label.append(labelText, select);
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'primary-action';
+  action.textContent = 'Choose output name and convert';
+  action.addEventListener('click', convertConverterSource);
+  row.append(label, action);
+  const disclosure = document.createElement('p');
+  disclosure.className = 'muted converter-output-disclosure';
+  disclosure.textContent = target.disclosure || 'The source is not changed. The native save dialog must select a new local output name.';
+  const result = source.state === 'converted'
+    ? statusRecord('Latest output completed', source.detail || 'A local output was written. Choose another target only to create another new output.', 'complete')
+    : statusRecord('Ready for an explicit local conversion', source.detail || 'Select one available target and choose a new local output name.', 'idle');
+  host.append(row, disclosure, result);
+}
+
 function renderConverter() {
   const snapshot = state.converterSnapshot;
   const sourceSummary = $('#converter-source-summary');
@@ -3076,22 +3139,23 @@ function renderConverter() {
   const queue = $('#converter-queue');
   if (!sourceSummary || !sourcePath || !catalog || !catalogSummary || !queue) return;
 
-  const source = state.converterSource;
+  const source = snapshot?.active || state.converterSource;
   if (source) {
-    sourcePath.value = source.sourcePath || '';
-    sourceSummary.dataset.state = 'waiting';
+    sourcePath.value = source.fileName || 'Selected local file';
+    sourceSummary.dataset.state = converterStatusState(source.state || 'ready');
     sourceSummary.replaceChildren(
-      Object.assign(document.createElement('strong'), { textContent: `${source.fileName} — inspection recorded` }),
-      Object.assign(document.createElement('span'), { textContent: `${source.descriptor?.title || 'Unclassified source'} · ${formatBytes(source.bytes)}. ${source.descriptor?.detail || 'A bounded local byte inspection completed.'} ${source.detail || ''}` })
+      Object.assign(document.createElement('strong'), { textContent: `${source.fileName || 'Selected file'} — ${source.state === 'converted' ? 'local output available' : 'bounded validation complete'}` }),
+      Object.assign(document.createElement('span'), { textContent: `${source.descriptor?.title || 'Unclassified source'} · ${formatBytes(source.bytes)}. ${source.descriptor?.detail || 'A bounded local inspection completed.'} ${source.detail || ''}` })
     );
   } else {
     sourcePath.value = '';
     sourceSummary.dataset.state = converterStatusState(snapshot?.state || 'idle');
     sourceSummary.replaceChildren(
-      Object.assign(document.createElement('strong'), { textContent: snapshot?.state === 'unavailable' ? 'Local converter storage is unavailable' : 'No local source file selected' }),
-      Object.assign(document.createElement('span'), { textContent: snapshot?.detail || 'Choose a file to record an inspection-only queue item. No conversion can start until a future verified bundled adapter is available.' })
+      Object.assign(document.createElement('strong'), { textContent: snapshot?.state === 'unavailable' ? 'Local converter record storage is unavailable' : 'No local source file selected' }),
+      Object.assign(document.createElement('span'), { textContent: snapshot?.detail || 'Choose a direct local file to validate its bounded conversion routes.' })
     );
   }
+  renderConverterOutput(snapshot, source);
 
   const evaluation = converterRegexEvaluation();
   renderConverterRegexBuilder(evaluation);
@@ -3117,12 +3181,12 @@ function renderConverter() {
     for (const adapter of adapters) {
       const card = document.createElement('article');
       card.className = 'converter-adapter-card';
-      card.dataset.state = adapter.enabled ? 'complete' : 'blocked';
+      card.dataset.state = adapter.enabled && adapter.bundled ? 'complete' : 'blocked';
       const title = document.createElement('strong');
       title.textContent = adapter.title;
       const stateLabel = document.createElement('span');
       stateLabel.className = 'converter-adapter-state';
-      stateLabel.textContent = adapter.enabled ? 'Bundled and available' : 'Unavailable';
+      stateLabel.textContent = adapter.enabled && adapter.bundled ? 'Bundled and available' : 'Unavailable';
       const formats = document.createElement('span');
       formats.textContent = `Source: ${(adapter.sourceKinds || []).join(', ') || 'none'} · Targets: ${(adapter.targets || []).join(', ') || 'none'}`;
       const reason = document.createElement('small');
@@ -3141,13 +3205,15 @@ function renderConverter() {
   queue.replaceChildren();
   const items = Array.isArray(snapshot?.queue) ? snapshot.queue : [];
   if (!items.length) {
-    queue.append(statusRecord('Inspection queue is empty', 'Choose a local file to record its bounded byte inspection. The app will not begin a conversion without a future verified bundled adapter.', 'idle'));
+    queue.append(statusRecord('No safe conversion records', 'A record is added only after a completed, cancelled, or failed local conversion attempt. It never includes a full path or file contents.', 'idle'));
   } else {
     for (const item of items) {
+      const target = item.targetLabel ? ` · ${item.targetLabel}` : '';
+      const output = item.outputFileName ? ` · Output label: ${item.outputFileName}` : '';
       queue.append(statusRecord(
-        `${item.fileName || 'Selected file'} — awaiting adapter`,
-        `${item.descriptor?.title || 'Unclassified source'} · ${formatBytes(item.bytes)} · ${item.detail || 'No conversion was started.'}`,
-        'waiting'
+        `${item.fileName || 'Selected file'} — ${item.state || 'recorded'}`,
+        `${item.descriptor?.title || 'Unclassified source'} · ${formatBytes(item.bytes)}${target}${output}. ${item.detail || 'No additional safe record detail is available.'}`,
+        converterStatusState(item.state)
       ));
     }
   }
@@ -6690,16 +6756,55 @@ async function refreshConverter() {
   const snapshot = await safely(() => window.studio.converterSnapshot());
   if (!snapshot) return;
   state.converterSnapshot = snapshot;
+  state.converterSource = snapshot.active || null;
   renderConverter();
 }
 
 async function chooseConverterSource() {
   const result = await safely(() => window.studio.pickConverterSource());
   if (!result) return;
-  state.converterSource = result.source || null;
+  state.converterSource = result.snapshot?.active || result.source || null;
+  state.converterTargetId = '';
   state.converterSnapshot = result.snapshot || state.converterSnapshot;
   renderConverter();
-  toast('Local source inspection was recorded. No conversion was started.', 'success');
+  toast('Local source validation is ready. Choose an available target and a new output name before conversion starts.', 'success');
+}
+
+async function convertConverterSource() {
+  const source = state.converterSnapshot?.active || state.converterSource;
+  if (!source?.id || !state.converterTargetId) {
+    toast('Choose a current local source and one available output target first.', 'warning');
+    return;
+  }
+  const result = await safely(() => window.studio.convertConverterSource(source.id, state.converterTargetId));
+  if (!result) return;
+  state.converterSnapshot = result.snapshot || state.converterSnapshot;
+  state.converterSource = state.converterSnapshot?.active || null;
+  renderConverter();
+  if (result.state === 'target-selection-cancelled') {
+    toast('No output location was selected. The source file was not changed.', 'info');
+    return;
+  }
+  if (result.conversion?.state === 'converted') {
+    toast('A bounded local output was written. The source file was not changed.', 'success');
+    return;
+  }
+  if (result.conversion?.state === 'cancelled') {
+    toast('The local conversion was cancelled before output was written.', 'info');
+    return;
+  }
+  toast('The local conversion did not produce output. The source file was not changed.', 'warning');
+}
+
+async function cancelConverterSource() {
+  const source = state.converterSnapshot?.active || state.converterSource;
+  if (!source?.id) return;
+  const snapshot = await safely(() => window.studio.cancelConverterSource(source.id));
+  if (!snapshot) return;
+  state.converterSnapshot = snapshot;
+  state.converterSource = snapshot.active || null;
+  renderConverter();
+  toast('Cancellation was requested. The converter will stop before writing output when the active step yields.', 'info');
 }
 
 async function refreshStatusHubBridgeConfiguration() {

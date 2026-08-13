@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld('studio', {
   openExternalEditorTarget: (serverId, targetKind) => ipcRenderer.invoke('studio:open-external-editor-target', serverId, targetKind),
   converterSnapshot: () => ipcRenderer.invoke('studio:converter-snapshot'),
   pickConverterSource: () => ipcRenderer.invoke('studio:pick-converter-source'),
+  convertConverterSource: (sourceId, targetId) => ipcRenderer.invoke('studio:convert-converter-source', sourceId, targetId),
+  cancelConverterSource: (sourceId) => ipcRenderer.invoke('studio:cancel-converter-source', sourceId),
   openFolder: (folder) => ipcRenderer.invoke('studio:open-folder', folder),
   dataDirectory: () => ipcRenderer.invoke('studio:data-directory'),
   localHistoryStatus: () => ipcRenderer.invoke('studio:local-history-status'),

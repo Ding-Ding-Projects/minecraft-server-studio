@@ -180,15 +180,17 @@ states.
 
 ## File-converter inventory boundary
 
-The `file-converter` row now names the registered source paths for the native
-source picker, bounded byte-inspection module, local queue skeleton, disabled
-adapter catalog, and renderer destination. That row remains incomplete: source
-registration is not evidence that a PDF, image, audio, video, archive,
-spreadsheet, text, or binary conversion ran. No output adapter is enabled until
-its exact bundled offline dependency, resource bounds, output validator,
-localization, tests, built-artifact interaction, and capture evidence are
-independently supplied. See [Local file-converter foundation](file-converter.md)
-for the present local-only boundary.
+The `file-converter` row now names the app-owned native picker, bounded
+in-process validation, available UTF-8/JSON/CSV/TSV/YAML-style/Base64/hex
+routes, native destination chooser, atomic output path, safe result records,
+and renderer destination. This is still incomplete universal-converter work:
+source registration and source-level routing are not evidence of a packaged or
+user-observed conversion. PDF, image, audio, video, archive, XML, and native
+workbook conversion remain unavailable until their exact bundled offline
+engine, resource bounds, output validator, localization, tests,
+built-artifact interaction, and capture evidence are independently supplied.
+See [Local app-owned file converter](file-converter.md) for the present
+local-only boundary.
 
 ## Offline-documentation inventory boundary
 
@@ -253,7 +255,7 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
-- [Local file-converter foundation](file-converter.md)
+- [Local app-owned file converter](file-converter.md)
 - [App-logo customization](app-logo-customization.md)
 - [Appearance and tab-navigation foundation](appearance-and-tabs.md)
 - [Desktop command palette foundation](desktop-command-palette.md)

@@ -163,16 +163,20 @@
         <section class="file-converter-card" id="file-converter-destination" aria-labelledby="file-converter-title">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">LOCAL-ONLY CONVERTER FOUNDATION</p>
+              <p class="eyebrow">LOCAL-ONLY CONVERTER</p>
               <h3 id="file-converter-title">Local file converter</h3>
-              <p class="muted">Choose a local file for a bounded byte inspection. This build keeps every known adapter visible, but only enables an adapter after a verified bundled offline engine exists. No source file leaves this device or changes during inspection.</p>
+              <p class="muted">Choose a direct local file for bounded validation, select an available in-process conversion, then choose a new local output name. No source file leaves this device or changes; paths and file contents are not retained in converter records.</p>
             </div>
             <button id="refresh-converter-button" type="button" class="outlined-action">Refresh converter</button>
           </div>
           <div class="converter-source-row">
-            <label class="field wide"><span>Source file</span><div class="browse-row"><input id="converter-source-path" type="text" readonly placeholder="Choose a local file to inspect"><button id="browse-converter-source-button" type="button" class="primary-action">Choose file</button></div><small>The file picker is the only source-selection route. The app reads at most 64 KiB to classify it and does not inspect by filename extension alone.</small></label>
-            <section id="converter-source-summary" class="status-record" data-state="idle" aria-live="polite"><strong>No local source file selected</strong><span>Choose a file to record an inspection-only queue item. No conversion can start until a future verified bundled adapter is available.</span></section>
+            <label class="field wide"><span>Selected source</span><div class="browse-row"><input id="converter-source-path" type="text" readonly placeholder="Choose a direct local file"><button id="browse-converter-source-button" type="button" class="primary-action">Choose file</button></div><small>The file picker is the only source-selection route. The app reads at most 64 KiB to classify it and at most 8 MiB for an enabled conversion; the parent path is not displayed or retained in converter records.</small></label>
+            <section id="converter-source-summary" class="status-record" data-state="idle" aria-live="polite"><strong>No local source file selected</strong><span>Choose a file to validate available local conversion routes. No conversion starts until you select a target and a new output name.</span></section>
           </div>
+          <section class="converter-output-section" aria-labelledby="converter-output-title">
+            <div><h4 id="converter-output-title">Local output</h4><p class="muted">Available routes are determined from complete bounded validation. Each target names what representation can change before the native save dialog opens; existing files are never overwritten.</p></div>
+            <div id="converter-output-controls" class="converter-output-controls" aria-live="polite"></div>
+          </section>
           <div class="converter-search-row">
             <label class="field"><span>Find an adapter</span><input id="converter-adapter-search" type="search" maxlength="128" placeholder="Search name, source, or target" autocomplete="off"></label>
             <label class="switch-field converter-regex-switch"><input id="converter-regex-mode" type="checkbox"><span><strong>Use regular expression</strong><small>Plain-text search is the default.</small></span></label>
@@ -204,7 +208,7 @@
             <div id="converter-adapter-catalog" class="converter-adapter-catalog" aria-live="polite"></div>
           </section>
           <section class="converter-queue-section" aria-labelledby="converter-queue-title">
-            <div><h4 id="converter-queue-title">Persistent inspection queue</h4><p class="muted">The queue is app-private and records inspection-only items. It does not copy, upload, convert, or alter the selected source.</p></div>
+            <div><h4 id="converter-queue-title">Persistent safe conversion records</h4><p class="muted">Records contain bounded outcome metadata only. They do not retain source paths, destination paths, source bytes, output bytes, or file contents.</p></div>
             <div id="converter-queue" class="converter-queue" aria-live="polite"></div>
           </section>
         </section>

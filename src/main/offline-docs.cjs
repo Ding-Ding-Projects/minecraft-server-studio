@@ -48,7 +48,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('browser-local-notifications-and-confirmation', 'browser-local-notifications-and-confirmation.md', 'Browser-local notification center and destructive confirmation', 'Read local page notices and the bounded two-key plus slider notification-metadata clear boundary.'),
   entry('unsigned-automatic-updates', 'unsigned-automatic-updates.md', 'Unsigned automatic updates', 'Understand the fixed Squirrel update feed and restart choice.'),
   entry('release-packaging', 'release-packaging.md', 'Windows release packaging metadata', 'Understand public dim-sum code-name metadata and its no-copy release boundary.'),
-  entry('file-converter', 'file-converter.md', 'Local file-converter foundation', 'Inspect a local file and browse the honest disabled adapter catalog.'),
+  entry('file-converter', 'file-converter.md', 'Local app-owned file converter', 'Convert bounded local text, structured data, or bytes through verified in-process routes while unavailable formats remain visible.'),
   entry('authenticator-and-toy-locks', 'authenticator-and-toy-locks.md', 'Local authenticator and toy-lock foundation', 'Manage local RFC 6238 codes and independently credentialed toy-lock records.'),
   entry('support-tickets', 'support-tickets.md', 'Local Support Tickets', 'Open a fictional local recovery ticket and reveal the application-data folder yourself.'),
   entry('browser-local-authenticator-and-toy-locks', 'browser-local-authenticator-and-toy-locks.md', 'Browser-local authenticator, toy locks, and recovery', 'Use the public page’s bounded local TOTP, toy-lock, QR, and recovery foundation.'),
