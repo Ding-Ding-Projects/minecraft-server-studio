@@ -57,7 +57,7 @@ The template includes these desktop surface rows:
 | `application-updates` | Unsigned Squirrel application-update controls |
 | `settings-appearance-and-localization` | Settings, appearance, and localization |
 | `file-converter` | Local file converter |
-| `ollama` | Local Ollama suite |
+| `ollama` | Local Ollama service health plus bounded installed/running inventory; complete Model Store, pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
 | `docs-history-and-notifications` | Documentation, history, and notifications |
 | `export` | Export |
@@ -82,6 +82,25 @@ downloaded. The only accepted feed is the product-derived public
 latest-release path; a visitor or desktop user cannot provide another feed URL.
 See [Unsigned automatic updates](unsigned-automatic-updates.md) for the state
 and recovery contract.
+
+## Local Ollama inventory boundary
+
+The `ollama` row currently covers a narrow, main-process-only local foundation:
+the fixed `http://127.0.0.1:11434` service version, bounded installed-model
+inventory, and bounded running-model inventory. Its implementation never asks a
+renderer for an endpoint, cloud credential, proxy, shell command, model name, or
+raw API response. A healthy local version response is not proof that a model is
+installed, running, compatible, or ready for a requested task.
+
+This row remains incomplete until it independently receives its localized-copy,
+focused-test, built-artifact interaction, capture, and evidence records. It
+does not inherit proof from server setup, Java installation, the desktop status
+destination, or a future application feature. Complete catalog pagination,
+hardware-fit assessment, batch pulls, chat, attachments, harness registration,
+snapshots, rollback, and offline recovery each need their own implemented and
+documented records before they can be treated as available. See [Local Ollama
+suite foundation](local-ollama-suite.md) for the current scope and recovery
+states.
 
 ## Source and evidence boundaries
 
