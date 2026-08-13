@@ -6,6 +6,7 @@
 - Persisted optional event narration and bounded local-time scheduled language rules, with platform-only voice enumeration and disabled external source choices until validated adapters exist.
 - Pages-ready public marketing surface with browser-local controls and a truthful desktop-execution boundary.
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
+- Serialized next-release metadata that can record one unused public dim-sum catalog link without copying the source photo into the product release.
 
 ## Next implementation items
 
