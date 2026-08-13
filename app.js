@@ -5,11 +5,12 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
   "use strict";
 
   /*
-   * Browser-local marketing interactions plus two narrow exceptions: one
-   * visitor-triggered fixed-loopback Ollama observer and explicitly selected,
-   * bounded browser-local file conversions. No server control, installer action,
-   * proxy, cloud fallback, model mutation, chat, upload, or remote conversion
-   * occurs here. The converter never persists source/output bytes or learns a
+   * Browser-local marketing interactions plus three narrow exceptions: one
+   * visitor-triggered fixed-loopback Ollama observer, explicitly selected
+   * bounded browser-local file conversions, and one visitor-confirmed immutable
+   * installer-link handoff validated from static page data. No server control,
+   * installer service, transfer observer, proxy, cloud fallback, model mutation,
+   * chat, upload, or remote conversion occurs here. The converter never persists source/output bytes or learns a
    * browser download destination. The dedicated authenticator module owns its
    * separate bounded browser-local credential record and does not expose it to
    * this general page export or history model. A user-selected personal-
@@ -56,6 +57,13 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     escapeHandler: null,
     status: "",
     maxBulkSelection: 50
+  };
+  var downloadRuntime = {
+    manifest: null,
+    phase: "ready",
+    handoffRequestedAt: "",
+    opener: null,
+    dialog: null
   };
 
   var LOCALIZED_COPY = Object.freeze({
@@ -4961,18 +4969,221 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     // a download request. No page-wide state export is offered here.
   }
 
-  function installVerifiedDownloadCtas() {
-    all("a[data-mss-verified-installer][href]").forEach(function (cta) {
-      cta.removeAttribute("aria-disabled");
-      cta.removeAttribute("disabled");
-      cta.removeAttribute("title");
-      delete cta.dataset.mssUnavailable;
-      cta.dataset.mssVerified = "true";
+  function installerText(value, maximum) {
+    if (typeof value !== "string") return "";
+    var text = value.trim();
+    return text && text.length <= maximum ? text : "";
+  }
+
+  function readFixedInstallerManifest() {
+    var source = one("#mss-fixed-installer-manifest");
+    if (!source || source.getAttribute("type") !== "application/json" || source.textContent.length > 4096) return null;
+    var raw = safely(function () { return JSON.parse(source.textContent); }, null);
+    if (!raw || Object.prototype.toString.call(raw) !== "[object Object]") return null;
+    var allowed = ["assetName", "assetUrl", "platform", "releaseTag", "releaseUrl", "schemaVersion", "unsigned", "version"];
+    var keys = Object.keys(raw).sort();
+    if (keys.length !== allowed.length || keys.some(function (key, index) { return key !== allowed[index]; })) return null;
+    var releaseTag = installerText(raw.releaseTag, 80);
+    var version = installerText(raw.version, 40);
+    var platform = installerText(raw.platform, 40);
+    var assetName = installerText(raw.assetName, 240);
+    var assetUrl = installerText(raw.assetUrl, 1024);
+    var releaseUrl = installerText(raw.releaseUrl, 1024);
+    if (raw.schemaVersion !== 1 || raw.unsigned !== true) return null;
+    if (!/^v\d+\.\d+\.\d+-build\.\d+\.\d+$/.test(releaseTag) || !/^\d+\.\d+\.\d+$/.test(version)) return null;
+    if (platform !== "Windows x64" || !/^Minecraft\.Server\.Studio-\d+\.\d+\.\d+-x64-Setup\.exe$/.test(assetName)) return null;
+    if (assetName !== "Minecraft.Server.Studio-" + version + "-x64-Setup.exe") return null;
+    var releasePrefix = "https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/";
+    if (releaseUrl !== releasePrefix + "tag/" + releaseTag) return null;
+    if (assetUrl !== releasePrefix + "download/" + releaseTag + "/" + assetName) return null;
+    return Object.freeze({
+      releaseTag: releaseTag,
+      version: version,
+      platform: platform,
+      assetName: assetName,
+      assetUrl: assetUrl,
+      releaseUrl: releaseUrl,
+      unsigned: true
     });
+  }
+
+  function setInstallerActionAvailability(enabled) {
+    all("[data-mss-installer-open]").forEach(function (control) {
+      control.disabled = !enabled;
+      control.setAttribute("aria-disabled", String(!enabled));
+      if (enabled) control.removeAttribute("title");
+      else control.title = "A valid fixed installer manifest is required before this page can offer a browser link.";
+    });
+    all("[data-mss-installer-release]").forEach(function (link) {
+      if (enabled && downloadRuntime.manifest) {
+        link.href = downloadRuntime.manifest.releaseUrl;
+        link.textContent = "View verified release " + downloadRuntime.manifest.releaseTag;
+        link.removeAttribute("aria-disabled");
+        link.removeAttribute("tabindex");
+      } else {
+        link.removeAttribute("href");
+        link.setAttribute("aria-disabled", "true");
+        link.setAttribute("tabindex", "-1");
+      }
+    });
+  }
+
+  function renderInstallerManifest() {
+    var manifest = downloadRuntime.manifest;
+    var valid = Boolean(manifest);
+    setInstallerActionAvailability(valid);
+    all("[data-mss-installer-version]").forEach(function (element) {
+      element.textContent = valid ? "Verified " + manifest.version + " · " + manifest.platform : "Installer manifest unavailable";
+    });
+    all("[data-mss-installer-summary]").forEach(function (element) {
+      element.textContent = valid
+        ? "Release " + manifest.releaseTag + " contains the immutable " + manifest.assetName + " asset for " + manifest.platform + ". It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning. This page asks for a start decision, then hands the exact link to the browser; it cannot monitor or confirm the download or installation."
+        : "The fixed installer manifest is unavailable or invalid, so this page will not invent an installer URL or offer a browser handoff.";
+    });
+    all("[data-mss-installer-release-status]").forEach(function (element) {
+      element.textContent = valid
+        ? "Verified immutable asset: " + manifest.assetName + " · " + manifest.platform + " · unsigned."
+        : "Installer manifest unavailable. No asset link has been enabled.";
+    });
+    all("[data-mss-installer-manifest-release]").forEach(function (element) { element.textContent = valid ? manifest.releaseTag + " · version " + manifest.version : "Unavailable"; });
+    all("[data-mss-installer-manifest-asset]").forEach(function (element) { element.textContent = valid ? manifest.assetName : "Unavailable"; });
+    all("[data-mss-installer-manifest-platform]").forEach(function (element) { element.textContent = valid ? manifest.platform : "Unavailable"; });
+    all("[data-mss-installer-manifest-signature]").forEach(function (element) { element.textContent = valid ? "Unsigned — Windows may warn before installation." : "Unavailable"; });
+    all("[data-mss-installer-start]").forEach(function (link) {
+      if (valid) {
+        link.href = manifest.assetUrl;
+        link.setAttribute("rel", "noopener");
+        link.removeAttribute("aria-disabled");
+      } else {
+        link.removeAttribute("href");
+        link.setAttribute("aria-disabled", "true");
+      }
+    });
+  }
+
+  function renderInstallerDownloadState() {
+    var manifest = downloadRuntime.manifest;
+    var handoff = downloadRuntime.phase === "browser-handoff-requested" && downloadRuntime.handoffRequestedAt;
+    var start = "Waiting for a valid fixed release manifest. No installer link is available yet.";
+    var progress = "Not observable: this page has no browser-download API, extension handoff, or transfer service.";
+    var completion = "Not observable: no download, cancellation, or installation result can be confirmed here.";
+    var status = "The fixed installer manifest is unavailable. This page will not invent an asset link.";
+    if (manifest && !handoff) {
+      start = "Open the start decision to review the immutable " + manifest.assetName + " link. Cancel leaves page-local history and notifications unchanged.";
+      status = "Ready for a user-initiated browser handoff to " + manifest.releaseTag + ". No browser download is active or observable from this page.";
+    }
+    if (manifest && handoff) {
+      start = "A browser handoff was requested at " + downloadRuntime.handoffRequestedAt + " for the immutable " + manifest.assetName + " link.";
+      progress = "Unknown after handoff: this static page cannot read transfer bytes, rate, destination, pause, resume, or cancellation from the browser.";
+      completion = "Unknown after handoff: this page cannot confirm whether the browser downloaded, cancelled, or installed the asset.";
+      status = "Browser handoff requested. Check this browser's own download controls for any transfer result; this page has no completion signal.";
+    }
+    all("[data-mss-download-start-state]").forEach(function (element) { element.textContent = start; });
+    all("[data-mss-download-progress-state]").forEach(function (element) { element.textContent = progress; });
+    all("[data-mss-download-completion-state]").forEach(function (element) { element.textContent = completion; });
+    all("[data-mss-installer-flow-status]").forEach(function (element) { element.textContent = status; });
     all('[data-contract-hook="download-states"]').forEach(function (grid) {
-      delete grid.dataset.mssUnavailable;
-      grid.dataset.mssVerified = "true";
+      grid.dataset.mssVerified = String(Boolean(manifest));
+      grid.dataset.mssDownloadPhase = handoff ? "browser-handoff-requested" : (manifest ? "ready" : "unavailable");
     });
+  }
+
+  function closeInstallerStartDialog(restoreFocus) {
+    var dialogElement = downloadRuntime.dialog;
+    if (!dialogElement) return;
+    if (typeof dialogElement.close === "function" && dialogElement.open) dialogElement.close();
+    else {
+      dialogElement.hidden = true;
+      dialogElement.removeAttribute("open");
+    }
+    if (restoreFocus && downloadRuntime.opener && document.contains(downloadRuntime.opener)) {
+      var opener = downloadRuntime.opener;
+      window.setTimeout(function () { safely(function () { opener.focus({ preventScroll: true }); }); }, 0);
+    }
+  }
+
+  function openInstallerStartDialog(opener) {
+    var dialogElement = downloadRuntime.dialog;
+    if (!downloadRuntime.manifest || !dialogElement) {
+      notify("warning", "The fixed installer manifest is unavailable, so this page did not offer a browser download link.");
+      return;
+    }
+    downloadRuntime.opener = opener || document.activeElement;
+    if (typeof dialogElement.showModal === "function") {
+      if (!dialogElement.open) dialogElement.showModal();
+    } else {
+      dialogElement.hidden = false;
+      dialogElement.setAttribute("open", "");
+      dialogElement.setAttribute("role", "dialog");
+      focus(dialogElement);
+    }
+    var start = one("[data-mss-installer-start]", dialogElement);
+    if (start) start.focus();
+    live("Installer start decision opened. Cancel leaves browser-local records unchanged.");
+  }
+
+  function recordInstallerBrowserHandoff() {
+    var manifest = downloadRuntime.manifest;
+    if (!manifest) return;
+    downloadRuntime.phase = "browser-handoff-requested";
+    downloadRuntime.handoffRequestedAt = new Date().toISOString();
+    renderInstallerDownloadState();
+    addHistory("Installer browser handoff requested", "The immutable " + manifest.releaseTag + " asset link was activated. Browser transfer and installation results are not observable by this page.");
+    notify("info", "The immutable installer link was handed to this browser. This page cannot observe transfer bytes, destination, cancellation, completion, or installation.");
+    live("Browser handoff requested. Browser transfer status remains outside this page.");
+  }
+
+  function installVerifiedDownloadCtas() {
+    downloadRuntime.manifest = readFixedInstallerManifest();
+    downloadRuntime.dialog = one("[data-mss-installer-start-dialog]");
+    renderInstallerManifest();
+    renderInstallerDownloadState();
+    all("[data-mss-installer-open]").forEach(function (control) {
+      control.addEventListener("click", function () { openInstallerStartDialog(control); });
+    });
+    var dialogElement = downloadRuntime.dialog;
+    if (dialogElement) {
+      var cancel = one("[data-mss-installer-cancel]", dialogElement);
+      var start = one("[data-mss-installer-start]", dialogElement);
+      if (cancel) cancel.addEventListener("click", function (event) {
+        event.preventDefault();
+        closeInstallerStartDialog(true);
+      });
+      if (start) start.addEventListener("click", function (event) {
+        if (!downloadRuntime.manifest || !start.getAttribute("href")) {
+          event.preventDefault();
+          notify("warning", "The fixed installer manifest is unavailable, so no browser download link was activated.");
+          return;
+        }
+        recordInstallerBrowserHandoff();
+        window.setTimeout(function () { closeInstallerStartDialog(false); }, 0);
+      });
+      dialogElement.addEventListener("close", function () {
+        if (downloadRuntime.opener && document.contains(downloadRuntime.opener)) {
+          var opener = downloadRuntime.opener;
+          window.setTimeout(function () { safely(function () { opener.focus({ preventScroll: true }); }); }, 0);
+        }
+      });
+      dialogElement.addEventListener("cancel", function () {
+        live("Installer start decision cancelled. Browser-local records were unchanged.");
+      });
+    }
+    if (hasContractMethod("registerCommand")) {
+      safely(function () {
+        contract.registerCommand({
+          id: "start-verified-installer-browser-handoff",
+          title: "Review verified installer download",
+          description: "Open the immutable-release start decision. The page can hand the link to the browser but cannot observe transfer or installation outcomes.",
+          group: "Browser-local destinations",
+          elementId: "downloads-preview",
+          keywords: ["installer", "download", "release", "browser handoff", "windows"],
+          action: function () {
+            activate("downloads-preview");
+            window.setTimeout(function () { openInstallerStartDialog(one("[data-mss-installer-open]")); }, 0);
+          }
+        });
+      });
+    }
   }
 
   function evidence(status, reference, detail, reason) {
@@ -5051,6 +5262,24 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       capture: "missing",
       captureDetail: "No real built-site capture is recorded."
     };
+    var browserInstallerHandoff = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html fixed manifest and start dialog; site/app.js manifest validator and browser-handoff controller; site/styles.css dialog and state styling",
+      implementationDetail: "Only a schema-checked immutable release URL can reach the user-triggered start link. The page records browser-link activation locally but never represents it as transfer, download, cancellation, completion, or installation evidence.",
+      documentation: "in-progress",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/browser-local-installer-download-handoff.md",
+      localization: "missing",
+      localizationDetail: "The start dialog and operational handoff copy are English-first in this delivery lane.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2 audit and notification records",
+      persistenceDetail: "Only bounded page-local evidence that a browser link was activated can persist. The page never persists or reads bytes, rate, destination, browser-download status, completion, cancellation, or installation state.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-site browser-handoff interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-site capture is recorded."
+    };
     var universalControlsCore = {
       implementation: "in-progress",
       implementationReference: "site/index.html, site/app.js, site/contract.js, and site/vocabulary-loader.js",
@@ -5122,7 +5351,6 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       captureDetail: "No real built-artifact capture is recorded."
     };
     var browserLocalLogo = {
-    var browserLocalLogo = {
       implementation: "in-progress",
       implementationReference: "site/index.html, site/app.js, and site/contract.js",
       implementationDetail: "Shipped CSS/markup presets and a bounded custom PNG/JPEG display path operate only in this browser-local page.",
@@ -5142,7 +5370,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
-        inventoryFeature("marketing-copy", "Marketing content and direct installer boundary", "in-progress", "The page exposes a static verified installer anchor and must not simulate a transfer.", staticHook),
+        inventoryFeature("marketing-copy", "Marketing content and immutable installer handoff boundary", "in-progress", "The page presents a fixed release manifest and start decision without inventing an installer URL or simulating a transfer.", staticHook),
         inventoryFeature("marketing-status", "Browser-local status model", "in-progress", "The page stores its status model in browser local storage only; no chat or status-service bridge exists.", localContract)
       ] },
       { id: "settings", label: "Settings and appearance preview", route: "#settings-preview", features: [
@@ -5163,7 +5391,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       ] },
       { id: "history", label: "Local history preview", route: "#history-preview", features: [inventoryFeature("history-preview", "Browser-local audit preview", "in-progress", "The browser-local contract audit is not Git-backed desktop history.", localContract)] },
       { id: "notifications", label: "Browser-local notification center", route: "#notifications-preview", features: [inventoryFeature("browser-local-notification-center", "Bounded browser-local notification center and page-local confirmation", "in-progress", "Notifications and their audit metadata remain local. Clearing records confirms only the exact page-local notification count and cannot affect a browser download, server, installed application, credential, file, or external system.", browserNotificationCenter)] },
-      { id: "downloads", label: "Download and release states", route: "#downloads-preview", features: [inventoryFeature("download-boundary", "Static verified installer anchor", "in-progress", "The browser owns transfer behavior; this page does not start, track, pause, resume, or confirm a transfer.", staticHook)] }
+      { id: "downloads", label: "Download and release states", route: "#downloads-preview", features: [inventoryFeature("browser-installer-handoff", "User-initiated immutable installer browser handoff", "in-progress", "A fixed embedded release manifest and start decision can hand the exact link to the browser. Transfer progress and completion remain explicitly unobservable.", browserInstallerHandoff)] }
     ];
     return { surfaces: surfaces };
   }
@@ -5216,7 +5444,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     if (bridge) bridge.textContent = model.chatBridge.message;
     if (evidenceHost) evidenceHost.textContent = model.evidence.length ? model.evidence.map(function (item) { return item.label + ": " + item.state + "."; }).join(" ") : "No browser-local evidence has been recorded yet.";
     if (interactions) interactions.textContent = model.activeInteractions.length ? model.activeInteractions.map(function (item) { return item.label + ": " + item.state + "."; }).join(" ") : "No browser-local interaction is active. The page does not run desktop actions.";
-    if (nextSteps) nextSteps.textContent = model.nextSteps.length ? model.nextSteps.map(function (item) { return item.label + ": " + item.detail; }).join(" ") : "Use the direct installer link only when you choose to hand transfer control to your browser.";
+    if (nextSteps) nextSteps.textContent = model.nextSteps.length ? model.nextSteps.map(function (item) { return item.label + ": " + item.detail; }).join(" ") : "Open the fixed-manifest start decision only when you choose to hand its immutable link to your browser.";
   }
 
   function seedStatusModel() {
@@ -5227,9 +5455,9 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
         contract.updateStatusModel({
           currentState: "waiting",
           summary: "This status model is browser-local. It reports the static public preview only and is not connected to a server, installer, desktop application, release workflow, or chat service.",
-          evidence: [{ id: "marketing-source", label: "Static public preview source", state: "verified", detail: "The marketing surface and direct installer anchor are present in this page source.", reference: "site/index.html" }],
-          activeInteractions: [{ id: "browser-local", label: "Browser-local interaction boundary", state: "waiting", detail: "No desktop action or network transfer is active from this page." }],
-          nextSteps: [{ id: "installer-link", label: "Optional direct installer handoff", state: "waiting", detail: "The user may activate the verified link; browser transfer and installation are outside this page." }]
+          evidence: [{ id: "marketing-source", label: "Static public preview source", state: "verified", detail: "The marketing surface, fixed installer manifest, and user-start decision are present in this page source.", reference: "site/index.html" }],
+          activeInteractions: [{ id: "browser-local", label: "Browser-local interaction boundary", state: "waiting", detail: "No desktop action, page-initiated transfer, or browser-download result is active from this page." }],
+          nextSteps: [{ id: "installer-link", label: "Optional immutable installer handoff", state: "waiting", detail: "The visitor may open the fixed-manifest start decision and activate its exact link; browser transfer and installation remain outside this page." }]
         });
       });
     }
