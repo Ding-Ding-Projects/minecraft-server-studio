@@ -19,6 +19,7 @@
 
         <button class="primary-action" id="new-server-button" type="button" data-i18n="nav.createServer">Create server</button>
         <button class="text-action" id="authenticator-destination-button" type="button" aria-controls="authenticator-destination">Authenticator and toy locks</button>
+        <button class="text-action" id="support-tickets-destination-button" type="button" aria-controls="support-tickets-destination">Support Tickets</button>
         <label class="field search-field" for="server-search">
           <span data-i18n="nav.findServer">Find a server</span>
           <input id="server-search" type="search" placeholder="Filter by name or software" data-i18n-placeholder="nav.searchPlaceholder" autocomplete="off">
@@ -218,7 +219,7 @@
               <h3 id="documentation-title">Offline documentation</h3>
               <p class="muted">Articles are read only from this installed app. The browser never downloads a replacement from the network.</p>
             </div>
-            <button class="outlined-action" id="close-documentation-button" type="button">Back to server workspace</button>
+            <div class="authenticator-entry-actions"><button class="outlined-action" id="open-support-tickets-from-help" type="button">Support Tickets</button><button class="outlined-action" id="close-documentation-button" type="button">Back to server workspace</button></div>
           </header>
           <div class="documentation-layout">
             <aside class="documentation-browser" aria-label="Documentation article list">
@@ -318,10 +319,57 @@
                 <label class="field"><span>Unlock duration</span><select id="toy-lock-duration"><option value="session">Until app closes</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">60 minutes</option></select></label>
                 <div id="toy-lock-password-fields" class="settings-grid wide"><label class="field"><span>New password</span><input id="toy-lock-password" type="password" maxlength="256" autocomplete="new-password"></label><label class="field"><span>Confirm password</span><input id="toy-lock-password-confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div>
                 <div id="toy-lock-totp-fields" class="settings-grid wide" hidden><label class="field"><span>Manual Base32 TOTP secret</span><input id="toy-lock-totp-secret" type="password" maxlength="4096" autocomplete="new-password" spellcheck="false"><small>QR pairing is not available in this foundation. Use a manually supplied secret only if you understand it is a toy lock.</small></label></div>
-                <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Create toy lock</button><p class="muted">Recovery: delete the application-data folder shown below yourself. No ticket is sent, no network request is made, and nobody is reading it.</p><code id="toy-lock-recovery-directory">Loading local recovery folder…</code></div>
+                <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Create toy lock</button><button id="open-support-tickets-from-toy-locks" class="outlined-action" type="button">Open local Support Tickets</button><p class="muted">Recovery: delete the application-data folder shown below yourself. No ticket is sent, no network request is made, and nobody is reading it.</p><code id="toy-lock-recovery-directory">Loading local recovery folder…</code></div>
               </form>
             </section>
             <section class="authenticator-card" aria-labelledby="toy-lock-list-title"><div><h4 id="toy-lock-list-title">Configured toy locks</h4><p class="muted">Only the authenticator tab is actively guarded by this foundation. Other recorded targets remain inventory-only until their own context-menu and keyboard routes are wired.</p></div><div id="toy-lock-list" class="toy-lock-list" aria-live="polite"></div></section>
+          </section>
+        </section>
+
+        <section id="support-tickets-destination" class="support-tickets-destination hidden" aria-labelledby="support-tickets-destination-title">
+          <div class="panel-heading authenticator-heading">
+            <div>
+              <p class="eyebrow">LOCAL-ONLY RECOVERY DESK</p>
+              <h3 id="support-tickets-destination-title">Support Tickets</h3>
+              <p class="muted">This is a fictional on-device desk for recovery guidance. It never sends a ticket, contacts a person, or removes data for you.</p>
+            </div>
+            <button id="return-from-support-tickets-button" class="outlined-action" type="button">Return to servers</button>
+          </div>
+
+          <div id="support-ticket-status" class="authenticator-status" aria-live="polite">Loading local Support Tickets…</div>
+
+          <section class="authenticator-card" aria-labelledby="support-ticket-create-title">
+            <div><h4 id="support-ticket-create-title">Open a local recovery ticket</h4><p class="muted">Use this only to keep a non-secret note beside the recovery instructions. Do not include a password, PIN, code, authenticator URI, token, or secret.</p></div>
+            <form id="support-ticket-create-form" class="settings-grid" novalidate>
+              <label class="field"><span>Category</span><select id="support-ticket-category"><option value="toy-lock-recovery">Toy-lock recovery</option><option value="authenticator-entry">Authenticator entry</option><option value="local-data-recovery">Application-data recovery</option><option value="other">Other local guidance</option></select></label>
+              <label class="field"><span>Severity</span><select id="support-ticket-severity"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="urgent">Urgent</option></select><small>This local label does not notify or prioritize anyone.</small></label>
+              <label class="field wide"><span>Brief non-secret description</span><textarea id="support-ticket-description" rows="4" maxlength="1600" autocomplete="off" spellcheck="true" placeholder="Describe the recovery step you need, without any credentials or codes."></textarea></label>
+              <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Create local ticket</button><p id="support-ticket-disclosure" class="support-ticket-disclosure">Nothing is sent anywhere. No ticket exists outside this computer. No network request is made. Nobody is reading it.</p></div>
+            </form>
+          </section>
+
+          <section class="authenticator-card" aria-labelledby="support-ticket-list-title">
+            <div class="panel-heading"><div><h4 id="support-ticket-list-title">Local ticket list</h4><p class="muted">Statuses move from opened to a canned local response, then resolve only after you open the recovery folder yourself.</p></div><button id="support-ticket-refresh-button" class="outlined-action" type="button">Refresh local tickets</button></div>
+            <div class="authenticator-search-row">
+              <label class="field" for="support-ticket-search"><span>Find a local ticket</span><input id="support-ticket-search" type="search" maxlength="256" autocomplete="off" placeholder="Filter ticket number, category, status, or note"></label>
+              <button id="support-ticket-regex-toggle" class="outlined-action" type="button" aria-expanded="false" aria-controls="support-ticket-regex-builder">Regex builder</button>
+            </div>
+            <section id="support-ticket-regex-builder" class="regex-builder" hidden aria-labelledby="support-ticket-regex-title">
+              <div><h5 id="support-ticket-regex-title">Support Tickets regex builder</h5><p class="muted">Plain text is the default. Regex evaluates only bounded local ticket metadata and non-secret notes.</p></div>
+              <label class="switch-field"><input id="support-ticket-regex-enabled" type="checkbox"><span><strong>Use regex for this ticket search</strong><small>Invalid patterns show an honest no-match state and never change ticket records.</small></span></label>
+              <label class="field"><span>Pattern</span><input id="support-ticket-regex-pattern" type="text" maxlength="128" autocomplete="off" placeholder="For example: ^MSS-"></label>
+              <label class="field"><span>Flags</span><input id="support-ticket-regex-flags" type="text" maxlength="3" autocomplete="off" value="i" placeholder="i, m, or u"></label>
+              <div class="regex-token-row" aria-label="Guided Support Tickets regex construction"><button type="button" data-support-ticket-regex-token="^">Start anchor</button><button type="button" data-support-ticket-regex-token="$">End anchor</button><button type="button" data-support-ticket-regex-token="\\d">Digit</button><button type="button" data-support-ticket-regex-token="[abc]">Character class</button><button type="button" data-support-ticket-regex-token="(group)">Group</button><button type="button" data-support-ticket-regex-token="|">Alternation</button><button type="button" data-support-ticket-regex-token="+">Quantifier</button></div>
+              <p id="support-ticket-regex-status" class="muted" aria-live="polite">Plain-text search is active.</p>
+            </section>
+            <div id="support-ticket-list" class="support-ticket-list" aria-live="polite"></div>
+          </section>
+
+          <section class="authenticator-card" aria-labelledby="support-ticket-recovery-title">
+            <div><h4 id="support-ticket-recovery-title">Open the recovery folder yourself</h4><p class="muted">The action opens the exact application-data folder in the operating-system file manager. It does not delete, reset, export, or send anything.</p></div>
+            <code id="support-ticket-recovery-directory" class="support-ticket-directory">Loading local recovery folder…</code>
+            <div class="authenticator-entry-actions"><button id="open-support-ticket-recovery-folder" class="primary-action" type="button">Open recovery folder</button><button id="copy-support-ticket-recovery-folder" class="outlined-action" type="button">Copy folder path</button></div>
+            <p class="support-ticket-disclosure">Nothing is sent anywhere. No ticket exists outside this computer. No network request is made. Nobody is reading it.</p>
           </section>
         </section>
 
@@ -963,7 +1011,7 @@
         <p id="toy-lock-unlock-copy">Enter this lock's own credential. This is a user-experience lock, not a security boundary.</p>
         <label class="field"><span id="toy-lock-unlock-credential-label">Credential</span><input id="toy-lock-unlock-credential" type="password" maxlength="4096" autocomplete="one-time-code"></label>
         <p id="toy-lock-unlock-recovery" class="muted">Recovery: delete the application's local data folder yourself. No ticket is sent anywhere.</p>
-        <div class="dialog-actions"><button id="toy-lock-unlock-cancel" class="outlined-action" type="button">Cancel</button><button class="primary-action" type="submit">Unlock</button></div>
+        <div class="dialog-actions"><button id="open-support-tickets-from-unlock" class="outlined-action" type="button">Forgotten your password? Support Tickets</button><button id="toy-lock-unlock-cancel" class="outlined-action" type="button">Cancel</button><button class="primary-action" type="submit">Unlock</button></div>
       </form>
     </dialog>
 

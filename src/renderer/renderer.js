@@ -47,6 +47,8 @@ const state = {
   authenticatorStatus: null,
   toyLocks: null,
   toyLockStatus: null,
+  supportTickets: null,
+  supportTicketStatus: null,
   activeAuthenticatorTab: 'codes',
   activeToyLockId: null,
   pendingAuthenticatorDestination: false,
@@ -59,6 +61,7 @@ const state = {
     authenticatorEntry: false,
     toyLockDraft: false,
     toyLockUnlock: false,
+    supportTicketDraft: false,
     appearance: false
   }
 };
@@ -2494,13 +2497,28 @@ function renderEditor() {
     editor.classList.add('hidden');
     empty.classList.add('hidden');
     $('#authenticator-destination')?.classList.add('hidden');
+    $('#support-tickets-destination')?.classList.add('hidden');
     return;
   }
   const authenticatorDestination = $('#authenticator-destination');
+  const supportTicketsDestination = $('#support-tickets-destination');
+  if (state.workspaceDestination === 'support-tickets') {
+    editor.classList.add('hidden');
+    empty.classList.add('hidden');
+    authenticatorDestination.classList.add('hidden');
+    supportTicketsDestination.classList.remove('hidden');
+    $('#server-title').textContent = 'Local Support Tickets';
+    $('#server-software').textContent = 'ON-DEVICE RECOVERY DESK';
+    $('#server-status').textContent = 'Local only';
+    $('#server-status').className = 'status-chip';
+    ['open-folder-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
+    return;
+  }
   if (state.workspaceDestination === 'authenticator') {
     editor.classList.add('hidden');
     empty.classList.add('hidden');
     authenticatorDestination.classList.remove('hidden');
+    supportTicketsDestination.classList.add('hidden');
     $('#server-title').textContent = 'Local authenticator';
     $('#server-software').textContent = 'PRIVATE LOCAL CODES AND TOY LOCKS';
     $('#server-status').textContent = 'Local only';
@@ -2509,6 +2527,7 @@ function renderEditor() {
     return;
   }
   authenticatorDestination.classList.add('hidden');
+  supportTicketsDestination.classList.add('hidden');
   if (!server) {
     editor.classList.add('hidden');
     empty.classList.remove('hidden');
@@ -3090,6 +3109,200 @@ function renderToyLocks() {
   }
 }
 
+function supportTicketRegexConfig() {
+  const enabled = $('#support-ticket-regex-enabled')?.checked === true;
+  const pattern = $('#support-ticket-regex-pattern')?.value || '';
+  const flags = $('#support-ticket-regex-flags')?.value || '';
+  if (!enabled) return { enabled: false, error: '', matcher: null };
+  if (pattern.length === 0) return { enabled: true, error: 'Enter a regex pattern before enabling regex search.', matcher: null };
+  if (pattern.length > 128 || flags.length > 3 || !/^[imu]*$/.test(flags) || new Set(flags).size !== flags.length) {
+    return { enabled: true, error: 'Use a bounded pattern and unique i, m, or u flags only.', matcher: null };
+  }
+  try {
+    return { enabled: true, error: '', matcher: new RegExp(pattern, flags) };
+  } catch {
+    return { enabled: true, error: 'This regex pattern is invalid. No tickets match until it is corrected.', matcher: null };
+  }
+}
+
+function updateSupportTicketRegexStatus() {
+  const config = supportTicketRegexConfig();
+  const status = $('#support-ticket-regex-status');
+  if (status) {
+    status.textContent = config.enabled
+      ? (config.error || 'Regex search is active for bounded local ticket fields.')
+      : 'Plain-text search is active.';
+    status.dataset.state = config.error ? 'invalid' : (config.enabled ? 'active' : 'plain');
+  }
+  return config;
+}
+
+function supportTicketMatches(ticket, config) {
+  const haystack = [ticket.number, ticket.category, ticket.severity, ticket.status, ticket.description, ticket.response].join(' · ').slice(0, 2048);
+  const query = ($('#support-ticket-search')?.value || '').trim();
+  if (config.enabled) return Boolean(config.matcher && config.matcher.test(haystack));
+  return !query || haystack.toLocaleLowerCase('en-US').includes(query.toLocaleLowerCase('en-US'));
+}
+
+function supportTicketCategoryLabel(category) {
+  return ({
+    'toy-lock-recovery': 'Toy-lock recovery',
+    'authenticator-entry': 'Authenticator entry',
+    'local-data-recovery': 'Application-data recovery',
+    other: 'Other local guidance'
+  })[category] || 'Local guidance';
+}
+
+function formatSupportTicketTime(value) {
+  const timestamp = Date.parse(value || '');
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : 'Unknown local time';
+}
+
+function renderSupportTickets() {
+  const status = state.supportTicketStatus || state.supportTickets?.status;
+  const statusTarget = $('#support-ticket-status');
+  if (statusTarget) {
+    statusTarget.textContent = status?.detail || 'Loading local Support Tickets…';
+    statusTarget.dataset.state = status?.state || 'loading';
+  }
+  const disclosure = status?.disclosure || 'Nothing is sent anywhere. No ticket exists outside this computer. No network request is made. Nobody is reading it.';
+  $$('.support-ticket-disclosure').forEach((element) => { element.textContent = disclosure; });
+  const recoveryDirectory = status?.recoveryDirectory || '';
+  const directory = $('#support-ticket-recovery-directory');
+  if (directory) directory.textContent = recoveryDirectory || 'Loading local recovery folder…';
+  const copy = $('#copy-support-ticket-recovery-folder');
+  if (copy) copy.disabled = !recoveryDirectory;
+  const open = $('#open-support-ticket-recovery-folder');
+  if (open) open.disabled = !recoveryDirectory;
+
+  const list = $('#support-ticket-list');
+  if (!list) return;
+  list.replaceChildren();
+  const config = updateSupportTicketRegexStatus();
+  const tickets = Array.isArray(state.supportTickets?.tickets) ? state.supportTickets.tickets : [];
+  const visible = config.enabled && config.error ? [] : tickets.filter((ticket) => supportTicketMatches(ticket, config));
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = tickets.length
+      ? (config.enabled && config.error ? 'Fix the regex pattern to show matching local tickets.' : 'No local tickets match this search.')
+      : 'No local tickets have been created yet.';
+    list.append(empty);
+    return;
+  }
+  for (const ticket of visible) {
+    const card = document.createElement('article');
+    card.className = 'support-ticket-card';
+    card.dataset.status = ticket.status || 'opened';
+    const header = document.createElement('header');
+    const title = document.createElement('strong');
+    title.textContent = ticket.number;
+    const stateLabel = document.createElement('span');
+    stateLabel.className = 'status-chip';
+    stateLabel.textContent = String(ticket.status || 'opened').replace(/(^|-)\w/g, (segment) => segment.replace('-', ' ').toUpperCase());
+    header.append(title, stateLabel);
+    const detail = document.createElement('span');
+    detail.textContent = `${supportTicketCategoryLabel(ticket.category)} · ${ticket.severity} severity · created ${formatSupportTicketTime(ticket.createdAt)}`;
+    const description = document.createElement('p');
+    description.textContent = ticket.description;
+    const response = document.createElement('p');
+    response.textContent = ticket.response;
+    const actions = document.createElement('div');
+    actions.className = 'authenticator-entry-actions';
+    if (ticket.status === 'opened') {
+      const acknowledge = document.createElement('button');
+      acknowledge.type = 'button';
+      acknowledge.className = 'outlined-action';
+      acknowledge.textContent = 'Show local first response';
+      acknowledge.addEventListener('click', () => acknowledgeSupportTicket(ticket.id));
+      actions.append(acknowledge);
+    }
+    if (ticket.status !== 'resolved') {
+      const recover = document.createElement('button');
+      recover.type = 'button';
+      recover.className = 'primary-action';
+      recover.textContent = 'Open recovery folder and resolve';
+      recover.addEventListener('click', () => openSupportTicketRecoveryFolder(ticket.id));
+      actions.append(recover);
+    }
+    const time = document.createElement('small');
+    time.textContent = ticket.status === 'resolved'
+      ? `Resolved locally ${formatSupportTicketTime(ticket.resolvedAt)}.`
+      : `Last local update ${formatSupportTicketTime(ticket.updatedAt)}.`;
+    card.append(header, detail, description, response, actions, time);
+    list.append(card);
+  }
+}
+
+async function refreshSupportTickets() {
+  const status = await safely(() => window.studio.supportTicketStatus());
+  if (status) state.supportTicketStatus = status;
+  if (status?.state === 'metadata-unavailable') {
+    state.supportTickets = { status, tickets: [] };
+    renderSupportTickets();
+    return;
+  }
+  const snapshot = await safely(() => window.studio.listSupportTickets());
+  if (snapshot) {
+    state.supportTickets = snapshot;
+    state.supportTicketStatus = snapshot.status || state.supportTicketStatus;
+  }
+  renderSupportTickets();
+}
+
+async function createSupportTicket(event) {
+  event.preventDefault();
+  const result = await safely(() => window.studio.createSupportTicket({
+    category: $('#support-ticket-category').value,
+    severity: $('#support-ticket-severity').value,
+    description: $('#support-ticket-description').value
+  }));
+  if (!result) return;
+  $('#support-ticket-description').value = '';
+  state.unsaved.supportTicketDraft = false;
+  toast(`Local ticket ${result.number} was created.`, 'success');
+  await refreshSupportTickets();
+}
+
+async function acknowledgeSupportTicket(ticketId) {
+  const result = await safely(() => window.studio.acknowledgeSupportTicket(ticketId));
+  if (!result) return;
+  toast(`Local first response recorded for ${result.number}.`, 'success');
+  await refreshSupportTickets();
+}
+
+async function openSupportTicketRecoveryFolder(ticketId = null) {
+  const result = await safely(() => window.studio.openSupportTicketRecoveryFolder(ticketId));
+  if (!result) return;
+  if (result.ticket?.number) toast(`Recovery folder opened for ${result.ticket.number}; no data was deleted.`, 'success');
+  else toast('The exact local recovery folder was opened. No data was deleted.', 'success');
+  await refreshSupportTickets();
+}
+
+async function copySupportTicketRecoveryFolder() {
+  const recoveryDirectory = state.supportTicketStatus?.recoveryDirectory || state.supportTickets?.status?.recoveryDirectory || '';
+  if (!recoveryDirectory) return toast('The local recovery folder is still loading.', 'error');
+  try {
+    await navigator.clipboard.writeText(recoveryDirectory);
+    toast('The exact local recovery-folder path was copied.', 'success');
+  } catch {
+    toast('Clipboard access was unavailable. Select the local folder path instead.', 'error');
+  }
+}
+
+async function openSupportTicketsDestination() {
+  state.documentationOpen = false;
+  state.pendingAuthenticatorDestination = false;
+  state.workspaceDestination = 'support-tickets';
+  renderAll();
+  await refreshSupportTickets();
+}
+
+async function openSupportTicketsFromUnlock() {
+  closeToyLockUnlockDialog();
+  await openSupportTicketsDestination();
+}
+
 function setAuthenticatorTab(tab) {
   state.activeAuthenticatorTab = tab;
   $$('.authenticator-tab-strip .tab').forEach((button) => {
@@ -3276,6 +3489,7 @@ function renderAll() {
   renderBuildToolsPlan();
   renderAuthenticator();
   renderToyLocks();
+  renderSupportTickets();
   renderConsole();
   renderLocalStatus();
   renderLocalHistory();
@@ -3955,6 +4169,7 @@ function unsavedWorkState() {
     || state.unsaved.authenticatorEntry
     || state.unsaved.toyLockDraft
     || state.unsaved.toyLockUnlock
+    || state.unsaved.supportTicketDraft
     || state.unsaved.appearance
     || createDialog?.open
     || experienceDialog?.open
@@ -3962,7 +4177,7 @@ function unsavedWorkState() {
   );
   return {
     hasUnsavedWork,
-    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, authenticator or toy-lock draft, Status Hub bridge edit, appearance preview, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
+    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, authenticator, toy-lock, or Support Tickets draft, Status Hub bridge edit, appearance preview, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
   };
 }
 
@@ -4539,6 +4754,10 @@ function handleStudioEvent(event) {
     refreshToyLocks();
     return;
   }
+  if (event?.type === 'support-tickets-changed') {
+    refreshSupportTickets();
+    return;
+  }
   logEvent(event || {});
 }
 
@@ -4671,7 +4890,9 @@ function bindEvents() {
   });
   $('#tab-dock').addEventListener('change', changeTabDock);
   $('#authenticator-destination-button').addEventListener('click', openAuthenticatorDestination);
+  $('#support-tickets-destination-button').addEventListener('click', openSupportTicketsDestination);
   $('#return-to-servers-button').addEventListener('click', returnToServers);
+  $('#return-from-support-tickets-button').addEventListener('click', returnToServers);
   $$('.authenticator-tab-strip .tab').forEach((button) => button.addEventListener('click', () => setAuthenticatorTab(button.dataset.authenticatorTab)));
   $('#authenticator-entry-form').addEventListener('submit', createAuthenticatorEntry);
   $('#authenticator-entry-form').addEventListener('input', () => { state.unsaved.authenticatorEntry = true; });
@@ -4700,10 +4921,12 @@ function bindEvents() {
   $('#toy-lock-create-form').addEventListener('input', () => { state.unsaved.toyLockDraft = true; });
   $('#toy-lock-create-form').addEventListener('change', () => { state.unsaved.toyLockDraft = true; });
   $('#toy-lock-method').addEventListener('change', toggleToyLockMethod);
+  $('#open-support-tickets-from-toy-locks').addEventListener('click', openSupportTicketsDestination);
   $('#toy-lock-unlock-form').addEventListener('submit', submitToyLockUnlock);
   $('#toy-lock-unlock-credential').addEventListener('input', () => { state.unsaved.toyLockUnlock = Boolean($('#toy-lock-unlock-credential').value); });
   $('#close-toy-lock-unlock-dialog').addEventListener('click', closeToyLockUnlockDialog);
   $('#toy-lock-unlock-cancel').addEventListener('click', closeToyLockUnlockDialog);
+  $('#open-support-tickets-from-unlock').addEventListener('click', openSupportTicketsFromUnlock);
   $('#toy-lock-unlock-dialog').addEventListener('close', () => {
     if (state.activeToyLockId) {
       state.activeToyLockId = null;
@@ -4711,6 +4934,31 @@ function bindEvents() {
       state.unsaved.toyLockUnlock = false;
     }
   });
+  $('#support-ticket-create-form').addEventListener('submit', createSupportTicket);
+  $('#support-ticket-create-form').addEventListener('input', () => { state.unsaved.supportTicketDraft = true; });
+  $('#support-ticket-create-form').addEventListener('change', () => { state.unsaved.supportTicketDraft = true; });
+  $('#support-ticket-refresh-button').addEventListener('click', refreshSupportTickets);
+  $('#support-ticket-search').addEventListener('input', renderSupportTickets);
+  $('#support-ticket-regex-toggle').addEventListener('click', () => {
+    const builder = $('#support-ticket-regex-builder');
+    builder.hidden = !builder.hidden;
+    $('#support-ticket-regex-toggle').setAttribute('aria-expanded', String(!builder.hidden));
+    if (!builder.hidden) $('#support-ticket-regex-pattern').focus();
+  });
+  ['support-ticket-regex-enabled', 'support-ticket-regex-pattern', 'support-ticket-regex-flags'].forEach((id) => {
+    $(`#${id}`).addEventListener(id === 'support-ticket-regex-enabled' ? 'change' : 'input', renderSupportTickets);
+  });
+  $$('[data-support-ticket-regex-token]').forEach((button) => button.addEventListener('click', () => {
+    const input = $('#support-ticket-regex-pattern');
+    const token = button.dataset.supportTicketRegexToken || '';
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.setRangeText(token, start, end, 'end');
+    input.focus();
+    renderSupportTickets();
+  }));
+  $('#open-support-ticket-recovery-folder').addEventListener('click', () => openSupportTicketRecoveryFolder());
+  $('#copy-support-ticket-recovery-folder').addEventListener('click', copySupportTicketRecoveryFolder);
   $('#new-server-button').addEventListener('click', openCreateDialog);
   $('#empty-create-button').addEventListener('click', openCreateDialog);
   $('#close-create-dialog').addEventListener('click', () => { state.unsaved.createDraft = false; $('#create-dialog').close(); });
@@ -4769,6 +5017,7 @@ function bindEvents() {
   }));
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
   $('#open-documentation-button').addEventListener('click', openOfflineDocumentation);
+  $('#open-support-tickets-from-help').addEventListener('click', openSupportTicketsDestination);
   $('#close-documentation-button').addEventListener('click', closeOfflineDocumentation);
   $('#documentation-search').addEventListener('input', () => {
     state.documentationQuery = $('#documentation-search').value.slice(0, 256);
@@ -4981,7 +5230,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets()]);
   renderCommandCenter();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });

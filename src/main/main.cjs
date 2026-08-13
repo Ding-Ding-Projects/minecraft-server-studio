@@ -17,6 +17,7 @@ let CredentialVault;
 let SharedStatusHubClient;
 let AuthenticatorService;
 let ToyLockService;
+let SupportTicketService;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
 } catch {
@@ -36,6 +37,11 @@ try {
   ({ ToyLockService } = require('./toy-lock-service.cjs'));
 } catch {
   ToyLockService = null;
+}
+try {
+  ({ SupportTicketService } = require('./support-ticket-service.cjs'));
+} catch {
+  SupportTicketService = null;
 }
 
 app.setName('Minecraft Server Studio');
@@ -60,6 +66,7 @@ let offlineDocumentation;
 let scheduleTickTimer;
 let authenticatorService;
 let toyLockService;
+let supportTicketService;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -387,8 +394,14 @@ app.whenReady().then(async () => {
     credentialVault,
     onChange: () => sendToRenderer({ type: 'toy-locks-changed' })
   }) : null;
+  supportTicketService = SupportTicketService ? new SupportTicketService({
+    dataDir: path.join(app.getPath('userData'), 'support-tickets'),
+    recoveryDirectory: app.getPath('userData'),
+    onChange: () => sendToRenderer({ type: 'support-tickets-changed' })
+  }) : null;
   authenticatorService?.initialize();
   toyLockService?.initialize();
+  supportTicketService?.initialize();
   schoolModeVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(sharedSettingsDirectory, 'credential-vault'),
     safeStorage
@@ -521,6 +534,11 @@ function requireAuthenticator() {
 function requireToyLocks() {
   if (!toyLockService) throw new Error('Toy locks are unavailable in this app build.');
   return toyLockService;
+}
+
+function requireSupportTickets() {
+  if (!supportTicketService) throw new Error('Local Support Tickets are unavailable in this app build.');
+  return supportTicketService;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -792,6 +810,46 @@ ipcMain.handle('studio:relock-toy-lock', async (_event, lockId) => {
     detail: 'A local toy lock state changed. Sensitive values were omitted from history.'
   });
   return relocked;
+});
+ipcMain.handle('studio:support-ticket-status', () => requireSupportTickets().getStatus());
+ipcMain.handle('studio:list-support-tickets', () => requireSupportTickets().listTickets());
+ipcMain.handle('studio:create-support-ticket', async (_event, input) => {
+  const created = await requireSupportTickets().createTicket(input);
+  await recordLocalHistory({
+    action: 'record-created',
+    subject: 'support-ticket',
+    subjectId: String(created.id),
+    label: 'Local support ticket created',
+    detail: 'A fictional local support ticket was created. Its description and sensitive values were omitted from history.'
+  });
+  return created;
+});
+ipcMain.handle('studio:acknowledge-support-ticket', async (_event, ticketId) => {
+  const ticket = await requireSupportTickets().acknowledgeTicket(ticketId);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'support-ticket',
+    subjectId: String(ticketId),
+    label: 'Local support ticket advanced',
+    detail: 'A fictional local support ticket advanced. Ticket details and sensitive values were omitted from history.'
+  });
+  return ticket;
+});
+ipcMain.handle('studio:open-support-ticket-recovery-folder', async (_event, ticketId) => {
+  if (ticketId !== undefined && ticketId !== null && typeof ticketId !== 'string') throw new Error('Support ticket identifier is invalid.');
+  const service = requireSupportTickets();
+  const recoveryDirectory = service.getStatus().recoveryDirectory;
+  const error = await shell.openPath(recoveryDirectory);
+  if (error) throw new Error(error);
+  const ticket = ticketId ? service.recordRecoveryFolderOpened(ticketId) : null;
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'support-ticket',
+    subjectId: ticketId ? String(ticketId) : 'recovery-folder',
+    label: 'Local recovery folder opened',
+    detail: 'The application-data recovery folder was opened by user request. No ticket content, credential, or path was recorded.'
+  });
+  return Object.freeze({ recoveryDirectory, ticket });
 });
 ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
   status: statusHubBridge.getStatus(),

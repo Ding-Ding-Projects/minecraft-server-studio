@@ -336,6 +336,7 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 body.school-mode-active [data-school-hidden] { display: none !important; }
 
 .authenticator-destination { display: grid; gap: 18px; }
+.support-tickets-destination { display: grid; gap: 18px; }
 .authenticator-heading { align-items: start; }
 .authenticator-heading > div { display: grid; gap: 7px; }
 .authenticator-heading .muted { max-width: 760px; }
@@ -356,7 +357,17 @@ body.school-mode-active [data-school-hidden] { display: none !important; }
 .regex-builder [data-state="invalid"] { color: var(--error); }
 .regex-builder [data-state="active"] { color: var(--success); }
 .authenticator-entry-list, .toy-lock-list { display: grid; gap: 12px; }
+.support-ticket-list { display: grid; gap: 12px; }
 .authenticator-entry-card, .toy-lock-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
+.support-ticket-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
+.support-ticket-card > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.support-ticket-card strong { color: var(--on-surface); }
+.support-ticket-card span, .support-ticket-card p, .support-ticket-card small { color: var(--on-surface-variant); overflow-wrap: anywhere; }
+.support-ticket-card p { margin: 0; line-height: 1.45; }
+.support-ticket-card[data-status="acknowledged"] { border-color: color-mix(in srgb, var(--primary) 55%, var(--outline-variant)); }
+.support-ticket-card[data-status="resolved"] { border-color: #4f9d75; }
+.support-ticket-disclosure { margin: 0; padding: 12px 14px; border: 1px solid var(--outline-variant); border-left: 4px solid var(--primary); border-radius: 12px; color: var(--on-surface); background: var(--surface-container-high); font-weight: 700; line-height: 1.45; }
+.support-ticket-directory { display: block; max-width: 100%; overflow-wrap: anywhere; padding: 12px 14px; border: 1px solid var(--outline-variant); border-radius: 12px; color: var(--on-surface); background: var(--surface-container-high); }
 .authenticator-entry-card > div:first-child { display: grid; gap: 4px; }
 .authenticator-entry-card strong, .toy-lock-card strong { color: var(--on-surface); }
 .authenticator-entry-card span, .toy-lock-card span { color: var(--on-surface-variant); font-size: .82rem; overflow-wrap: anywhere; }
