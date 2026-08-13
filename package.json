@@ -40,7 +40,7 @@
       ]
     },
     "squirrelWindows": {
-      "artifactName": "${productName}-${version}-${arch}-Setup.exe",
+      "artifactName": "Minecraft.Server.Studio-${version}-${arch}-Setup.exe",
       "iconUrl": "https://raw.githubusercontent.com/Ding-Ding-Projects/minecraft-server-studio/cf1e39526eeab1996e8ecdf4114e00c12577cd62/assets/minecraft-server-studio.ico",
       "msi": false
     }
