@@ -32,6 +32,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Open the fictional local Support Tickets recovery desk for a toy lock. It can show and ask the operating system to open the actual application-data folder for a user-directed reset route; it never sends a ticket, calls a network service, displays a credential, or deletes application data.
 - Use the public landing page's separate browser-local authenticator for manually entered or `otpauth://totp/` entries, local QR pairing reveal, independently credentialed registered-target toy locks, and its local-only Support Tickets recovery desk. It uses origin-scoped browser storage rather than the desktop vault, makes no network request, and remains incomplete for QR import/decoding, synchronization, secret export, every-element lock coverage, localization, automated tests, and capture evidence.
 - Use the public landing page's separate browser-local history view for bounded page-owned audit metadata, local date/action/plain-text/regular-expression filtering, selected-record UTF-8 JSON, JSON Lines, CSV, TSV, or Markdown export, and two-key/full-slider confirmation before deleting page audit records. It never reads server, desktop, browser-history, filesystem, converter-content, or authenticator records; it does not know a browser download destination or completion result.
+- Use the public landing page's browser-local notification center to search, dismiss, and clear page-local notification metadata. Clearing dismissed or all records requires two acknowledgements and a full slider, and it affects no server, installer, file, credential, download, or external data.
 
 ## Desktop workflow
 
@@ -102,6 +103,8 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 
 The companion site also independently provides a deliberately bounded local converter for selected files: UTF-8 text, validated JSON/CSV/TSV, a limited YAML-style text target, and Base64/hex encodings. It accepts no more than 12 files at a time, each up to 1 MiB, detects eligible routes from bounded local bytes/content rather than an extension, and stores no file path or raw source/output bytes in browser storage. PDF, image, audio, video, archive, and native workbook conversion remain visibly unavailable because the site does not bundle a suitable local parser/encoder. Its separate history view retains at most 500 page-owned audit records, supports local date/action/plain-text/regular-expression filters, requires a two-key/full-slider confirmation for local history deletion, and can prepare only selected-record UTF-8 JSON, JSON Lines, CSV, TSV, or Markdown output. This public browser feature is separate from the desktop file-converter and local-history foundations and never calls the desktop application.
 
+The companion site also has a bounded browser-local notification center. Its notices and audit records describe page-local preview events only; info, success, and progress toasts auto-dismiss after seven seconds while warning and error notices remain until dismissed. The center supports local plain-text and regular-expression discovery, individual/selected dismissal, and two-acknowledgement/full-slider confirmation before clearing only local notification metadata. It does not start or confirm a server operation, browser transfer, installer action, desktop action, or file change. See [Browser-local notification center and destructive confirmation](docs/features/browser-local-notifications-and-confirmation.md) for the local-storage, privacy, and verification boundaries.
+
 ## Documentation
 
 - [Server lifecycle and Paper/Spigot setup](docs/features/server-orchestration.md)
@@ -125,6 +128,7 @@ The companion site also independently provides a deliberately bounded local conv
 - [Local file-converter foundation](docs/features/file-converter.md)
 - [Browser-local companion-site file converter](docs/features/browser-local-file-converter.md)
 - [Browser-local history and safe exports](docs/features/browser-local-history-and-safe-exports.md)
+- [Browser-local notification center and destructive confirmation](docs/features/browser-local-notifications-and-confirmation.md)
 - [External editor integration](docs/features/external-editor-integration.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Local history and safe exports](docs/features/local-history-and-safe-exports.md)

@@ -49,6 +49,14 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     visibleIds: [],
     message: ""
   };
+  var notificationRuntime = {
+    selected: new Set(),
+    autoDismissTimers: Object.create(null),
+    confirmation: null,
+    escapeHandler: null,
+    status: "",
+    maxBulkSelection: 50
+  };
 
   var LOCALIZED_COPY = Object.freeze({
     "settings-eyebrow": { english: "Settings and appearance", cantonese: "設定與外觀" },
@@ -113,6 +121,13 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     var mode = state.settings && state.settings.languageMode || "english";
     var english = funnyCopy(key, "english", entry.english);
     var cantonese = funnyCopy(key, "cantonese", entry.cantonese);
+    if (mode === "cantonese") return cantonese;
+    if (mode === "bilingual") return english + " · " + cantonese;
+    return english;
+  }
+
+  function notificationLocalizedCopy(english, cantonese) {
+    var mode = state.settings && state.settings.languageMode || "english";
     if (mode === "cantonese") return cantonese;
     if (mode === "bilingual") return english + " · " + cantonese;
     return english;
@@ -4158,92 +4173,428 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     });
   }
 
-  function installDestructiveDemo() {
+  function notificationElements() {
     var surface = one('[data-contract-surface="notification-center"]');
-    if (!surface || one("[data-mss-confirmation-demo]", surface)) return;
-    var area = made("section");
-    area.setAttribute("data-mss-confirmation-demo", "true");
-    var heading = made("h3");
-    heading.textContent = "Safe confirmation interaction demo";
-    var copy = made("p");
-    copy.textContent = "This educational flow cannot delete, change, upload, download, or otherwise affect anything. It only demonstrates deliberate confirmation controls.";
-    area.append(heading, copy);
-    area.appendChild(button("Open non-destructive confirmation demo", function () {
-      showDialog("Non-destructive confirmation demo", function (content) {
-        var description = made("p");
-        description.textContent = "Complete both acknowledgements and move the slider. The final control only reports that nothing changed.";
-        var firstLabel = made("label");
-        var first = made("input");
-        first.type = "checkbox";
-        firstLabel.append(first, document.createTextNode(" I understand this is only a demonstration."));
-        var secondLabel = made("label");
-        var second = made("input");
-        second.type = "checkbox";
-        secondLabel.append(second, document.createTextNode(" I understand no data can be changed here."));
-        var rangeLabel = made("label");
-        rangeLabel.textContent = "Confirmation slider";
-        var range = made("input");
-        range.type = "range";
-        range.min = "0";
-        range.max = "100";
-        range.value = "0";
-        range.disabled = true;
-        rangeLabel.appendChild(range);
-        var output = made("output");
-        output.setAttribute("aria-live", "polite");
-        var finish = button("Finish safe demo", function () {
-          output.textContent = "Demo complete. Nothing was changed.";
-          addHistory("Confirmation demo completed", "No operation was available or performed.");
-          notify("demo", "The confirmation demonstration completed. Nothing was changed.");
-        });
-        finish.disabled = true;
-        function update() {
-          range.disabled = !(first.checked && second.checked);
-          finish.disabled = range.disabled || range.value !== "100";
-          output.textContent = range.disabled ? "Acknowledge both statements to enable the slider." : range.value === "100" ? "Ready to complete the safe demonstration." : "Move the slider to 100 to finish the demonstration.";
-        }
-        first.addEventListener("change", update);
-        second.addEventListener("change", update);
-        range.addEventListener("input", update);
-        content.append(description, firstLabel, secondLabel, rangeLabel, output, finish);
-        update();
+    if (!surface) return {};
+    var host = one('[data-mss-notification-center]', surface);
+    return {
+      surface: surface,
+      host: host,
+      list: host && one('[data-mss-notification-list]', host),
+      search: host && one('[data-contract-hook="notification-search-regex"] input[type="search"]', host),
+      showDismissed: host && one('[data-mss-notification-show-dismissed]', host),
+      add: host && one('[data-mss-notification-add]', host),
+      selectVisible: host && one('[data-mss-notification-select-visible]', host),
+      clearSelection: host && one('[data-mss-notification-clear-selection]', host),
+      dismissSelected: host && one('[data-mss-notification-dismiss-selected]', host),
+      clearDismissed: host && one('[data-mss-notification-clear-dismissed]', host),
+      clearAll: host && one('[data-mss-notification-clear-all]', host),
+      summary: surface && one('[data-mss-notification-summary]', surface),
+      status: host && one('[data-mss-notification-status]', host),
+      confirmationHost: host && one('[data-mss-notification-confirmation]', host)
+    };
+  }
+
+  function notificationRecordTime(notice) {
+    return notice && (notice.createdAt || notice.when) || new Date().toISOString();
+  }
+
+  function activeNotificationRecords() {
+    return state.notifications.filter(function (notice) { return !notice.dismissed; });
+  }
+
+  function dismissedNotificationRecords() {
+    return state.notifications.filter(function (notice) { return Boolean(notice.dismissed); });
+  }
+
+  function setNotificationStatus(message) {
+    notificationRuntime.status = String(message || "").slice(0, 500);
+    var elements = notificationElements();
+    if (elements.status) elements.status.textContent = notificationRuntime.status;
+  }
+
+  function cleanNotificationSelection() {
+    var activeIds = new Set(activeNotificationRecords().map(function (notice) { return notice.id; }));
+    Array.from(notificationRuntime.selected).forEach(function (id) {
+      if (!activeIds.has(id)) notificationRuntime.selected.delete(id);
+    });
+  }
+
+  function clearNotificationTimer(id) {
+    if (!notificationRuntime.autoDismissTimers[id]) return;
+    window.clearTimeout(notificationRuntime.autoDismissTimers[id]);
+    delete notificationRuntime.autoDismissTimers[id];
+  }
+
+  function notificationDismissesAutomatically(notice) {
+    return ["info", "success", "progress"].indexOf(notificationLevel(notice)) >= 0;
+  }
+
+  function dismissNotificationRecord(id, announcement) {
+    var result = hasContractMethod("dismissNotification") ? safely(function () { return contract.dismissNotification(id); }, null) : null;
+    if (result && result.ok === true) {
+      hydrateContractState();
+    } else if (!hasContractMethod("dismissNotification")) {
+      state.notifications.forEach(function (notice) { if (notice.id === id) notice.dismissed = true; });
+      state.history.unshift({ id: "history-dismiss-" + Date.now(), action: "Notification dismissed", target: id, detail: "A browser-local notification was dismissed.", createdAt: new Date().toISOString() });
+    } else {
+      setNotificationStatus((result && result.error) || "This browser-local notification could not be dismissed.");
+      return false;
+    }
+    clearNotificationTimer(id);
+    cleanNotificationSelection();
+    renderNotifications();
+    if (announcement) live(announcement);
+    return true;
+  }
+
+  function scheduleNotificationAutoDismissals() {
+    var activeIds = new Set();
+    activeNotificationRecords().forEach(function (notice) {
+      activeIds.add(notice.id);
+      if (!notificationDismissesAutomatically(notice) || notificationRuntime.autoDismissTimers[notice.id]) return;
+      notificationRuntime.autoDismissTimers[notice.id] = window.setTimeout(function () {
+        delete notificationRuntime.autoDismissTimers[notice.id];
+        dismissNotificationRecord(notice.id, "A non-blocking browser-local notification closed automatically. Its local history record remains available when dismissed notices are shown.");
+      }, 7000);
+    });
+    Object.keys(notificationRuntime.autoDismissTimers).forEach(function (id) {
+      if (!activeIds.has(id)) clearNotificationTimer(id);
+    });
+  }
+
+  function renderNotificationToasts() {
+    var stack = one('[data-mss-notification-toast-stack]');
+    if (!stack) {
+      stack = made("section");
+      stack.setAttribute("data-mss-notification-toast-stack", "true");
+      stack.setAttribute("aria-label", "Browser-local notifications");
+      stack.setAttribute("aria-live", "polite");
+      (body || document.documentElement).appendChild(stack);
+    }
+    stack.replaceChildren();
+    activeNotificationRecords().slice(0, 4).reverse().forEach(function (notice) {
+      var level = notificationLevel(notice);
+      var toast = made("article");
+      toast.className = "notification-toast notification-toast--" + level;
+      toast.setAttribute("data-mss-notification-toast", notice.id);
+      toast.setAttribute("role", level === "warning" || level === "error" ? "alert" : "status");
+      var content = made("div");
+      var title = made("strong");
+      title.textContent = emoji(level) + (notice.title || "Browser-local notification");
+      var message = made("span");
+      message.textContent = notificationMessage(notice);
+      var behavior = made("small");
+      behavior.textContent = notificationDismissesAutomatically(notice) ? "Closes automatically while this page remains open; the dismissed record remains local." : "Stays visible until you dismiss it; the record remains local.";
+      content.append(title, message, behavior);
+      var dismiss = button("Dismiss", function () {
+        dismissNotificationRecord(notice.id, "Browser-local notification dismissed. Its metadata remains in this page's dismissed-notice history until you explicitly clear it.");
+      }, "Dismiss browser-local notification: " + (notice.title || "notification"));
+      toast.append(content, dismiss);
+      stack.appendChild(toast);
+    });
+    scheduleNotificationAutoDismissals();
+  }
+
+  function updateNotificationControls(elements) {
+    var active = activeNotificationRecords().length;
+    var dismissed = dismissedNotificationRecords().length;
+    var selected = notificationRuntime.selected.size;
+    if (elements.summary) elements.summary.textContent = active + " active and " + dismissed + " dismissed browser-local notice" + (active + dismissed === 1 ? "." : "s.");
+    if (elements.dismissSelected) elements.dismissSelected.disabled = selected === 0;
+    if (elements.clearSelection) elements.clearSelection.disabled = selected === 0;
+    if (elements.clearDismissed) elements.clearDismissed.disabled = dismissed === 0;
+    if (elements.clearAll) elements.clearAll.disabled = active + dismissed === 0;
+    if (!notificationRuntime.status) {
+      setNotificationStatus(active + " active and " + dismissed + " dismissed browser-local notices. Bulk selection is limited to " + notificationRuntime.maxBulkSelection + " active notices.");
+    }
+  }
+
+  function refreshNotificationSearch(elements) {
+    if (!elements.search || elements.search.getAttribute("data-mss-regex-ready") !== "true") return;
+    safely(function () { elements.search.dispatchEvent(new Event("input", { bubbles: true })); });
+  }
+
+  function notificationSelectionToggle(id, selected) {
+    if (!selected) {
+      notificationRuntime.selected.delete(id);
+      setNotificationStatus(notificationRuntime.selected.size + " active browser-local notice" + (notificationRuntime.selected.size === 1 ? " is" : "s are") + " selected.");
+      renderNotifications();
+      return;
+    }
+    if (notificationRuntime.selected.size >= notificationRuntime.maxBulkSelection) {
+      setNotificationStatus("Bulk selection is limited to " + notificationRuntime.maxBulkSelection + " active browser-local notices. Clear a selection before adding another.");
+      renderNotifications();
+      return;
+    }
+    notificationRuntime.selected.add(id);
+    setNotificationStatus(notificationRuntime.selected.size + " active browser-local notice" + (notificationRuntime.selected.size === 1 ? " is" : "s are") + " selected.");
+    renderNotifications();
+  }
+
+  function removeNotificationEscapeHandler() {
+    if (notificationRuntime.escapeHandler) document.removeEventListener("keydown", notificationRuntime.escapeHandler);
+    notificationRuntime.escapeHandler = null;
+  }
+
+  function closeNotificationConfirmation(message) {
+    var confirmation = notificationRuntime.confirmation;
+    if (!confirmation) return;
+    if (confirmation.session && hasContractMethod("advanceDestructiveAction")) {
+      safely(function () { contract.advanceDestructiveAction(confirmation.session, { cancel: true }); });
+    }
+    notificationRuntime.confirmation = null;
+    removeNotificationEscapeHandler();
+    if (message) setNotificationStatus(message);
+    renderNotifications();
+    if (confirmation.origin) focus(confirmation.origin);
+  }
+
+  function beginNotificationClearConfirmation(mode, origin) {
+    var affected = mode === "dismissed" ? dismissedNotificationRecords().length : state.notifications.length;
+    if (!affected) {
+      setNotificationStatus(mode === "dismissed" ? "There are no dismissed browser-local notification records to clear." : "There are no browser-local notification records to clear.");
+      return;
+    }
+    if (!hasContractMethod("beginDestructiveAction") || !hasContractMethod("advanceDestructiveAction") || !hasContractMethod("clearNotifications")) {
+      setNotificationStatus("This browser-local confirmation cannot start because the page-local contract is unavailable. No records were changed.");
+      return;
+    }
+    var title = mode === "dismissed" ? "Clear dismissed browser-local notification metadata" : "Clear all browser-local notification metadata";
+    var session = safely(function () {
+      return contract.beginDestructiveAction({ id: "notification-clear-" + mode + "-" + Date.now(), title: title, affected: affected });
+    }, null);
+    if (!session || !session.id) {
+      setNotificationStatus("This browser-local confirmation could not start. No records were changed.");
+      return;
+    }
+    notificationRuntime.confirmation = { mode: mode, affected: affected, title: title, session: session, origin: origin || null };
+    removeNotificationEscapeHandler();
+    notificationRuntime.escapeHandler = function (event) {
+      if (event.key !== "Escape" || !notificationRuntime.confirmation) return;
+      event.preventDefault();
+      closeNotificationConfirmation("Browser-local clear cancelled with Emergency exit. No notification records were changed.");
+    };
+    document.addEventListener("keydown", notificationRuntime.escapeHandler);
+    setNotificationStatus("Confirmation is open for " + affected + " browser-local notification record" + (affected === 1 ? "." : "s.") + " No records have been changed.");
+    renderNotifications();
+  }
+
+  function confirmationSessionForInputs(confirmation, first, second, range) {
+    var source = safely(function () {
+      return contract.beginDestructiveAction({ id: confirmation.session.id, title: confirmation.title, affected: confirmation.affected });
+    }, null);
+    if (!source) return null;
+    var current = source;
+    function advance(request) {
+      var result = safely(function () { return contract.advanceDestructiveAction(current, request); }, null);
+      if (result && result.ok === true && result.session) current = result.session;
+    }
+    if (first.checked) advance({ key: "first" });
+    if (second.checked) advance({ key: "second" });
+    advance({ slider: Number(range.value) });
+    return current;
+  }
+
+  function renderNotificationConfirmation(elements) {
+    var host = elements.confirmationHost;
+    if (!host) return;
+    var confirmation = notificationRuntime.confirmation;
+    host.replaceChildren();
+    if (!confirmation) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    var heading = made("h4");
+    heading.textContent = confirmation.title;
+    var description = made("p");
+    description.textContent = "This will remove exactly " + confirmation.affected + " browser-local notification metadata record" + (confirmation.affected === 1 ? "." : "s.") + " It cannot delete browser downloads, server data, installed-app data, credentials, files, or external data.";
+    var firstLabel = made("label");
+    firstLabel.className = "notification-confirmation-check";
+    var first = made("input");
+    first.type = "checkbox";
+    first.setAttribute("data-mss-notification-confirm-first", "true");
+    firstLabel.append(first, document.createTextNode(" I understand that only page-local notification metadata will be removed."));
+    var secondLabel = made("label");
+    secondLabel.className = "notification-confirmation-check";
+    var second = made("input");
+    second.type = "checkbox";
+    second.setAttribute("data-mss-notification-confirm-second", "true");
+    secondLabel.append(second, document.createTextNode(" I understand dismissed or cleared notices cannot be restored by this page."));
+    var rangeLabel = made("label");
+    rangeLabel.className = "notification-confirmation-range";
+    var rangeCaption = made("span");
+    rangeCaption.textContent = "Slide to 100 to enable clearing";
+    var range = made("input");
+    range.type = "range";
+    range.min = "0";
+    range.max = "100";
+    range.value = "0";
+    range.disabled = true;
+    range.setAttribute("aria-label", "Confirmation slider from 0 to 100");
+    var progress = made("progress");
+    progress.max = 100;
+    progress.value = 0;
+    var sliderStatus = made("output");
+    sliderStatus.setAttribute("aria-live", "polite");
+    rangeLabel.append(rangeCaption, range, progress, sliderStatus);
+    var controls = made("div");
+    controls.className = "notification-confirmation-actions";
+    var exit = button("Emergency exit", function () {
+      closeNotificationConfirmation("Browser-local clear cancelled with Emergency exit. No notification records were changed.");
+    });
+    var confirm = button(confirmation.mode === "dismissed" ? "Clear dismissed metadata" : "Clear all local notices", function () {
+      var final = safely(function () { return contract.advanceDestructiveAction(confirmation.session, { confirm: true }); }, null);
+      if (!final || final.ok !== true || !final.session || final.session.state !== "confirmed") {
+        setNotificationStatus((final && final.error) || "Both acknowledgements and the full 0–100 confirmation slider are required. No records were changed.");
+        renderNotificationConfirmation(notificationElements());
+        return;
+      }
+      var result = safely(function () { return contract.clearNotifications({ onlyDismissed: confirmation.mode === "dismissed" }); }, null);
+      if (!result || result.ok !== true) {
+        setNotificationStatus((result && result.error) || "Browser-local notification metadata could not be cleared. No records were changed.");
+        return;
+      }
+      notificationRuntime.selected.clear();
+      notificationRuntime.confirmation = null;
+      removeNotificationEscapeHandler();
+      Object.keys(notificationRuntime.autoDismissTimers).forEach(clearNotificationTimer);
+      hydrateContractState();
+      setNotificationStatus(result.removed + " browser-local notification metadata record" + (result.removed === 1 ? " was" : "s were") + " cleared. No browser download, server, installed-app, credential, file, or external data changed.");
+      live(notificationRuntime.status);
+      renderNotifications();
+      if (confirmation.origin) focus(confirmation.origin);
+    }, "Confirm clearing browser-local notification metadata");
+    confirm.disabled = true;
+    controls.append(exit, confirm);
+    host.append(heading, description, firstLabel, secondLabel, rangeLabel, controls);
+
+    function update() {
+      var both = first.checked && second.checked;
+      if (!both) range.value = "0";
+      range.disabled = !both;
+      var nextSession = confirmationSessionForInputs(confirmation, first, second, range);
+      if (nextSession) confirmation.session = nextSession;
+      progress.value = Number(range.value);
+      confirm.disabled = !(confirmation.session && confirmation.session.canConfirm === true);
+      sliderStatus.textContent = !both ? "Complete both independent acknowledgements before the slider becomes available." : range.value === "100" ? "All confirmation controls are complete. The clear action is enabled." : "Confirmation slider: " + range.value + " of 100.";
+    }
+    first.addEventListener("change", update);
+    second.addEventListener("change", update);
+    range.addEventListener("input", update);
+    update();
+    window.setTimeout(function () { if (notificationRuntime.confirmation === confirmation) first.focus(); }, 0);
+  }
+
+  function installNotificationCenter() {
+    var elements = notificationElements();
+    if (!elements.surface || !elements.host || elements.surface.getAttribute("data-mss-notification-center-ready") === "true") return;
+    elements.surface.setAttribute("data-mss-notification-center-ready", "true");
+    if (elements.search) {
+      makeRegexBuilder(elements.search, {
+        label: "browser-local notices",
+        scope: elements.surface,
+        candidates: function () { return all("[data-mss-notification-record]", elements.list); }
       });
-    }));
-    surface.appendChild(area);
+    }
+    if (elements.showDismissed) elements.showDismissed.addEventListener("change", function () {
+      setNotificationStatus(elements.showDismissed.checked ? "Dismissed browser-local notification history is visible." : "Dismissed browser-local notification history is hidden. Records remain local until explicitly cleared.");
+      renderNotifications();
+    });
+    if (elements.add) elements.add.addEventListener("click", function () {
+      notify("info", "A browser-local information notice was added. No server, installer, download, desktop-app, account, or external-data action occurred.");
+      setNotificationStatus("A browser-local information notice was added to this page's local record.");
+      renderNotifications();
+    });
+    if (elements.selectVisible) elements.selectVisible.addEventListener("click", function () {
+      var visible = all('[data-mss-notification-record]:not([hidden])', elements.list).filter(function (item) { return item.getAttribute("data-mss-notification-dismissed") !== "true"; });
+      notificationRuntime.selected.clear();
+      visible.slice(0, notificationRuntime.maxBulkSelection).forEach(function (item) { notificationRuntime.selected.add(item.getAttribute("data-mss-notification-record")); });
+      setNotificationStatus(notificationRuntime.selected.size + " visible active browser-local notice" + (notificationRuntime.selected.size === 1 ? " is" : "s are") + " selected" + (visible.length > notificationRuntime.maxBulkSelection ? "; selection is bounded to " + notificationRuntime.maxBulkSelection + "." : "."));
+      renderNotifications();
+    });
+    if (elements.clearSelection) elements.clearSelection.addEventListener("click", function () {
+      notificationRuntime.selected.clear();
+      setNotificationStatus("The browser-local notice selection was cleared. No notification record changed.");
+      renderNotifications();
+    });
+    if (elements.dismissSelected) elements.dismissSelected.addEventListener("click", function () {
+      var ids = Array.from(notificationRuntime.selected).slice(0, notificationRuntime.maxBulkSelection);
+      var dismissed = ids.filter(function (id) { return dismissNotificationRecord(id); }).length;
+      notificationRuntime.selected.clear();
+      setNotificationStatus(dismissed + " browser-local notice" + (dismissed === 1 ? " was" : "s were") + " dismissed. Their local metadata remains available when dismissed history is shown.");
+      live(notificationRuntime.status);
+      renderNotifications();
+    });
+    if (elements.clearDismissed) elements.clearDismissed.addEventListener("click", function () { beginNotificationClearConfirmation("dismissed", elements.clearDismissed); });
+    if (elements.clearAll) elements.clearAll.addEventListener("click", function () { beginNotificationClearConfirmation("all", elements.clearAll); });
+    window.addEventListener("pagehide", function () {
+      Object.keys(notificationRuntime.autoDismissTimers).forEach(clearNotificationTimer);
+      removeNotificationEscapeHandler();
+    }, { once: true });
+    if (hasContractMethod("registerCommand")) safely(function () {
+      contract.registerCommand({ id: "browser-local-notification-center", title: "Browser-local notification center", description: "Review, dismiss, search, and safely clear only this page's browser-local notification metadata.", group: "Browser-local controls", elementId: "notifications-preview", keywords: ["notifications", "toast", "clear", "confirmation"] });
+    });
   }
 
   function renderNotifications() {
-    var surface = one('[data-contract-surface="notification-center"]');
-    if (!surface) return;
-    var area = one("[data-mss-local-notifications]", surface);
-    if (!area) {
-      area = made("section");
-      area.setAttribute("data-mss-local-notifications", "true");
-      var heading = made("h3");
-      heading.textContent = "Browser-local demonstration notices";
-      var list = made("ul");
-      list.setAttribute("data-mss-notification-list", "true");
-      area.append(heading, button("Add demo notice", function () {
-        addHistory("Demo notice added", "A browser-local notice was added.");
-        notify("demo", "A browser-local demonstration notice was added. No server or installer action occurred.");
-      }), list);
-      surface.appendChild(area);
-    }
-    var listHost = one("[data-mss-notification-list]", area);
-    listHost.replaceChildren();
-    if (!state.notifications.length) {
+    var elements = notificationElements();
+    if (!elements.surface || !elements.list) return;
+    cleanNotificationSelection();
+    var showDismissed = Boolean(elements.showDismissed && elements.showDismissed.checked);
+    var records = state.notifications.filter(function (notice) { return showDismissed || !notice.dismissed; });
+    elements.list.replaceChildren();
+    if (!records.length) {
       var empty = made("li");
-      empty.textContent = "No browser-local notices yet.";
-      listHost.appendChild(empty);
-      return;
+      empty.className = "empty-state";
+      empty.textContent = showDismissed ? notificationLocalizedCopy("No browser-local notification history matches this view.", "而家呢個檢視冇符合嘅瀏覽器本機通知記錄。") : notificationLocalizedCopy("No active browser-local notices remain. Show dismissed notice history to review retained local metadata.", "而家冇未處理嘅瀏覽器本機通知。顯示已關閉通知記錄可以查看仍然保留嘅本機資料。");
+      elements.list.appendChild(empty);
+    } else {
+      records.forEach(function (notice) {
+        var level = notificationLevel(notice);
+        var item = made("li");
+        item.setAttribute("data-mss-notification-record", notice.id);
+        item.setAttribute("data-mss-notification-dismissed", String(Boolean(notice.dismissed)));
+        item.dataset.level = level;
+        var selectLabel = made("label");
+        selectLabel.className = "notification-selection";
+        var selection = made("input");
+        selection.type = "checkbox";
+        selection.checked = notificationRuntime.selected.has(notice.id);
+        selection.disabled = Boolean(notice.dismissed);
+        selection.setAttribute("aria-label", "Select browser-local notification: " + (notice.title || "notification"));
+        selection.addEventListener("change", function () { notificationSelectionToggle(notice.id, selection.checked); });
+        selectLabel.append(selection, document.createTextNode(" Select"));
+        var dot = made("span");
+        dot.className = "notification-dot notification-dot--" + level;
+        dot.setAttribute("aria-hidden", "true");
+        var content = made("div");
+        var title = made("strong");
+        title.textContent = emoji(level) + (notice.title || "Browser-local notification");
+        var message = made("small");
+        message.textContent = notificationMessage(notice);
+        var metadata = made("small");
+        metadata.textContent = (notice.dismissed ? "Dismissed" : "Active") + " · recorded locally at " + notificationRecordTime(notice) + ".";
+        content.append(title, message, metadata);
+        var actions = made("div");
+        actions.className = "notification-item-actions";
+        if (!notice.dismissed) actions.appendChild(button("Dismiss", function () {
+          dismissNotificationRecord(notice.id, "Browser-local notification dismissed. Its metadata remains local until explicitly cleared.");
+        }, "Dismiss browser-local notification: " + (notice.title || "notification")));
+        else {
+          var dismissed = made("span");
+          dismissed.textContent = "Dismissed";
+          actions.appendChild(dismissed);
+        }
+        item.append(selectLabel, dot, content, actions);
+        elements.list.appendChild(item);
+      });
     }
-    state.notifications.forEach(function (notice) {
-      var item = made("li");
-      var level = notificationLevel(notice);
-      item.dataset.level = level;
-      item.textContent = emoji(level) + notificationMessage(notice) + " Recorded locally at " + (notice.createdAt || notice.when || new Date().toISOString()) + ".";
-      listHost.appendChild(item);
-    });
+    updateNotificationControls(elements);
+    renderNotificationConfirmation(elements);
+    renderNotificationToasts();
+    refreshNotificationSearch(elements);
   }
 
   function syncHistoryActionOptions(select) {
@@ -4682,6 +5033,24 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       interaction: "missing",
       capture: "missing"
     };
+    var browserNotificationCenter = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, site/styles.css, and site/contract.js",
+      implementationDetail: "The page renders bounded local notification records, non-blocking toasts, dismissal controls, a plain-text-first regex search, and two-key/full-slider confirmation before clearing only local notification metadata.",
+      documentation: "in-progress",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/browser-local-notifications-and-confirmation.md",
+      localization: "in-progress",
+      localizationDetail: "The existing page-wide language controls remain available, while this operational surface is still English-first in the current delivery lane.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2",
+      persistenceDetail: "At most 200 notification records and 500 contract audit records persist only for this page origin in this browser; transient bulk selection and confirmation sessions are not stored.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-site interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-site capture is recorded."
+    };
     var universalControlsCore = {
       implementation: "in-progress",
       implementationReference: "site/index.html, site/app.js, site/contract.js, and site/vocabulary-loader.js",
@@ -4793,7 +5162,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
         inventoryFeature("ollama-privileged-boundary", "Unavailable browser-only Ollama actions", "in-progress", "Model Store, pull, chat, delete, copy, hardware-fit, and harness actions remain visibly unavailable because this static browser surface cannot safely implement them.", ollamaBrowserObserver)
       ] },
       { id: "history", label: "Local history preview", route: "#history-preview", features: [inventoryFeature("history-preview", "Browser-local audit preview", "in-progress", "The browser-local contract audit is not Git-backed desktop history.", localContract)] },
-      { id: "notifications", label: "Notification center preview", route: "#notifications-preview", features: [inventoryFeature("notification-preview", "Browser-local notification preview", "in-progress", "Notifications are browser-local and do not represent a server or installer outcome.", localContract)] },
+      { id: "notifications", label: "Browser-local notification center", route: "#notifications-preview", features: [inventoryFeature("browser-local-notification-center", "Bounded browser-local notification center and page-local confirmation", "in-progress", "Notifications and their audit metadata remain local. Clearing records confirms only the exact page-local notification count and cannot affect a browser download, server, installed application, credential, file, or external system.", browserNotificationCenter)] },
       { id: "downloads", label: "Download and release states", route: "#downloads-preview", features: [inventoryFeature("download-boundary", "Static verified installer anchor", "in-progress", "The browser owns transfer behavior; this page does not start, track, pause, resume, or confirm a transfer.", staticHook)] }
     ];
     return { surfaces: surfaces };
@@ -4953,8 +5322,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     installConverterPlanner();
     installOllamaPreview();
     installAuthenticatorEducation();
+    installNotificationCenter();
     renderNotifications();
-    installDestructiveDemo();
     installHistoryFilters();
     installHistorySearchBuilder();
     installExports();
