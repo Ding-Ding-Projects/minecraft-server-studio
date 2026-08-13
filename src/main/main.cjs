@@ -7,6 +7,7 @@ const { StudioSettingsService } = require('./studio-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { UpdateController } = require('./update-controller.cjs');
+const { NotificationCenter } = require('./notification-center.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
 try {
@@ -33,6 +34,7 @@ const MAX_RCON_PACKET_BYTES = 256 * 1024;
 const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 let statusHubBridge;
 let updateController;
+let notificationCenter;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -312,6 +314,14 @@ app.whenReady().then(async () => {
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
   }) : null;
+  try {
+    notificationCenter = new NotificationCenter({
+      dataDir: path.join(app.getPath('userData'), 'notifications')
+    });
+    await notificationCenter.initialize();
+  } catch {
+    notificationCenter = null;
+  }
   schoolModeVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(sharedSettingsDirectory, 'credential-vault'),
     safeStorage
@@ -372,6 +382,11 @@ function requireManager() {
 function requireUpdater() {
   if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
   return updateController;
+}
+
+function requireNotificationCenter() {
+  if (!notificationCenter) throw new Error('The local notification center is unavailable. Toast messages remain available for this session.');
+  return notificationCenter;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -575,6 +590,15 @@ ipcMain.handle('studio:check-for-updates', () => requireUpdater().checkForUpdate
 ipcMain.handle('studio:set-updates-enabled', (_event, enabled) => requireUpdater().setEnabled(enabled));
 ipcMain.handle('studio:defer-update', () => requireUpdater().deferUpdate());
 ipcMain.handle('studio:restart-for-update', () => requireUpdater().restartForUpdate(queryRendererUnsavedWork));
+ipcMain.handle('studio:list-notifications', (_event, options) => requireNotificationCenter().list({ includeDismissed: options?.includeDismissed === true }));
+ipcMain.handle('studio:record-notification', (_event, input) => requireNotificationCenter().publish({
+  kind: input?.kind,
+  title: input?.title,
+  detail: input?.detail,
+  source: 'desktop-renderer'
+}));
+ipcMain.handle('studio:mark-notifications-read', (_event, ids) => requireNotificationCenter().markRead(ids));
+ipcMain.handle('studio:dismiss-notifications', (_event, ids) => requireNotificationCenter().dismiss(ids));
 ipcMain.handle('studio:open-update-notes', async () => {
   const releaseNotesUrl = requireUpdater().status().releaseNotesUrl;
   const url = releaseNotesUrl ? new URL(releaseNotesUrl) : null;

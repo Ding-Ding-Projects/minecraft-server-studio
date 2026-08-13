@@ -26,6 +26,7 @@
         <div class="sidebar-footer">
           <button class="text-action" id="refresh-button" type="button" data-i18n="nav.refresh">Refresh local data</button>
           <button class="text-action" id="experience-settings-button" type="button" aria-haspopup="dialog" aria-controls="experience-settings-dialog" data-i18n="nav.preferences">Studio preferences</button>
+          <button class="text-action notification-center-trigger" id="notification-center-button" type="button" aria-haspopup="dialog" aria-controls="notification-center-dialog">Notification center <span id="notification-count" class="notification-count" hidden>0</span></button>
           <p id="data-directory" class="muted">Loading local data location…</p>
         </div>
       </aside>
@@ -464,14 +465,32 @@
         <p id="command-confirmation-target" class="confirmation-target"></p>
         <label class="switch-field"><input id="command-confirmation-first" type="checkbox"><span><strong>First independent confirmation</strong><small>I reviewed the affected local server and the action's impact.</small></span></label>
         <label class="switch-field"><input id="command-confirmation-second" type="checkbox"><span><strong>Second independent confirmation</strong><small>I understand that this operation can change live server or world state.</small></span></label>
-        <label class="field"><span>Slide to authorize</span><input id="command-confirmation-slider" type="range" min="0" max="100" value="0" disabled><small>Both confirmations are required before the full-range authorization control becomes available.</small></label>
+        <label class="field"><span>Slide to authorize</span><input id="command-confirmation-slider" type="range" min="0" max="100" value="0" disabled aria-describedby="command-confirmation-progress-label"><small>Both confirmations are required before the full-range authorization control becomes available.</small></label>
+        <div class="confirmation-progress" aria-live="polite"><progress id="command-confirmation-progress" max="100" value="0">0%</progress><span id="command-confirmation-progress-label">Authorization progress: 0%.</span></div>
+        <p id="command-confirmation-complete" class="confirmation-complete" aria-live="polite" hidden>Authorization complete. Starting the reviewed action…</p>
         <div class="dialog-actions"><button id="command-confirmation-cancel" type="button" class="outlined-action">Emergency exit</button><button id="command-confirmation-accept" type="button" class="danger-action" disabled>Authorize operation</button></div>
+      </section>
+    </dialog>
+
+    <dialog id="notification-center-dialog" aria-labelledby="notification-center-title">
+      <section class="notification-center-dialog">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">LOCAL REVIEWABLE HISTORY</p><h2 id="notification-center-title">Notification center</h2></div>
+          <button id="close-notification-center-button" type="button" class="icon-action" aria-label="Close notification center">×</button>
+        </div>
+        <p class="muted">This local history keeps bounded, scrubbed notification metadata. It omits credentials, local paths, URL query values, action callbacks, and raw external responses.</p>
+        <label class="field"><span>Filter notifications</span><input id="notification-center-search" type="search" autocomplete="off" placeholder="Search titles and safe details"></label>
+        <div class="notification-center-actions" aria-label="Notification bulk actions"><button id="notification-select-all-button" type="button" class="outlined-action">Select visible</button><button id="notification-mark-read-button" type="button" class="outlined-action" disabled>Mark selected read</button><button id="notification-dismiss-button" type="button" class="outlined-action" disabled>Dismiss selected</button></div>
+        <p id="notification-center-summary" class="muted" aria-live="polite">Loading local notification history…</p>
+        <div id="notification-center-list" class="notification-center-list" role="list" aria-live="polite"></div>
       </section>
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     <script src="experience-copy.js"></script>
     <script src="rcon-response-safety.js"></script>
+    <script src="notification-toasts.js"></script>
+    <script src="destructive-confirmation.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

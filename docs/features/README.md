@@ -11,5 +11,6 @@
 - [Presentation settings and shared School mode](experience-settings.md)
 - [CLI RCON gateway](cli-rcon-gateway.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
+- [Notification center and destructive confirmation](notifications-and-confirmation.md)
 - [Local status and completeness](local-status-and-completeness.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)

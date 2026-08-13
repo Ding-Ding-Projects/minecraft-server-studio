@@ -70,6 +70,10 @@ contextBridge.exposeInMainWorld('studio', {
   setUpdatesEnabled: (enabled) => ipcRenderer.invoke('studio:set-updates-enabled', Boolean(enabled)),
   deferUpdate: () => ipcRenderer.invoke('studio:defer-update'),
   restartForUpdate: () => ipcRenderer.invoke('studio:restart-for-update'),
+  listNotifications: (options) => ipcRenderer.invoke('studio:list-notifications', options || {}),
+  recordNotification: (input) => ipcRenderer.invoke('studio:record-notification', input || {}),
+  markNotificationsRead: (ids) => ipcRenderer.invoke('studio:mark-notifications-read', ids),
+  dismissNotifications: (ids) => ipcRenderer.invoke('studio:dismiss-notifications', ids),
   openUpdateNotes: () => ipcRenderer.invoke('studio:open-update-notes'),
   onUnsavedWorkQuery: (callback) => {
     if (typeof callback !== 'function') throw new Error('Unsaved-work callbacks must be functions.');

@@ -19,6 +19,9 @@ const state = {
   pluginPlan: null,
   pluginPlanServerId: null,
   applicationUpdate: null,
+  notifications: { records: [], unreadCount: 0, retentionLimit: 400, localOnly: true },
+  notificationFilter: '',
+  notificationSelections: new Set(),
   unsaved: {
     settings: false,
     createDraft: false,
@@ -167,21 +170,37 @@ function selectedServer() {
 }
 
 function toast(message, kind = 'info') {
-  const item = document.createElement('div');
-  item.className = `toast ${kind}`;
-  if (currentExperienceLocal().dialogEmoji) {
-    const decoration = document.createElement('span');
-    decoration.className = 'toast-emoji';
-    decoration.setAttribute('aria-hidden', 'true');
-    decoration.textContent = kind === 'error' ? '⚠️' : kind === 'success' ? '✓' : 'ℹ️';
-    item.append(decoration);
+  const safeKind = ['info', 'success', 'warning', 'error', 'progress'].includes(kind) ? kind : 'info';
+  const title = toastPrefix(safeKind);
+  const detail = messageText(message);
+  let persistedId = '';
+  let dismissedBeforePersist = false;
+  const dismissPersistedRecord = () => {
+    dismissedBeforePersist = true;
+    if (persistedId) dismissNotificationIds([persistedId]).catch(() => {
+      // A toast can still disappear when its optional history update fails.
+    });
+  };
+  if (window.StudioNotificationToasts?.show) {
+    window.StudioNotificationToasts.show({
+      kind: safeKind,
+      title,
+      detail,
+      showEmoji: currentExperienceLocal().dialogEmoji,
+      onDismiss: dismissPersistedRecord
+    });
   }
-  const copy = document.createElement('span');
-  copy.className = 'toast-copy';
-  copy.textContent = `${toastPrefix(kind)}: ${messageText(message)}`;
-  item.append(copy);
-  $('#toast-region').append(item);
-  setTimeout(() => item.remove(), kind === 'error' ? 9000 : 5000);
+  if (!window.studio?.recordNotification) return;
+  window.studio.recordNotification({ kind: safeKind, title, detail }).then(async (record) => {
+    if (!record?.id) return;
+    persistedId = record.id;
+    state.notifications.records = [record, ...state.notifications.records.filter((item) => item.id !== record.id)];
+    state.notifications.unreadCount = state.notifications.records.filter((item) => !item.read && !item.dismissed).length;
+    renderNotificationCenter();
+    if (dismissedBeforePersist) await dismissNotificationIds([record.id]);
+  }).catch(() => {
+    // A transient toast remains useful if local history persistence is unavailable.
+  });
 }
 
 async function safely(work, successMessage) {
@@ -1422,6 +1441,153 @@ function updateStateLabel(value) {
   })[value] || 'Update status unavailable';
 }
 
+function applyNotificationSnapshot(snapshot) {
+  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const records = Array.isArray(source.records) ? source.records.filter((record) => record && typeof record.id === 'string') : [];
+  state.notifications = {
+    records,
+    unreadCount: Number.isInteger(source.unreadCount) ? source.unreadCount : records.filter((record) => !record.read && !record.dismissed).length,
+    retentionLimit: Number.isInteger(source.retentionLimit) ? source.retentionLimit : 400,
+    localOnly: source.localOnly !== false
+  };
+  state.notificationSelections = new Set([...state.notificationSelections].filter((id) => records.some((record) => record.id === id)));
+  renderNotificationCenter();
+}
+
+async function refreshNotifications() {
+  if (!window.studio?.listNotifications) return;
+  try {
+    applyNotificationSnapshot(await window.studio.listNotifications({ includeDismissed: false }));
+  } catch {
+    const summary = $('#notification-center-summary');
+    if (summary) summary.textContent = 'Local notification history is unavailable. Session toasts remain visible.';
+  }
+}
+
+function visibleNotificationRecords() {
+  const query = state.notificationFilter.trim().toLocaleLowerCase();
+  return state.notifications.records.filter((record) => {
+    if (record.dismissed) return false;
+    if (!query) return true;
+    return [record.title, record.detail, record.kind, record.source].some((value) => String(value || '').toLocaleLowerCase().includes(query));
+  });
+}
+
+function updateNotificationSelectionControls(records = visibleNotificationRecords()) {
+  const selected = records.filter((record) => state.notificationSelections.has(record.id));
+  const markRead = $('#notification-mark-read-button');
+  const dismiss = $('#notification-dismiss-button');
+  const selectVisible = $('#notification-select-all-button');
+  if (markRead) markRead.disabled = !selected.some((record) => !record.read);
+  if (dismiss) dismiss.disabled = selected.length === 0;
+  if (selectVisible) selectVisible.textContent = records.length && selected.length === records.length ? 'Clear visible selection' : 'Select visible';
+}
+
+function renderNotificationCenter() {
+  const trigger = $('#notification-center-button');
+  const count = $('#notification-count');
+  const unread = state.notifications.records.filter((record) => !record.read && !record.dismissed).length;
+  if (count) {
+    count.hidden = unread === 0;
+    count.textContent = String(unread);
+  }
+  if (trigger) trigger.setAttribute('aria-label', unread ? `Notification center, ${unread} unread notifications` : 'Notification center, no unread notifications');
+
+  const list = $('#notification-center-list');
+  const summary = $('#notification-center-summary');
+  if (!list || !summary) return;
+  const records = visibleNotificationRecords();
+  const total = state.notifications.records.filter((record) => !record.dismissed).length;
+  summary.textContent = records.length === total
+    ? `${total} local notification${total === 1 ? '' : 's'} visible · ${unread} unread · retention limit ${state.notifications.retentionLimit}.`
+    : `${records.length} of ${total} local notifications match the current filter · ${unread} unread.`;
+  list.replaceChildren();
+  if (!records.length) {
+    const empty = document.createElement('p');
+    empty.className = 'notification-record-empty';
+    empty.textContent = total ? 'No local notifications match the current filter.' : 'No local notification history is available yet.';
+    list.append(empty);
+    updateNotificationSelectionControls(records);
+    return;
+  }
+  for (const record of records) {
+    const item = document.createElement('article');
+    item.className = 'notification-record';
+    item.dataset.kind = record.kind || 'info';
+    item.dataset.read = String(record.read === true);
+    item.setAttribute('role', 'listitem');
+
+    const selector = document.createElement('input');
+    selector.className = 'notification-record-selector';
+    selector.type = 'checkbox';
+    selector.checked = state.notificationSelections.has(record.id);
+    selector.setAttribute('aria-label', `Select notification: ${record.title || 'Notification'}`);
+    selector.addEventListener('change', () => {
+      if (selector.checked) state.notificationSelections.add(record.id);
+      else state.notificationSelections.delete(record.id);
+      updateNotificationSelectionControls(records);
+    });
+
+    const copy = document.createElement('div');
+    copy.className = 'notification-record-copy';
+    const title = document.createElement('strong');
+    title.textContent = record.title || 'Notification';
+    const detail = document.createElement('span');
+    detail.textContent = record.detail || 'No additional safe detail was retained.';
+    const source = document.createElement('small');
+    source.textContent = `Local source: ${record.source || 'desktop'}`;
+    copy.append(title, detail, source);
+
+    const meta = document.createElement('div');
+    meta.className = 'notification-record-meta';
+    const timestamp = document.createElement('time');
+    timestamp.dateTime = record.createdAt || '';
+    timestamp.textContent = record.createdAt ? new Date(record.createdAt).toLocaleString() : 'time unavailable';
+    const status = document.createElement('span');
+    status.textContent = record.read ? 'Read' : 'Unread';
+    meta.append(timestamp, status);
+    item.append(selector, copy, meta);
+    list.append(item);
+  }
+  updateNotificationSelectionControls(records);
+}
+
+async function dismissNotificationIds(ids) {
+  if (!Array.isArray(ids) || !ids.length || !window.studio?.dismissNotifications) return null;
+  const result = await window.studio.dismissNotifications(ids);
+  if (result?.snapshot) applyNotificationSnapshot(result.snapshot);
+  return result;
+}
+
+async function markSelectedNotificationsRead() {
+  const ids = [...state.notificationSelections];
+  if (!ids.length || !window.studio?.markNotificationsRead) return;
+  try {
+    const result = await window.studio.markNotificationsRead(ids);
+    if (result?.snapshot) applyNotificationSnapshot(result.snapshot);
+  } catch (error) {
+    toast(error?.message || String(error), 'error');
+  }
+}
+
+async function dismissSelectedNotifications() {
+  const ids = [...state.notificationSelections];
+  if (!ids.length) return;
+  try {
+    await dismissNotificationIds(ids);
+  } catch (error) {
+    toast(error?.message || String(error), 'error');
+  }
+}
+
+async function openNotificationCenter() {
+  const dialog = $('#notification-center-dialog');
+  if (!dialog) return;
+  if (!dialog.open) dialog.showModal();
+  await refreshNotifications();
+  $('#notification-center-search')?.focus({ preventScroll: true });
+}
+
 function renderApplicationUpdate() {
   const update = state.applicationUpdate;
   const card = $('#application-update-card');
@@ -1561,14 +1727,19 @@ async function executeBuildToolsPlan() {
   const server = selectedServer();
   const plan = state.buildToolsPlan;
   if (!server || !plan) return toast('Prepare a BuildTools plan before starting a build.', 'error');
-  const approved = window.confirm(`Build Spigot ${plan.revision} in the isolated workspace and then promote only the staged JAR? The plan retains the prior server JAR as a rollback record when one exists.`);
-  if (!approved) return;
-  const result = await safely(() => window.studio.executeBuildToolsPlan(server.id, {
-    confirmed: true,
-    digest: plan.authority?.digest,
-    confirmedAt: new Date().toISOString()
-  }), 'BuildTools completed and the staged JAR was promoted with a rollback record.');
-  if (result) await refreshServers();
+  openDestructiveConfirmation({
+    title: 'Confirm BuildTools JAR promotion',
+    copy: 'This runs the reviewed Spigot BuildTools plan in its isolated workspace and can replace the selected server JAR. The current plan digest must still match before the privileged process begins. A prior JAR is retained as the plan’s rollback record when available.',
+    target: `Affected resource: ${server.name} · Spigot ${plan.revision || 'selected revision'} · staged server JAR promotion`,
+    execute: async (confirmation) => {
+      const result = await safely(() => window.studio.executeBuildToolsPlan(server.id, {
+        confirmed: true,
+        digest: plan.authority?.digest,
+        confirmedAt: confirmation?.confirmedAt || new Date().toISOString()
+      }), 'BuildTools completed and the staged JAR was promoted with a rollback record.');
+      if (result) await refreshServers();
+    }
+  });
 }
 
 function updateRuntimeRequirement() {
@@ -1793,14 +1964,15 @@ async function discoverManagement() {
   if (discovered) await refreshServers();
 }
 
-function destructiveConfirmationFor(plan) {
+function destructiveConfirmationFor(plan, confirmation) {
   return {
+    ...(confirmation || {}),
     confirmed: true,
     firstConfirmation: true,
     secondConfirmation: true,
     sliderValue: 100,
     digest: plan?.authority?.digest || '',
-    confirmedAt: new Date().toISOString()
+    confirmedAt: confirmation?.confirmedAt || new Date().toISOString()
   };
 }
 
@@ -1844,8 +2016,8 @@ function requestRestore() {
     title: 'Confirm snapshot restore',
     copy: 'This replaces the listed managed world, configuration, plugin, log, and server JAR roots. The server must remain stopped. The app creates a new safety backup before replacement, then retains no vault credentials in either snapshot.',
     target: `Affected resource: ${server.name} · backup ${plan.backup?.backupId || 'unknown'} · roots ${(plan.targets || []).join(', ') || 'none'}`,
-    execute: async () => {
-      const restored = await safely(() => window.studio.restoreBackup(server.id, destructiveConfirmationFor(plan)), 'Snapshot restore completed after a new safety backup was created.');
+    execute: async (confirmation) => {
+      const restored = await safely(() => window.studio.restoreBackup(server.id, destructiveConfirmationFor(plan, confirmation)), 'Snapshot restore completed after a new safety backup was created.');
       if (!restored) return;
       state.restorePlan = null;
       state.paperUpdatePlan = null;
@@ -1874,8 +2046,8 @@ function requestPaperUpdate() {
     title: 'Confirm Paper server JAR update',
     copy: 'This replaces only server.jar while the server is stopped. The app creates a new verified local backup first, downloads the reviewed stable Paper JAR to local staging, verifies its byte size and SHA-256, then retains the previous JAR as an app-controlled rollback record. Plugins are never auto-updated.',
     target: `Affected resource: ${server.name} · server.jar · Paper build ${plan.release?.build || 'unknown'} · pre-update backup required`,
-    execute: async () => {
-      const updated = await safely(() => window.studio.applyPaperUpdate(server.id, destructiveConfirmationFor(plan)), 'Paper server JAR updated with a new backup and rollback record.');
+    execute: async (confirmation) => {
+      const updated = await safely(() => window.studio.applyPaperUpdate(server.id, destructiveConfirmationFor(plan, confirmation)), 'Paper server JAR updated with a new backup and rollback record.');
       if (!updated) return;
       state.paperUpdatePlan = null;
       state.paperRollbackPlan = null;
@@ -1903,8 +2075,8 @@ function requestPaperRollback() {
     title: 'Confirm Paper server JAR rollback',
     copy: 'This replaces only server.jar while the server is stopped. The app creates a new verified local backup before promoting the retained app-controlled rollback JAR. Plugins are never auto-updated or replaced.',
     target: `Affected resource: ${server.name} · server.jar · retained rollback record · pre-rollback backup required`,
-    execute: async () => {
-      const rolledBack = await safely(() => window.studio.applyPaperRollback(server.id, destructiveConfirmationFor(plan)), 'Paper server JAR rollback completed with a new backup and a retained reverse rollback record.');
+    execute: async (confirmation) => {
+      const rolledBack = await safely(() => window.studio.applyPaperRollback(server.id, destructiveConfirmationFor(plan, confirmation)), 'Paper server JAR rollback completed with a new backup and a retained reverse rollback record.');
       if (!rolledBack) return;
       state.paperRollbackPlan = null;
       state.paperUpdatePlan = null;
@@ -1962,26 +2134,17 @@ async function executeCommandAction({ action, command, transport, transportState
 }
 
 function openDestructiveConfirmation({ title, copy, target, execute }) {
-  const dialog = $('#command-confirmation-dialog');
-  if (!dialog) return;
-  $('#command-confirmation-title').textContent = title;
-  $('#command-confirmation-copy').textContent = copy;
-  $('#command-confirmation-target').textContent = target;
-  const first = $('#command-confirmation-first');
-  const second = $('#command-confirmation-second');
-  const slider = $('#command-confirmation-slider');
-  const confirm = $('#command-confirmation-accept');
-  first.checked = false;
-  second.checked = false;
-  slider.value = '0';
-  const update = () => { slider.disabled = !(first.checked && second.checked); confirm.disabled = !(first.checked && second.checked && Number(slider.value) >= 100); };
-  first.onchange = update;
-  second.onchange = update;
-  slider.oninput = update;
-  confirm.onclick = () => { dialog.close('confirmed'); execute(); };
-  $('#command-confirmation-cancel').onclick = () => dialog.close('cancelled');
-  update();
-  dialog.showModal();
+  const component = window.StudioDestructiveConfirmation;
+  if (!component?.open) {
+    toast('The destructive-action confirmation surface is unavailable. The action was not started.', 'error');
+    return;
+  }
+  component.open({ title, copy, target, origin: document.activeElement }).then((decision) => {
+    if (!decision?.approved) return null;
+    return execute(decision.confirmation);
+  }).catch((error) => {
+    toast(error?.message || String(error), 'error');
+  });
 }
 
 function openCommandConfirmation(payload) {
@@ -2030,6 +2193,27 @@ function bindEvents() {
   $('#experience-settings-button').addEventListener('click', openExperienceSettings);
   $('#close-experience-settings-dialog').addEventListener('click', closeExperienceSettings);
   $('#close-experience-settings-button').addEventListener('click', closeExperienceSettings);
+  $('#notification-center-button').addEventListener('click', openNotificationCenter);
+  $('#close-notification-center-button').addEventListener('click', () => $('#notification-center-dialog').close());
+  $('#notification-center-dialog').addEventListener('close', () => {
+    state.notificationSelections.clear();
+    renderNotificationCenter();
+  });
+  $('#notification-center-search').addEventListener('input', () => {
+    state.notificationFilter = $('#notification-center-search').value;
+    renderNotificationCenter();
+  });
+  $('#notification-select-all-button').addEventListener('click', () => {
+    const records = visibleNotificationRecords();
+    const allSelected = records.length > 0 && records.every((record) => state.notificationSelections.has(record.id));
+    records.forEach((record) => {
+      if (allSelected) state.notificationSelections.delete(record.id);
+      else state.notificationSelections.add(record.id);
+    });
+    renderNotificationCenter();
+  });
+  $('#notification-mark-read-button').addEventListener('click', markSelectedNotificationsRead);
+  $('#notification-dismiss-button').addEventListener('click', dismissSelectedNotifications);
   $('#experience-settings-form').addEventListener('submit', saveExperienceSettings);
   $('#funny-english').addEventListener('input', previewFunnyLevelOutputs);
   $('#funny-cantonese').addEventListener('input', previewFunnyLevelOutputs);
@@ -2215,7 +2399,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshNotifications()]);
   renderCommandCenter();
 }
 

@@ -16,6 +16,7 @@ The application source provides a Windows Electron control center, shared CLI, s
 - `src/renderer/rcon-response-safety.js`, `src/main/main.cjs`, `src/main/preload.cjs`, and `src/renderer/renderer.js`: bounded RCON response envelope that redacts the current vault-only password and credential-shaped values before renderer-visible console or notifier state.
 - `src/main/studio-settings.cjs`, `src/main/main.cjs`, and `src/main/preload.cjs`: app-private presentation settings, a watched shared per-user School-mode record, protected shared unlock-credential boundary, and narrow renderer IPC.
 - `src/main/update-controller.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: approved-feed validation, Electron Squirrel update-state wiring, visible update status, and user-controlled restart handling.
+- `src/main/notification-center.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/notification-toasts.js`, `src/renderer/destructive-confirmation.js`, `src/renderer/index.html`, and `src/renderer/renderer.js`: bounded scrubbed local notification history, a user-opened notification center, functional non-blocking corner toasts, and the reusable two-key/full-slider destructive-confirmation component.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, backup/update/rollback previews, application-update controls, and Local status destination.
 - `src/renderer/experience-copy.js` and the preferences dialog: persisted English/Cantonese/bilingual presentation, independent message-playfulness controls, decorative message emoji preference, display-name label, and School-mode status/recovery controls.
 - `src/cli/mss.cjs` and `src/cli/rcon-gateway.cjs`: shared local CLI plus a one-shot protected Electron gateway for fixed-loopback RCON command and stop operations. The CLI rejects password configuration, removes legacy RCON password fields from JSON output, and never carries an RCON credential across its own arguments, environment, stdin, or registry path.
@@ -57,6 +58,29 @@ No tests, linting, build, package, packaged-runtime interaction, capture, or
 installed-update cycle was run by this documentation lane. Source-level updater
 behavior and any eventual release evidence must be recorded separately; this
 handoff does not claim either.
+
+## Notification center and destructive confirmation foundation
+
+The desktop candidate now has a bounded local notification-history source in
+the Electron main process. It persists only scrubbed notification metadata and
+does not retain credentials, local paths, URL query values, raw external
+responses, action callbacks, or network copies. The renderer presents a
+user-opened center with plain-text filtering, selection, bulk mark-read, and
+bulk dismiss groundwork, while informational/success/progress toasts
+auto-dismiss and warnings/errors remain until dismissed.
+
+The shared destructive confirmation component names the affected action and
+resource, requires two independent controls and a full-range slider, has an
+Emergency exit and Escape path, returns focus, respects reduced motion, and
+does not execute privileged work itself. Restore, Paper replacement/rollback,
+BuildTools staged-JAR promotion, and existing Command Center super-confirmation
+routes use it while retaining their existing current-plan and main-process
+checks.
+
+No tests, linting, type checks, build, package, runtime interaction,
+screenshots, or independent review were run for this source-only lane. The
+notification/history and confirmation inventory evidence remains explicitly
+in-progress.
 
 ### Remaining work
 

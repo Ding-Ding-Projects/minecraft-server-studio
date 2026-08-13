@@ -27,6 +27,8 @@
 - Windows-only GitHub Actions release workflow source for every push and manual dispatch: unsigned Squirrel.Windows packaging, artifact-set and `NotSigned` verification, safe package-evidence upload, line-count release notes, and a rerun-unique non-draft GitHub Release when the workflow reaches publication. The workflow intentionally has no test or lint jobs.
 - Original vector application mark, multi-resolution Windows ICO, local executable icon wiring, and immutable Squirrel icon metadata source.
 - Desktop presentation-settings foundation: persisted English, playful Hong Kong-style Cantonese, and bilingual modes; independent 1–5 message-playfulness levels; optional decorative dialog/message emoji; a display-name label that preserves installed identity; and a watched shared local School-mode record with protected password/PIN unlock storage and honest unavailable-state handling.
+- Local notification-center foundation with non-blocking corner toasts, bounded scrubbed application-data history, user-opened review/filter/select/mark-read/dismiss controls, and explicit unavailable-history behavior.
+- Shared destructive-action confirmation component with two independent confirmations, a full-range authorization slider, Emergency exit, Escape cancellation, reduced-motion completion behavior, focus restoration, and current-plan execution handoff for restore, Paper JAR, BuildTools, and Command Center routes.
 
 ### Fixed
 
