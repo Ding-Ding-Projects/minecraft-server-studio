@@ -561,11 +561,34 @@ unknown-publisher/SmartScreen warning visible and never claim signature
 verification. A staged `ready` update is not installed until the user selects
 restart, and normal unsaved-work protection must still run before that restart.
 
+### Runtime-version compatibility
+
+The controller now derives the installed application version only from
+Electron's packaged `app.getVersion()` value. It accepts stable three-part
+numeric versions and compares that runtime value with the strict version in a
+validated `minecraft-server-studio-<version>-full.nupkg` filename. It selects
+the greatest full package independently of `RELEASES` row order, rejects
+duplicate full-package versions, and refuses a package older than the installed
+application rather than allowing a rollback candidate. A redirect-derived
+GitHub Release tag remains release-note provenance only and is never treated as
+an updater version. After the canonical latest-release `RELEASES` check, the
+controller gives Electron only the exact approved release directory discovered
+by that redirect, preventing a later latest-release move from changing the
+native updater's selected package.
+
+Read-only release inspection recorded that `v0.1.0-build.104.1` has a distinct
+application package version `0.104.1`, the asset
+`minecraft-server-studio-0.104.1-full.nupkg`, and a matching `RELEASES` row.
+That fact confirms the intended package shape but is not packaged-runtime,
+installed-update, test, or capture evidence.
+
 ### Directly related documentation
 
 - `docs/features/unsigned-automatic-updates.md`: approved-feed derivation,
-  literal state semantics, Squirrel metadata boundary, restart policy,
-  failure/offline recovery, and no-secret boundary.
+  literal state semantics, runtime-version comparison, Squirrel metadata
+  boundary, restart policy, failure/offline recovery, and no-secret boundary.
+- `docs/features/release-packaging.md`: workflow-local application version,
+  provenance-tag separation, and strict updater package-version contract.
 - `docs/features/local-status-and-completeness.md`: separate incomplete rows for
   application updates and the server backup/Paper lifecycle.
 

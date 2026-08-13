@@ -28,6 +28,16 @@ also required to be new. A pre-existing tag stops the workflow rather than
 allowing an asset replacement. This preserves immutable, distinct Squirrel
 package names and `RELEASES` references even when a workflow is rerun.
 
+The packaged updater reads Electron's runtime `app.getVersion()` value, not the
+checked-in source baseline or the release tag. It requires that value and the
+validated Squirrel full-package filename to be stable three-part numeric
+versions, selects the greatest full package independent of `RELEASES` row
+order, and refuses an older package as a rollback candidate. A provenance tag
+can identify release notes, but it is never converted into an updater version.
+The controller validates `releases/latest/download/RELEASES` first, then passes
+only its approved redirect-derived release directory to the native updater so
+a later latest-release change cannot swap the package selected by that check.
+
 The workflow does not use SemVer build metadata (`+...`) because the Windows
 installer converter removes it from the NuGet package version. It does not use
 a prerelease suffix because that sorts below the corresponding stable version.

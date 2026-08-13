@@ -32,7 +32,8 @@ const OFFICIAL_REPOSITORY = Object.freeze({
 
 const OFFICIAL_DOWNLOAD_BASE = `https://github.com/${OFFICIAL_REPOSITORY.owner}/${OFFICIAL_REPOSITORY.name}/releases/latest/download/`;
 const OFFICIAL_RELEASE_NOTES = `https://github.com/${OFFICIAL_REPOSITORY.owner}/${OFFICIAL_REPOSITORY.name}/releases/latest`;
-const PACKAGE_NAME = /^minecraft-server-studio-([0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9.-]+)?)-(full|delta)\.nupkg$/i;
+const PACKAGE_NAME = /^minecraft-server-studio-([0-9]+(?:\.[0-9]+){2})-(full|delta)\.nupkg$/i;
+const STABLE_APPLICATION_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 function copy(value) {
   return JSON.parse(JSON.stringify(value));
@@ -77,10 +78,31 @@ function createOfficialFeed() {
   });
 }
 
+function stableApplicationVersion(value) {
+  const candidate = text(value, 80);
+  return STABLE_APPLICATION_VERSION.test(candidate) ? candidate : null;
+}
+
+function compareStableApplicationVersions(left, right) {
+  const leftVersion = stableApplicationVersion(left);
+  const rightVersion = stableApplicationVersion(right);
+  if (!leftVersion || !rightVersion) return null;
+  const leftParts = leftVersion.split('.');
+  const rightParts = rightVersion.split('.');
+  for (let index = 0; index < leftParts.length; index += 1) {
+    if (leftParts[index].length !== rightParts[index].length) {
+      return leftParts[index].length > rightParts[index].length ? 1 : -1;
+    }
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] > rightParts[index] ? 1 : -1;
+  }
+  return 0;
+}
+
 function packageMetadata(fileName) {
   const match = PACKAGE_NAME.exec(fileName);
   if (!match) return null;
-  return { version: match[1], kind: match[2].toLowerCase() };
+  const version = stableApplicationVersion(match[1]);
+  return version ? { version, kind: match[2].toLowerCase() } : null;
 }
 
 function releaseNotesFromRedirects(redirects, fallback) {
@@ -95,19 +117,30 @@ function releaseNotesFromRedirects(redirects, fallback) {
     if (url.hostname !== 'github.com' || !url.pathname.startsWith(expectedPrefix) || !url.pathname.endsWith('/RELEASES')) continue;
     const tag = decodeURIComponent(url.pathname.slice(expectedPrefix.length, -'/RELEASES'.length));
     if (!/^v[0-9A-Za-z._-]+$/.test(tag)) continue;
+    // The redirect tag is release-note provenance only. Package versions always
+    // come from a validated Squirrel package filename in the RELEASES index.
     return {
       tag,
       releaseNotesUrl: `https://github.com/${OFFICIAL_REPOSITORY.owner}/${OFFICIAL_REPOSITORY.name}/releases/tag/${encodeURIComponent(tag)}`,
-      releaseNotesExact: true
+      releaseNotesExact: true,
+      updateFeedUrl: `https://github.com/${OFFICIAL_REPOSITORY.owner}/${OFFICIAL_REPOSITORY.name}/releases/download/${encodeURIComponent(tag)}/`
     };
   }
-  return { tag: null, releaseNotesUrl: fallback, releaseNotesExact: false };
+  return { tag: null, releaseNotesUrl: fallback, releaseNotesExact: false, updateFeedUrl: null };
 }
 
-function parseReleasesIndex(body, { feedUrl, redirects, fallbackReleaseNotesUrl }) {
+function parseReleasesIndex(body, { feedUrl, redirects, fallbackReleaseNotesUrl, installedVersion }) {
+  const currentVersion = stableApplicationVersion(installedVersion);
+  if (!currentVersion) throw new Error('The installed application does not expose a supported stable Squirrel version.');
+  const initialFeedUrl = asApprovedHttpsUrl(feedUrl, { initial: true });
+  if (!initialFeedUrl) throw new Error('The Squirrel RELEASES index did not originate from the approved latest-release feed.');
+  const release = releaseNotesFromRedirects(redirects, fallbackReleaseNotesUrl);
+  const updateFeedUrl = asApprovedHttpsUrl(release.updateFeedUrl);
+  if (!updateFeedUrl) throw new Error('The Squirrel RELEASES index did not resolve to one approved immutable release feed.');
   const source = String(body || '');
   if (!source || Buffer.byteLength(source, 'utf8') > MAX_RELEASES_BYTES) throw new Error('The Squirrel RELEASES index is missing or exceeds the safe size limit.');
   const entries = [];
+  const fullPackageVersions = new Set();
   for (const rawLine of source.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
@@ -119,23 +152,38 @@ function parseReleasesIndex(body, { feedUrl, redirects, fallbackReleaseNotesUrl 
     if (!metadata) throw new Error('The Squirrel RELEASES index references an unsupported package name.');
     const bytes = Number(fields[2]);
     if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 4 * 1024 * 1024 * 1024) throw new Error('The Squirrel RELEASES index contains an invalid package size.');
-    const packageUrl = new URL(fileName, feedUrl);
+    const packageUrl = new URL(fileName, updateFeedUrl);
     if (!asApprovedHttpsUrl(packageUrl)) throw new Error('The Squirrel RELEASES index resolves a package outside the approved HTTPS delivery origin.');
-    entries.push({
+    const entry = {
       sha1: fields[0].toLowerCase(),
       fileName,
       bytes,
       packageUrl: packageUrl.toString(),
       ...metadata
-    });
+    };
+    if (entry.kind === 'full') {
+      if (fullPackageVersions.has(entry.version)) throw new Error('The Squirrel RELEASES index contains duplicate full packages for one application version.');
+      fullPackageVersions.add(entry.version);
+    }
+    entries.push(entry);
     if (entries.length > MAX_RELEASE_ROWS) throw new Error('The Squirrel RELEASES index contains too many package rows.');
   }
-  const selected = [...entries].reverse().find((entry) => entry.kind === 'full');
+  const fullPackages = entries.filter((entry) => entry.kind === 'full');
+  const selected = fullPackages.reduce((newest, entry) => {
+    if (!newest) return entry;
+    return compareStableApplicationVersions(entry.version, newest.version) > 0 ? entry : newest;
+  }, null);
   if (!selected) throw new Error('The Squirrel RELEASES index has no full package for this application.');
+  const comparison = compareStableApplicationVersions(selected.version, currentVersion);
+  if (comparison === null) throw new Error('The Squirrel RELEASES index has an unsupported application-version comparison.');
+  if (comparison < 0) throw new Error('The Squirrel RELEASES index offers an older full package than the installed application. Rollback updates are refused.');
   return {
     source: 'Squirrel RELEASES',
-    ...releaseNotesFromRedirects(redirects, fallbackReleaseNotesUrl),
+    ...release,
+    updateFeedUrl: updateFeedUrl.toString(),
     package: selected,
+    installedVersion: currentVersion,
+    packageRelation: comparison === 0 ? 'current' : 'newer',
     rows: entries.length,
     validatedAt: now()
   };
@@ -207,15 +255,6 @@ function safeFailure(error) {
   };
 }
 
-function releaseNameFromEvent(values, fallback) {
-  for (const value of values) {
-    if (typeof value !== 'string') continue;
-    const candidate = text(value, 160);
-    if (candidate && !candidate.includes('://')) return candidate;
-  }
-  return fallback || null;
-}
-
 class UpdateController {
   constructor({ app, autoUpdater, dataDir, onStateChange, processArgs = process.argv, platform = process.platform }) {
     if (!app || !autoUpdater || !dataDir) throw new Error('UpdateController requires the Electron app, autoUpdater, and application data directory.');
@@ -253,7 +292,7 @@ class UpdateController {
 
   version() {
     try {
-      return text(this.app.getVersion(), 80) || 'unknown';
+      return stableApplicationVersion(this.app.getVersion()) || 'unknown';
     } catch {
       return 'unknown';
     }
@@ -301,7 +340,9 @@ class UpdateController {
     if (this.platform !== 'win32') return { available: false, reason: 'Application updates are available only for the installed Windows Squirrel.Windows package.' };
     if (!this.app.isPackaged) return { available: false, reason: 'Application updates are available only from an installed Squirrel.Windows package, not this development launch.' };
     if (!this.feed) return { available: false, reason: 'No approved public HTTPS Squirrel.Windows feed can be derived for this application.' };
-    return { available: true };
+    const installedVersion = this.version();
+    if (installedVersion === 'unknown') return { available: false, reason: 'The installed application does not expose a supported stable Squirrel version, so update checking is unavailable.' };
+    return { available: true, installedVersion };
   }
 
   attachUpdaterHandlers() {
@@ -310,9 +351,9 @@ class UpdateController {
     this.autoUpdater.on('checking-for-update', () => {
       this.publish({ state: 'checking', message: 'Validating the public Squirrel.Windows update feed.', restartBlocked: false });
     });
-    this.autoUpdater.on('update-available', (...values) => {
+    this.autoUpdater.on('update-available', () => {
       this.clearNativeCheckTimeout();
-      const availableVersion = releaseNameFromEvent([this.manifest?.package?.version, ...values], null);
+      const availableVersion = this.manifest?.package?.version || null;
       this.publish({
         state: 'available',
         availableVersion,
@@ -342,9 +383,9 @@ class UpdateController {
         deferredAt: null
       });
     });
-    this.autoUpdater.on('update-downloaded', (...values) => {
+    this.autoUpdater.on('update-downloaded', () => {
       this.clearNativeCheckTimeout();
-      const availableVersion = releaseNameFromEvent([this.manifest?.package?.version, ...values], null);
+      const availableVersion = this.manifest?.package?.version || null;
       this.publish({
         state: 'ready',
         availableVersion,
@@ -434,12 +475,15 @@ class UpdateController {
   async validateFeed() {
     const feedUrl = asApprovedHttpsUrl(this.feed?.feedUrl, { initial: true });
     if (!feedUrl) throw new Error('No approved public HTTPS Squirrel.Windows feed can be derived for this application.');
+    const installedVersion = this.version();
+    if (installedVersion === 'unknown') throw new Error('The installed application does not expose a supported stable Squirrel version.');
     const manifestUrl = new URL('RELEASES', feedUrl);
     const result = await fetchTrustedText(manifestUrl.toString());
     return parseReleasesIndex(result.body, {
       feedUrl: feedUrl.toString(),
       redirects: result.redirects,
-      fallbackReleaseNotesUrl: this.feed.fallbackReleaseNotesUrl
+      fallbackReleaseNotesUrl: this.feed.fallbackReleaseNotesUrl,
+      installedVersion
     });
   }
 
@@ -462,7 +506,7 @@ class UpdateController {
     this.checkInFlight = (async () => {
       try {
         this.manifest = await this.validateFeed();
-        this.autoUpdater.setFeedURL({ url: this.feed.feedUrl });
+        this.autoUpdater.setFeedURL({ url: this.manifest.updateFeedUrl });
         this.beginNativeCheckTimeout();
         await this.autoUpdater.checkForUpdates();
       } catch (error) {
