@@ -4,6 +4,7 @@ const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
 const { StudioSettingsService } = require('./studio-settings.cjs');
+const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 let CredentialVault;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
@@ -19,6 +20,9 @@ let credentialVault;
 let studioSettings;
 let schoolModeVault;
 let schoolModeCredentialKey;
+
+const MAX_RCON_PACKET_BYTES = 256 * 1024;
+const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 
 function rconPacket(id, type, body) {
   const payload = Buffer.from(String(body), 'utf8');
@@ -52,21 +56,31 @@ function sendVaultBackedRconCommand({ host, port, password, command }) {
     const timer = setTimeout(() => fail(new Error('RCON did not respond within 10 seconds.')), 10_000);
     socket.once('connect', () => socket.write(rconPacket(1, 3, password)));
     socket.on('data', (chunk) => {
-      buffer = Buffer.concat([buffer, chunk]);
-      while (buffer.length >= 4) {
-        const length = buffer.readInt32LE(0);
-        if (length < 10 || length > 1024 * 1024 || buffer.length < length + 4) return;
-        const packet = buffer.subarray(0, length + 4);
-        buffer = buffer.subarray(length + 4);
-        const packetId = packet.readInt32LE(4);
-        const type = packet.readInt32LE(8);
-        if (!authenticated && type === 2) {
-          if (packetId === -1) return fail(new Error('RCON rejected the protected password.'));
-          authenticated = true;
-          socket.write(rconPacket(2, 2, text));
-        } else if (authenticated && packetId === 2) {
-          return succeed(packet.subarray(12, packet.length - 2).toString('utf8'));
+      try {
+        if (!Buffer.isBuffer(chunk) || buffer.length + chunk.length > MAX_RCON_BUFFER_BYTES) {
+          return fail(new Error('RCON response exceeded the safe response limit.'));
         }
+        buffer = Buffer.concat([buffer, chunk]);
+        while (buffer.length >= 4) {
+          const length = buffer.readInt32LE(0);
+          if (length < 10 || length > MAX_RCON_PACKET_BYTES) {
+            return fail(new Error('RCON returned an invalid or oversized response frame.'));
+          }
+          if (buffer.length < length + 4) return;
+          const packet = buffer.subarray(0, length + 4);
+          buffer = buffer.subarray(length + 4);
+          const packetId = packet.readInt32LE(4);
+          const type = packet.readInt32LE(8);
+          if (!authenticated && type === 2) {
+            if (packetId === -1) return fail(new Error('RCON rejected the protected password.'));
+            authenticated = true;
+            socket.write(rconPacket(2, 2, text));
+          } else if (authenticated && packetId === 2) {
+            return succeed(packet.subarray(12, packet.length - 2).toString('utf8'));
+          }
+        }
+      } catch {
+        return fail(new Error('RCON returned an invalid response frame.'));
       }
     });
     socket.once('error', () => fail(new Error('RCON connection failed.')));
@@ -347,7 +361,12 @@ ipcMain.handle('studio:rcon', async (_event, id, command) => {
   if (!credentialVault) throw new Error('The protected credential vault is unavailable in this app build.');
   const password = credentialVault.read(credentialVault.createKey('minecraft-server-studio', `rcon:${id}`));
   if (!password) throw new Error('Save an RCON password in the Network tab before using remote CLI commands.');
-  return sendVaultBackedRconCommand({ host: '127.0.0.1', port: Number(server.settings['rcon.port']), password, command });
+  try {
+    const response = await sendVaultBackedRconCommand({ host: '127.0.0.1', port: Number(server.settings['rcon.port']), password, command });
+    return createSafeRconResponse(response, { secrets: [password] });
+  } catch (error) {
+    throw new Error(safeRconErrorMessage(error, { secrets: [password] }));
+  }
 });
 ipcMain.handle('studio:list-plugins', (_event, id) => requireManager().listPlugins(id));
 ipcMain.handle('studio:plan-plugin-install', (_event, id, sourcePath) => requireManager().planPluginInstallation(id, sourcePath));

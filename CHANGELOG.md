@@ -30,5 +30,6 @@
 - Reject `mss config --set rcon.password=...` and omit legacy RCON password fields from CLI JSON output.
 - Normalize `rpc.discover` descriptors before persistence, bind the stored allowlist to its endpoint, expire it after a bounded lifetime, and restore it only when a reconnect targets the same current endpoint.
 - Keep a protected management credential out of the generic WebSocket transport, show the provider-adapter-required state, and disable authenticated protocol routes until a documented provider-specific adapter exists.
+- Redact and byte-bound desktop RCON responses before IPC, reject malformed response envelopes in the renderer path, and visibly label redacted, sanitized, or truncated console output instead of silently changing it.
 
 Commit link: pending the consolidated implementation commit.
