@@ -8,8 +8,8 @@
   "scripts": {
     "start": "electron .",
     "start:cli": "node src/cli/mss.cjs",
-    "package": "node scripts/verify-offline-docs-bundle.cjs && electron-builder --win squirrel",
-    "package:dir": "node scripts/verify-offline-docs-bundle.cjs && electron-builder --dir"
+    "package": "node scripts/generate-release-catalog.cjs && node scripts/verify-offline-docs-bundle.cjs && node scripts/verify-offline-changelog-bundle.cjs && electron-builder --win squirrel",
+    "package:dir": "node scripts/generate-release-catalog.cjs && node scripts/verify-offline-docs-bundle.cjs && node scripts/verify-offline-changelog-bundle.cjs && electron-builder --dir"
   },
   "devDependencies": {
     "electron": "^37.0.0",
@@ -23,6 +23,7 @@
     "files": [
       "src/**/*",
       "docs/features/**/*",
+      "CHANGELOG.md",
       "package.json"
     ],
     "forceCodeSigning": false,

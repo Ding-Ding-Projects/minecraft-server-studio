@@ -60,6 +60,7 @@ The template includes these desktop surface rows:
 | `ollama` | Local Ollama service health plus bounded installed/running inventory; complete Model Store, pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
 | `docs-history-and-notifications` | Offline documentation, history, and notifications |
+| `changelog-viewer` | Offline bundled version records, local filtering, copy/export, and validated commit handoff |
 | `export` | Export |
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
@@ -148,6 +149,17 @@ It does not prove local history, a notification center, full localization,
 runtime interaction, or a built-artifact capture. See [Offline documentation
 browser](offline-documentation-browser.md) for the package and source-boundary
 details.
+
+## Changelog-viewer inventory boundary
+
+The `changelog-viewer` row is independent from both the documentation browser
+and the local-history journal. It names a fixed bundled `CHANGELOG.md`, a
+bounded package-local release catalog, narrow IPC, local plain-text and regex
+search, typed date filtering, copy/export actions, and a validated
+user-initiated commit handoff. It does not prove that a release API was read,
+that an external commit opened, that a release was installed, or that every
+published version has runtime evidence. See [Offline changelog
+viewer](changelog-viewer.md) for its exact source and failure boundary.
 
 ## Source and evidence boundaries
 

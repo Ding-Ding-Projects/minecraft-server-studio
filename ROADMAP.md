@@ -10,6 +10,7 @@
 - Browser-local public-site appearance and tab-navigation foundation with persisted visual preferences, docked tabs, local overflow, local searches, and bounded appearance-target controls; broad universal behavior and evidence remain incomplete.
 - Local external-editor handoff foundation for validated server folders and existing application-created exports, with discovered or explicitly selected Visual Studio Code as the preferred generated-export destination.
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
+- Offline changelog browsing from bundled curated notes and package-local release metadata, with local filtering and export rather than runtime release fetching.
 - Serialized next-release metadata that can record one unused public dim-sum catalog link without copying the source photo into the product release.
 
 ## Next implementation items
