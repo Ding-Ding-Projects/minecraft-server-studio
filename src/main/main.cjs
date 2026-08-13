@@ -245,6 +245,9 @@ app.whenReady().then(() => {
     onEvent: sendToRenderer
   });
   createWindow();
+  serverManager.revalidateManagedJavaInventory().catch((error) => {
+    serverManager.emit({ type: 'dependency-output', dependency: 'java', message: 'The app-managed Java inventory could not be revalidated at startup: ' + String(error?.message || 'unknown error').slice(0, 512) });
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -313,7 +316,7 @@ ipcMain.handle('studio:update-server', async (_event, id, patch) => {
   return requireManager().updateServer(id, safePatch);
 });
 ipcMain.handle('studio:paper-versions', () => requireManager().paperVersions());
-ipcMain.handle('studio:inspect-dependencies', () => requireManager().inspectDependencies());
+ipcMain.handle('studio:inspect-dependencies', (_event, serverId) => requireManager().inspectDependencies(serverId || null));
 ipcMain.handle('studio:install-dependencies', (_event, ids, serverId) => requireManager().installDependencies(ids, serverId));
 ipcMain.handle('studio:provision', (_event, id) => requireManager().provisionServer(id));
 ipcMain.handle('studio:start', (_event, id) => requireManager().startServer(id));
