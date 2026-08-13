@@ -886,6 +886,21 @@ ipcMain.handle('studio:pick-converter-source', async () => {
   });
   return result.canceled ? null : requireFileConverter().inspectSource(result.filePaths[0]);
 });
+ipcMain.handle('studio:convert-converter-source', async (_event, sourceId, targetId) => {
+  const converter = requireFileConverter();
+  const plan = converter.targetPlan(sourceId, targetId);
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: `Save ${plan.label}`,
+    defaultPath: plan.defaultFileName,
+    filters: [{ name: plan.label, extensions: [plan.filterExtension] }],
+    showOverwriteConfirmation: true
+  });
+  if (result.canceled || !result.filePath) {
+    return { state: 'target-selection-cancelled', snapshot: converter.snapshot() };
+  }
+  return converter.convert(sourceId, targetId, result.filePath);
+});
+ipcMain.handle('studio:cancel-converter-source', (_event, sourceId) => requireFileConverter().cancel(sourceId));
 ipcMain.handle('studio:open-folder', async (_event, folder) => {
   const error = await shell.openPath(folder);
   if (error) throw new Error(error);

@@ -49,6 +49,48 @@ for this fast-delivery candidate. Documentation records source-level scope
 only; it does not establish a successful credential-vault operation, a
 completed lock/unlock/removal interaction, every-element enforcement, or a
 packaged desktop result.
+## App-owned bounded file-converter candidate
+
+The desktop converter now implements only verified in-process, local routes:
+UTF-8 text, validated JSON/CSV/TSV, a restricted YAML-style subset, and
+Base64/hex encodings. It owns source inspection, complete bounded validation,
+target eligibility, a native destination dialog, atomic output writing, output
+reopening/validation, cancellation before the write step, and safe result
+metadata. A conversion never changes the source file or overwrites an existing
+destination. Full source and destination paths, source bytes, output bytes,
+and file contents are not retained in converter records.
+
+PDF, image, audio, video, archive, XML, and native-workbook conversion remain
+visible but unavailable because no verified bundled offline adapter and output
+validator exists for them. Base64/hex availability for bounded bytes does not
+claim semantic decoding of an unavailable format.
+
+The candidate intentionally keeps one active source and does not claim an
+unlimited/resumable batch queue, preview, overwrite route, percentage-accurate
+long-operation progress, document/PDF tools, media/archive/XML/native-workbook
+tools, or external adapter discovery.
+
+### Directly related paths
+
+- `src/main/file-converter.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/file-converter.md`
+- `docs/features/local-status-and-completeness.md`
+- `src/main/offline-docs.cjs`
+- `README.md`, `ROADMAP.md`, `CHANGELOG.md`, and `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, runtime interaction,
+real conversion, accessibility validation, or capture was run or claimed for
+this source-only speed-delivery candidate. The new source must receive focused
+format/error tests and installed-artifact interaction/capture evidence before
+it is treated as verified. Localization, full universal converter coverage,
+and all disabled semantic format adapters remain incomplete.
 
 ## Browser-local history and safe-export documentation candidate
 

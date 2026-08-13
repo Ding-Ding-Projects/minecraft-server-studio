@@ -22,7 +22,7 @@
 - [Browser-local Ollama observer](browser-local-ollama-observer.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
 - [Windows release packaging metadata](release-packaging.md)
-- [Local file-converter foundation](file-converter.md)
+- [Local app-owned file converter](file-converter.md)
 - [Browser-local companion-site file converter](browser-local-file-converter.md)
 - [Browser-local history and safe exports](browser-local-history-and-safe-exports.md)
 - [Browser-local notification center and destructive confirmation](browser-local-notifications-and-confirmation.md)
