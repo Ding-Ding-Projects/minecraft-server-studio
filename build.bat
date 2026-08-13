@@ -36,9 +36,9 @@ if errorlevel 1 (
 )
 
 echo [2/4] Installing project dependencies...
-call npm install
+call npm ci
 if errorlevel 1 (
-  echo ERROR: npm install failed. See the output above for the exact package failure.
+  echo ERROR: npm ci failed. See the output above for the exact package failure.
   popd
   exit /b 1
 )
