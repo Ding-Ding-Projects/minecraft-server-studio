@@ -132,6 +132,33 @@ and recovery contract.
 
 The settings-appearance-and-localization record also includes the local app-logo manager: shipped presets, byte/signature/dimension/static-image validation for a selected PNG or JPEG, a private derived cache, renderer-only display data, and reset back to the shipped mark. It makes no network request, stores no selected source path, and never changes package, executable, installer, updater, or application-data identity. Its dedicated documentation and inventory proof fields remain pending rather than verified.
 
+## Authenticator and toy-lock inventory boundary
+
+The `authenticator-and-toy-locks` row now includes a bounded registry of 20
+application-owned toy-lock targets: the authenticator destination, 15 server
+settings tabs, three direct appearance targets, and the authenticator-entry
+form. The main process is the authority for target type, identifier, and label;
+new lock creation fails closed for an unknown target or a label mismatch. The
+renderer receives the catalog and non-secret public lock state only, uses a
+registered-target picker rather than free-form target fields, and keeps a local
+plain-text-first lock-list search with a bounded regular-expression mode.
+
+The source-level lock routes include the authenticator header and the
+authenticator-entry form's own configuration action, as well as registered
+server-tab selection, selected appearance preview/save/reset, and
+authenticator-entry submission. Per-record unlock/relock/removal routes remain
+scoped to the selected lock; removal is an existing confirmation-gated local
+metadata action with best-effort protected-vault cleanup. Existing legacy
+records remain listable and unlockable without allowing arbitrary new target
+creation.
+
+The row remains incomplete. It does not establish a lock wizard for every
+rendered element, broad context-menu or universal keyboard coverage, QR pairing
+or import, localized copy, focused checks, packaged interaction, vault success,
+or a real capture. Its evidence must stay independent from appearance, tabs,
+Support Tickets, notification confirmation, and browser-local companion-site
+records.
+
 ## Local Ollama inventory boundary
 
 The `ollama` row currently covers a narrow, main-process-only local foundation:

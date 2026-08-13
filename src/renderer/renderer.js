@@ -65,6 +65,7 @@ const state = {
   supportTicketStatus: null,
   activeAuthenticatorTab: 'codes',
   activeToyLockId: null,
+  pendingToyLockAction: null,
   pendingAuthenticatorDestination: false,
   commandPalette: {
     mode: 'plain',
@@ -1418,6 +1419,7 @@ function renderAppearanceTargetEditor() {
   const settings = currentAppearanceSettings();
   const override = settings.elementOverrides?.[target] || { surface: null, onSurface: null, radius: null };
   const effective = appearanceTargetValue(target, settings);
+  const lock = toyLockForAppearanceTarget(target);
   const status = $('#appearance-target-status');
   const surface = $('#appearance-target-surface');
   const onSurface = $('#appearance-target-on-surface');
@@ -1425,11 +1427,23 @@ function renderAppearanceTargetEditor() {
   if (surface) surface.value = effective.surface;
   if (onSurface) onSurface.value = effective.onSurface;
   if (radius) radius.value = String(effective.radius);
+  for (const control of [surface, onSurface, radius, $('#save-appearance-navigation-button'), $('#reset-appearance-target-button')]) {
+    if (control) control.disabled = !appearanceNavigationIsReady() || Boolean(lock);
+  }
+  const configure = $('#configure-appearance-toy-lock');
+  if (configure) configure.disabled = !toyLockTargets().some((candidate) => candidate.targetType === 'appearance' && candidate.targetId === `appearance.${target}`);
+  const unlock = $('#unlock-appearance-toy-lock');
+  if (unlock) {
+    unlock.hidden = !lock;
+    unlock.disabled = !lock;
+  }
   if (status) {
     const inherited = override.surface === null && override.onSurface === null && override.radius === null;
     status.dataset.state = appearanceNavigationIsReady() ? 'ready' : currentAppearanceNavigation().state || 'unavailable';
     status.textContent = appearanceNavigationIsReady()
-      ? (inherited ? 'This target currently inherits the active theme values.' : 'This target has a local appearance override. Reset it to inherit the active theme again.')
+      ? (lock
+        ? `${lock.targetLabel} is locked. Unlock it with its independent credential before changing this target.`
+        : (inherited ? 'This target currently inherits the active theme values.' : 'This target has a local appearance override. Reset it to inherit the active theme again.'))
       : (currentAppearanceNavigation().detail || 'Appearance and tab-navigation settings are unavailable.');
   }
 }
@@ -1441,6 +1455,13 @@ function previewSelectedAppearanceTarget() {
   const radius = Number($('#appearance-target-radius')?.value);
   const status = $('#appearance-target-status');
   if (!appearanceNavigationIsReady() || !target || !surface || !onSurface || !Number.isInteger(radius) || radius < 0 || radius > 999) return;
+  const lock = toyLockForAppearanceTarget(target);
+  if (lock) {
+    state.pendingToyLockAction = previewSelectedAppearanceTarget;
+    openToyLockUnlockDialog(lock);
+    toast(`${lock.targetLabel} is locked by its configured toy lock.`, 'info');
+    return;
+  }
   const prefix = target === 'shell' ? 'shell' : target === 'tabStrip' ? 'tab-strip' : 'primary-action';
   setAppearanceCssValue(`--appearance-${prefix}-surface`, surface);
   setAppearanceCssValue(`--appearance-${prefix}-on-surface`, onSurface);
@@ -1478,6 +1499,13 @@ async function persistAppearanceNavigation(patch, successMessage) {
 async function saveAppearanceNavigation() {
   const target = $('#appearance-target')?.value;
   if (!target) return;
+  const lock = toyLockForAppearanceTarget(target);
+  if (lock) {
+    state.pendingToyLockAction = saveAppearanceNavigation;
+    openToyLockUnlockDialog(lock);
+    toast(`${lock.targetLabel} is locked by its configured toy lock.`, 'info');
+    return;
+  }
   const settings = currentAppearanceSettings();
   const snapshot = await persistAppearanceNavigation({
     theme: $('#appearance-theme').value,
@@ -1504,6 +1532,13 @@ async function saveAppearanceNavigation() {
 async function resetAppearanceTarget() {
   const target = $('#appearance-target')?.value;
   if (!target) return;
+  const lock = toyLockForAppearanceTarget(target);
+  if (lock) {
+    state.pendingToyLockAction = resetAppearanceTarget;
+    openToyLockUnlockDialog(lock);
+    toast(`${lock.targetLabel} is locked by its configured toy lock.`, 'info');
+    return;
+  }
   const snapshot = await persistAppearanceNavigation({
     elementOverrides: { [target]: { surface: null, onSurface: null, radius: null } }
   }, 'Selected appearance target now inherits the active theme.');
@@ -4685,6 +4720,102 @@ function renderAuthenticator() {
   }
 }
 
+function toyLockTargetKey(targetType, targetId) {
+  return `${targetType}:${targetId}`;
+}
+
+function toyLockTargets() {
+  return Array.isArray(state.toyLocks?.targets) ? state.toyLocks.targets : [];
+}
+
+function toyLockRecordForTarget(targetType, targetId) {
+  return (state.toyLocks?.locks || []).find((lock) => lock?.targetType === targetType && lock?.targetId === targetId) || null;
+}
+
+function toyLockForTarget(targetType, targetId) {
+  const lock = toyLockRecordForTarget(targetType, targetId);
+  return lock?.state === 'locked' ? lock : null;
+}
+
+function selectedToyLockTarget() {
+  const value = $('#toy-lock-target')?.value || '';
+  return toyLockTargets().find((target) => toyLockTargetKey(target.targetType, target.targetId) === value) || null;
+}
+
+function renderToyLockTargetPicker() {
+  const picker = $('#toy-lock-target');
+  const detail = $('#toy-lock-target-detail');
+  const create = $('#create-toy-lock-button');
+  if (!picker || !detail || !create) return;
+  const selected = picker.value;
+  const targets = toyLockTargets();
+  picker.replaceChildren();
+  if (!targets.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'Loading registered local targets…';
+    picker.append(empty);
+    picker.disabled = true;
+    create.disabled = true;
+    detail.textContent = 'The bounded local target catalog has not loaded yet.';
+    return;
+  }
+  for (const target of targets) {
+    const option = document.createElement('option');
+    option.value = toyLockTargetKey(target.targetType, target.targetId);
+    option.textContent = target.targetLabel;
+    picker.append(option);
+  }
+  picker.disabled = false;
+  picker.value = targets.some((target) => toyLockTargetKey(target.targetType, target.targetId) === selected)
+    ? selected
+    : toyLockTargetKey(targets[0].targetType, targets[0].targetId);
+  const target = selectedToyLockTarget();
+  const lock = target ? toyLockRecordForTarget(target.targetType, target.targetId) : null;
+  const status = state.toyLockStatus || state.toyLocks?.status;
+  create.disabled = status?.state !== 'ready' || !target || Boolean(lock);
+  detail.textContent = !target
+    ? 'Choose a registered local target before creating a lock.'
+    : lock
+      ? `${target.targetType} · ${target.targetId} already has a ${lock.state} independent ${lock.method.toUpperCase()} toy lock. Unlock, relock, or remove it from the list below.`
+      : `${target.targetType} · ${target.targetId}. This is a stable application-owned target, not a free-form identifier.`;
+}
+
+function toyLockRegexConfig() {
+  const enabled = $('#toy-lock-regex-enabled')?.checked === true;
+  const pattern = $('#toy-lock-regex-pattern')?.value || '';
+  const flags = $('#toy-lock-regex-flags')?.value || '';
+  if (!enabled) return { enabled: false, error: '', matcher: null };
+  if (pattern.length === 0) return { enabled: true, error: 'Enter a regex pattern before enabling regex search.', matcher: null };
+  if (pattern.length > 128 || flags.length > 3 || !/^[imu]*$/.test(flags) || new Set(flags).size !== flags.length) {
+    return { enabled: true, error: 'Use a bounded pattern and unique i, m, or u flags only.', matcher: null };
+  }
+  try {
+    return { enabled: true, error: '', matcher: new RegExp(pattern, flags) };
+  } catch {
+    return { enabled: true, error: 'This regex pattern is invalid. No toy locks match until it is corrected.', matcher: null };
+  }
+}
+
+function updateToyLockRegexStatus() {
+  const config = toyLockRegexConfig();
+  const status = $('#toy-lock-regex-status');
+  if (status) {
+    status.textContent = config.enabled
+      ? (config.error || 'Regex search is active for bounded local lock metadata.')
+      : 'Plain-text search is active.';
+    status.dataset.state = config.error ? 'invalid' : (config.enabled ? 'active' : 'plain');
+  }
+  return config;
+}
+
+function toyLockMatches(lock, config) {
+  const haystack = [lock.targetLabel, lock.targetType, lock.targetId, lock.method, lock.state].join(' · ').slice(0, 512);
+  const query = ($('#toy-lock-search')?.value || '').trim();
+  if (config.enabled) return Boolean(config.matcher && config.matcher.test(haystack));
+  return !query || haystack.toLocaleLowerCase('en-US').includes(query.toLocaleLowerCase('en-US'));
+}
+
 function renderToyLocks() {
   const status = state.toyLockStatus || state.toyLocks?.status;
   const statusTarget = $('#toy-lock-status');
@@ -4692,20 +4823,27 @@ function renderToyLocks() {
     statusTarget.textContent = status?.detail || 'Loading toy-lock status…';
     statusTarget.dataset.state = status?.state || 'loading';
   }
+  const disclosure = $('#toy-lock-disclosure');
+  if (disclosure) disclosure.textContent = status?.disclosure || 'Toy locks are a user-experience speed bump, not encryption or security. Delete the application-data folder yourself to reset every toy lock.';
   const recoveryDirectory = $('#toy-lock-recovery-directory');
   if (recoveryDirectory && status?.recoveryDirectory) recoveryDirectory.textContent = status.recoveryDirectory;
+  renderToyLockTargetPicker();
   const list = $('#toy-lock-list');
   if (!list) return;
   list.replaceChildren();
+  const config = updateToyLockRegexStatus();
   const locks = Array.isArray(state.toyLocks?.locks) ? state.toyLocks.locks : [];
-  if (!locks.length) {
+  const visible = config.enabled && config.error ? [] : locks.filter((lock) => toyLockMatches(lock, config));
+  if (!visible.length) {
     const empty = document.createElement('p');
     empty.className = 'muted';
-    empty.textContent = 'No toy locks are configured. The authenticator tab is the only actively guarded target in this foundation.';
+    empty.textContent = locks.length
+      ? (config.enabled && config.error ? 'Fix the regex pattern to show matching toy locks.' : 'No toy locks match this local search.')
+      : 'No toy locks are configured. Choose a shipped target above to create an independent local toy lock.';
     list.append(empty);
     return;
   }
-  for (const lock of locks) {
+  for (const lock of visible) {
     const card = document.createElement('article');
     card.className = 'toy-lock-card';
     card.dataset.state = lock.state;
@@ -4728,7 +4866,12 @@ function renderToyLocks() {
       if (lock.state === 'unlocked') relockToyLock(lock.id);
       else openToyLockUnlockDialog(lock);
     });
-    actions.append(control);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'danger-action';
+    remove.textContent = 'Remove toy lock';
+    remove.addEventListener('click', () => requestToyLockRemoval(lock));
+    actions.append(control, remove);
     card.append(title, detail, stateDetail, actions);
     list.append(card);
   }
@@ -4941,7 +5084,7 @@ function setAuthenticatorTab(tab) {
 }
 
 function activeToyLockForAuthenticatorTab() {
-  return (state.toyLocks?.locks || []).find((lock) => lock.targetType === 'tab' && lock.targetId === 'authenticator' && lock.state === 'locked') || null;
+  return toyLockForTarget('tab', 'authenticator');
 }
 
 async function openAuthenticatorDestination() {
@@ -4997,6 +5140,8 @@ async function refreshToyLocks() {
   if (status?.state === 'metadata-unavailable') {
     state.toyLocks = { status, locks: [] };
     renderToyLocks();
+    renderTabWorkspace();
+    renderAppearanceTargetEditor();
     return;
   }
   const snapshot = await safely(() => window.studio.listToyLocks());
@@ -5006,11 +5151,11 @@ async function refreshToyLocks() {
   }
   renderToyLocks();
   renderTabWorkspace();
+  renderAppearanceTargetEditor();
 }
 
-async function createAuthenticatorEntry(event) {
-  event.preventDefault();
-  const result = await safely(() => window.studio.createAuthenticatorEntry({
+function authenticatorEntryInput() {
+  return {
     issuer: $('#authenticator-issuer').value,
     account: $('#authenticator-account').value,
     label: $('#authenticator-label').value,
@@ -5020,13 +5165,34 @@ async function createAuthenticatorEntry(event) {
     algorithm: $('#authenticator-algorithm').value,
     digits: Number($('#authenticator-digits').value),
     period: Number($('#authenticator-period').value)
-  }));
+  };
+}
+
+function toyLockForAppearanceTarget(target) {
+  return toyLockForTarget('appearance', `appearance.${target}`);
+}
+
+async function persistAuthenticatorEntry(input) {
+  const result = await safely(() => window.studio.createAuthenticatorEntry(input));
   if (!result) return;
   ['authenticator-issuer', 'authenticator-account', 'authenticator-label', 'authenticator-manual-secret', 'authenticator-uri'].forEach((id) => { $(`#${id}`).value = ''; });
   $('#authenticator-group').value = 'Ungrouped';
   state.unsaved.authenticatorEntry = false;
   toast(`Local authenticator entry saved: ${result.label}.`, 'success');
   await refreshAuthenticator();
+}
+
+async function createAuthenticatorEntry(event) {
+  event.preventDefault();
+  const input = authenticatorEntryInput();
+  const lock = toyLockForTarget('element', 'authenticator.entry-form');
+  if (lock) {
+    state.pendingToyLockAction = () => persistAuthenticatorEntry(input);
+    openToyLockUnlockDialog(lock);
+    toast('The authenticator entry form is locked by its configured toy lock.', 'info');
+    return;
+  }
+  await persistAuthenticatorEntry(input);
 }
 
 function toggleToyLockMethod() {
@@ -5037,10 +5203,12 @@ function toggleToyLockMethod() {
 
 async function createToyLock(event) {
   event.preventDefault();
+  const target = selectedToyLockTarget();
+  if (!target) return toast('Choose a registered local target before creating a toy lock.', 'error');
   const result = await safely(() => window.studio.createToyLock({
-    targetType: $('#toy-lock-target-type').value,
-    targetId: $('#toy-lock-target-id').value.trim(),
-    targetLabel: $('#toy-lock-target-label').value,
+    targetType: target.targetType,
+    targetId: target.targetId,
+    targetLabel: target.targetLabel,
     method: $('#toy-lock-method').value,
     password: $('#toy-lock-password').value,
     passwordConfirmation: $('#toy-lock-password-confirmation').value,
@@ -5074,6 +5242,7 @@ function openToyLockUnlockDialog(lock) {
 
 function closeToyLockUnlockDialog() {
   state.activeToyLockId = null;
+  state.pendingToyLockAction = null;
   state.pendingAuthenticatorDestination = false;
   state.pendingServerTabId = null;
   state.unsaved.toyLockUnlock = false;
@@ -5089,7 +5258,9 @@ async function submitToyLockUnlock(event) {
   $('#toy-lock-unlock-credential').value = '';
   const shouldOpenAuthenticator = state.pendingAuthenticatorDestination && unlocked.targetType === 'tab' && unlocked.targetId === 'authenticator';
   const pendingServerTabId = state.pendingServerTabId;
+  const pendingAction = state.pendingToyLockAction;
   state.activeToyLockId = null;
+  state.pendingToyLockAction = null;
   state.pendingAuthenticatorDestination = false;
   state.pendingServerTabId = null;
   state.unsaved.toyLockUnlock = false;
@@ -5103,12 +5274,30 @@ async function submitToyLockUnlock(event) {
   if (pendingServerTabId && SERVER_TAB_IDS.includes(pendingServerTabId)) {
     await selectServerWorkspaceTab(pendingServerTabId, { focus: true });
   }
+  if (typeof pendingAction === 'function') await pendingAction(unlocked);
 }
 
 async function relockToyLock(lockId) {
   const result = await safely(() => window.studio.relockToyLock(lockId));
   if (!result) return;
   toast(`Toy lock restored for ${result.targetLabel}.`, 'success');
+  await refreshToyLocks();
+}
+
+function requestToyLockRemoval(lock) {
+  if (!lock?.id) return;
+  openDestructiveConfirmation({
+    title: `Remove toy lock for ${lock.targetLabel}`,
+    copy: 'This removes the selected local toy-lock record and its protected credential reference. It does not delete server data, authenticator entries, application settings, or the application-data folder.',
+    target: `Affected toy-lock target: ${lock.targetLabel} · ${lock.targetType} · ${lock.targetId}`,
+    execute: () => removeToyLock(lock.id)
+  });
+}
+
+async function removeToyLock(lockId) {
+  const result = await safely(() => window.studio.removeToyLock(lockId));
+  if (!result) return;
+  toast(`Toy lock removed for ${result.targetLabel}.`, 'success');
   await refreshToyLocks();
 }
 
@@ -5408,9 +5597,7 @@ function groupForTab(tabId, workspace = tabWorkspaceSettings()) {
 }
 
 function toyLockForServerTab(tabId) {
-  return (state.toyLocks?.locks || []).find((lock) => lock?.targetType === 'tab'
-    && lock?.state === 'locked'
-    && (lock.targetId === tabId || lock.targetId === `server.${tabId}`)) || null;
+  return toyLockForTarget('tab', `server.${tabId}`) || toyLockForTarget('tab', tabId);
 }
 
 function tabWorkspaceDescriptor(tabId, workspace = tabWorkspaceSettings()) {
@@ -6317,19 +6504,39 @@ function closeTabGroupPicker(restoreFocus = true) {
   if (restoreFocus) focus?.focus?.();
 }
 
-function configureToyLockForServerTab(tabId) {
+function configureToyLockForTarget(targetType, targetId) {
+  const target = toyLockTargets().find((candidate) => candidate.targetType === targetType && candidate.targetId === targetId);
+  if (!target) {
+    toast('The bounded local toy-lock target catalog is still loading. Refresh the toy-lock destination and try again.', 'error');
+    return;
+  }
   closeTabContextMenu(false);
+  if ($('#experience-settings-dialog')?.open) closeExperienceSettings();
   state.pendingServerTabId = null;
   state.workspaceDestination = 'authenticator';
   state.activeAuthenticatorTab = 'locks';
   renderAll();
-  const type = $('#toy-lock-target-type');
-  const id = $('#toy-lock-target-id');
-  const label = $('#toy-lock-target-label');
-  if (type) type.value = 'tab';
-  if (id) id.value = `server.${tabId}`;
-  if (label) label.value = `${tabLabel(tabId)} server settings tab`;
-  id?.focus();
+  const picker = $('#toy-lock-target');
+  if (picker) picker.value = toyLockTargetKey(target.targetType, target.targetId);
+  renderToyLockTargetPicker();
+  picker?.focus();
+}
+
+function configureToyLockForServerTab(tabId) {
+  configureToyLockForTarget('tab', `server.${tabId}`);
+}
+
+function configureSelectedAppearanceToyLock() {
+  const target = $('#appearance-target')?.value;
+  if (!target) return;
+  configureToyLockForTarget('appearance', `appearance.${target}`);
+}
+
+function unlockSelectedAppearanceToyLock() {
+  const target = $('#appearance-target')?.value;
+  const lock = target ? toyLockForAppearanceTarget(target) : null;
+  if (!lock) return;
+  openToyLockUnlockDialog(lock);
 }
 
 function handleTabContextAction(action) {
@@ -7747,7 +7954,11 @@ function bindEvents() {
     closeExperienceSettings();
     openTabOverflow();
   });
+  $('#configure-appearance-toy-lock')?.addEventListener('click', configureSelectedAppearanceToyLock);
+  $('#unlock-appearance-toy-lock')?.addEventListener('click', unlockSelectedAppearanceToyLock);
   $('#authenticator-destination-button').addEventListener('click', openAuthenticatorDestination);
+  $('#configure-authenticator-toy-lock').addEventListener('click', () => configureToyLockForTarget('tab', 'authenticator'));
+  $('#configure-authenticator-entry-toy-lock').addEventListener('click', () => configureToyLockForTarget('element', 'authenticator.entry-form'));
   $('#support-tickets-destination-button').addEventListener('click', openSupportTicketsDestination);
   $('#notification-center-destination-button').addEventListener('click', openNotificationCenter);
   $('#return-to-servers-button').addEventListener('click', returnToServers);
@@ -7832,7 +8043,30 @@ function bindEvents() {
   $('#toy-lock-create-form').addEventListener('submit', createToyLock);
   $('#toy-lock-create-form').addEventListener('input', () => { state.unsaved.toyLockDraft = true; });
   $('#toy-lock-create-form').addEventListener('change', () => { state.unsaved.toyLockDraft = true; });
+  $('#toy-lock-target').addEventListener('change', () => {
+    renderToyLockTargetPicker();
+    state.unsaved.toyLockDraft = true;
+  });
   $('#toy-lock-method').addEventListener('change', toggleToyLockMethod);
+  $('#toy-lock-search').addEventListener('input', renderToyLocks);
+  $('#toy-lock-regex-toggle').addEventListener('click', () => {
+    const builder = $('#toy-lock-regex-builder');
+    builder.hidden = !builder.hidden;
+    $('#toy-lock-regex-toggle').setAttribute('aria-expanded', String(!builder.hidden));
+    if (!builder.hidden) $('#toy-lock-regex-pattern').focus();
+  });
+  ['toy-lock-regex-enabled', 'toy-lock-regex-pattern', 'toy-lock-regex-flags'].forEach((id) => {
+    $(`#${id}`).addEventListener(id === 'toy-lock-regex-enabled' ? 'change' : 'input', renderToyLocks);
+  });
+  $$('[data-toy-lock-regex-token]').forEach((button) => button.addEventListener('click', () => {
+    const input = $('#toy-lock-regex-pattern');
+    const token = button.dataset.toyLockRegexToken || '';
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.setRangeText(token, start, end, 'end');
+    input.focus();
+    renderToyLocks();
+  }));
   $('#open-support-tickets-from-toy-locks').addEventListener('click', openSupportTicketsDestination);
   $('#toy-lock-unlock-form').addEventListener('submit', submitToyLockUnlock);
   $('#toy-lock-unlock-credential').addEventListener('input', () => { state.unsaved.toyLockUnlock = Boolean($('#toy-lock-unlock-credential').value); });
@@ -7842,6 +8076,7 @@ function bindEvents() {
   $('#toy-lock-unlock-dialog').addEventListener('close', () => {
     if (state.activeToyLockId) {
       state.activeToyLockId = null;
+      state.pendingToyLockAction = null;
       state.pendingAuthenticatorDestination = false;
       state.pendingServerTabId = null;
       state.unsaved.toyLockUnlock = false;

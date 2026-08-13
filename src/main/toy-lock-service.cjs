@@ -24,7 +24,7 @@ const LIMITS = Object.freeze({
   protectedRecordChars: 512
 });
 
-const TARGET_TYPES = new Set(['tab', 'element']);
+const TARGET_TYPES = new Set(['tab', 'element', 'appearance']);
 const LOCK_METHODS = new Set(['password', 'totp']);
 const IDENTIFIER_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TARGET_ID_PATTERN = /^[A-Za-z][A-Za-z0-9._:-]*$/;
@@ -170,6 +170,34 @@ function passwordMatches(record, candidate) {
   return derived.length === decoded.derived.length && crypto.timingSafeEqual(derived, decoded.derived);
 }
 
+function normalizeTargetRegistry(value) {
+  if (!Array.isArray(value) || value.length > LIMITS.locks) {
+    throw lockError('TOY_LOCK_TARGET_REGISTRY_INVALID', 'Toy-lock target registry is unavailable.');
+  }
+  const identifiers = new Set();
+  return Object.freeze(value.map((candidate) => {
+    assertExactKeys(candidate, ['targetType', 'targetId', 'targetLabel'], 'Toy-lock target registry is invalid.');
+    const target = Object.freeze({
+      targetType: normalizeTargetType(candidate.targetType),
+      targetId: normalizeTargetId(candidate.targetId),
+      targetLabel: normalizeText(candidate.targetLabel, LIMITS.targetLabelChars, 'Toy-lock target label')
+    });
+    const identifier = `${target.targetType}:${target.targetId}`;
+    if (identifiers.has(identifier)) throw lockError('TOY_LOCK_TARGET_REGISTRY_INVALID', 'Toy-lock target registry is invalid.');
+    identifiers.add(identifier);
+    return target;
+  }).sort((left, right) => left.targetLabel.localeCompare(right.targetLabel)));
+}
+
+function publicTarget(target, lock, state) {
+  return Object.freeze({
+    targetType: target.targetType,
+    targetId: target.targetId,
+    targetLabel: target.targetLabel,
+    lock: lock ? publicLock(lock, state) : null
+  });
+}
+
 function publicLock(lock, state) {
   return Object.freeze({
     id: lock.id,
@@ -187,10 +215,11 @@ function publicLock(lock, state) {
 
 class ToyLockService {
   constructor(options = {}) {
-    assertKnownKeys(options, new Set(['dataDir', 'recoveryDirectory', 'credentialVault', 'onChange']), 'Toy-lock service options are invalid.');
+    assertKnownKeys(options, new Set(['dataDir', 'recoveryDirectory', 'credentialVault', 'onChange', 'targets']), 'Toy-lock service options are invalid.');
     this.dataDir = normalizeDirectory(options.dataDir, LIMITS.dataDirectoryChars, 'Toy-lock storage requires an application-private data directory.');
     this.recoveryDirectory = normalizeDirectory(options.recoveryDirectory, LIMITS.recoveryDirectoryChars, 'Toy-lock recovery requires an application-private data directory.');
     this.locksPath = path.join(this.dataDir, 'toy-locks.json');
+    this.targets = normalizeTargetRegistry(options.targets || []);
     this.credentialVault = options.credentialVault || null;
     this.onChange = typeof options.onChange === 'function' ? options.onChange : null;
     this.locks = [];
@@ -233,7 +262,8 @@ class ToyLockService {
       detail: this.metadataError || (vault.ready ? 'Each configured toy lock has an independent protected credential.' : 'Protected credential storage is unavailable, so toy locks cannot be created or unlocked.'),
       disclosure: 'Toy locks are a user-experience speed bump, not encryption or security. Delete this application data folder yourself to reset every toy lock.',
       recoveryDirectory: this.recoveryDirectory,
-      everyElementCoverage: Object.freeze({ state: 'incomplete', detail: 'This foundation records per-target locks. Context-menu and keyboard wiring for every rendered element is not implemented yet.' })
+      registeredTargetCount: this.targets.length,
+      everyElementCoverage: Object.freeze({ state: 'incomplete', detail: 'This lane guards its shipped registered targets only. Context-menu and keyboard wiring for every rendered element is not implemented yet.' })
     });
   }
 
@@ -242,6 +272,10 @@ class ToyLockService {
     this._expireUnlocks();
     return Object.freeze({
       status: this.getStatus(),
+      targets: this.targets.map((target) => {
+        const lock = this.locks.find((candidate) => candidate.targetType === target.targetType && candidate.targetId === target.targetId);
+        return publicTarget(target, lock, lock ? this._lockState(lock.id) : null);
+      }),
       locks: this.locks.map((lock) => publicLock(lock, this._lockState(lock.id)))
     });
   }
@@ -261,11 +295,17 @@ class ToyLockService {
     }
     const totpSecret = method === 'totp' ? normalizeBase32Secret(source.totpSecret || '') : '';
     const now = new Date().toISOString();
+    const targetType = normalizeTargetType(source.targetType);
+    const targetId = normalizeTargetId(source.targetId);
+    const registeredTarget = this.targets.find((candidate) => candidate.targetType === targetType && candidate.targetId === targetId);
+    if (!registeredTarget) throw lockError('TOY_LOCK_UNKNOWN_TARGET', 'Choose a shipped toy-lock target from the registered local target list.');
+    const requestedLabel = normalizeText(source.targetLabel, LIMITS.targetLabelChars, 'Toy-lock target label');
+    if (requestedLabel !== registeredTarget.targetLabel) throw lockError('TOY_LOCK_TARGET_LABEL_MISMATCH', 'The toy-lock target label must match the selected shipped target.');
     const lock = Object.freeze({
       id: crypto.randomUUID(),
-      targetType: normalizeTargetType(source.targetType),
-      targetId: normalizeTargetId(source.targetId),
-      targetLabel: normalizeText(source.targetLabel, LIMITS.targetLabelChars, 'Toy-lock target label'),
+      targetType,
+      targetId,
+      targetLabel: registeredTarget.targetLabel,
       method,
       unlockMinutes: normalizeUnlockMinutes(source.unlockMinutes),
       createdAt: now,
@@ -318,6 +358,29 @@ class ToyLockService {
     this.unlocked.delete(lock.id);
     this._notify();
     return publicLock(lock, this._lockState(lock.id));
+  }
+
+  removeLock(lockId) {
+    this._assertReady();
+    const lock = this._findLock(lockId);
+    const original = this.locks;
+    const retained = this.locks.filter((candidate) => candidate.id !== lock.id);
+    this.locks = retained;
+    this.unlocked.delete(lock.id);
+    try {
+      this._writeLocks();
+    } catch (error) {
+      this.locks = original;
+      throw error;
+    }
+    try {
+      this.credentialVault.delete(this._credentialKey(lock.id));
+    } catch {
+      // The metadata record is already gone. A protected orphan is safer than
+      // recreating a deleted lock or exposing credential material.
+    }
+    this._notify();
+    return Object.freeze({ id: lock.id, targetType: lock.targetType, targetId: lock.targetId, targetLabel: lock.targetLabel });
   }
 
   lockForTarget(targetType, targetId) {

@@ -65,10 +65,43 @@ secret, or code in the metadata file. A session unlock lasts until the app
 closes; a selected minute duration expires in memory. All locks return to their
 locked state after restart.
 
-The authenticator tab is the first actively guarded target. The service can
-also record individual element targets, but this foundation does not claim that
-every rendered element has its own context-menu wizard or keyboard equivalent
-yet. The inventory remains explicit about that incomplete coverage.
+### Registered desktop targets
+
+New desktop locks can be created only for the fixed application-owned target
+catalog returned by the main process. The renderer does not accept a free-form
+target identifier or label: the service rejects an unknown target and rejects a
+label that does not exactly match the selected catalog record. The current
+catalog contains 20 targets:
+
+- 16 tabs: the authenticator destination and the General, World, Gameplay,
+  Network, Runtime, Paper JAR CLI, BuildTools, Backups and updates, Live
+  management, Command Center, Local status, History and exports, Advanced,
+  Plugins, and Console server-settings tabs;
+- three appearance targets: the app shell, settings-tab strip, and primary
+  actions; and
+- the authenticator-entry form.
+
+The authenticator header, the authenticator-entry form's own configuration
+action, each registered server-tab route, and the selected appearance-target
+controls can route a person to the registered-target picker. The list itself
+keeps plain-text search as the default and offers a bounded local
+regular-expression mode over non-secret lock metadata only. Per-record controls
+expose unlock, relock, and removal. Removal uses the existing two-control/full-
+slider confirmation before removing the local lock metadata; the service then
+attempts protected credential-vault cleanup without exposing a credential.
+
+The locked routes in this bounded catalog are the authenticator destination,
+registered server-tab selection, selected appearance preview/save/reset, and
+authenticator-entry submission. A lock on the entry form defers the submitted
+entry data only until its independent credential unlocks the form; it does not
+write a secret into lock metadata or the lock list. Existing legacy lock records
+remain listable and unlockable, but a new lock cannot be created for a target
+outside the catalog.
+
+This is registered-target coverage, not universal element coverage. The build
+does not claim a lock wizard for every rendered element, broad context-menu
+coverage, or a universal keyboard route. Those capabilities remain separate
+work rather than an implication of the catalog.
 
 If a user loses a toy-lock credential, the self-service recovery route is to
 delete the application-data folder shown in the toy-lock UI. Nothing is sent to
@@ -85,6 +118,13 @@ that folder on the user's behalf.
 - A failed metadata write attempts to remove the newly created protected
   credential. If the credential vault cannot complete that cleanup, it may keep
   an unreachable protected record rather than exposing plaintext material.
+- A request for an unregistered target or a mismatched catalog label is refused
+  before a credential is created. Legacy metadata remains available for listing
+  and unlocking rather than being silently rewritten to a new target.
+- Removing a lock writes the retained metadata first and then makes a best-effort
+  protected-vault deletion. A vault-cleanup failure can retain an unreachable
+  protected record, which is safer than restoring a removed lock or exposing a
+  secret.
 - Secret-shaped values are not emitted through status events, notification
   payloads, renderer snapshots, ordinary exports, local history, or logs.
 - The current UI has no ordinary secret export, deletion workflow, QR workflow,
@@ -92,11 +132,14 @@ that folder on the user's behalf.
 
 ## Verification state
 
-This foundation was added in a fast delivery pass. No focused tests, linting,
-runtime interaction, package build, installed-app exercise, or screen capture
-was run for this feature. The local completeness inventory records the source
-paths and documentation article while keeping localization, test, capture, and
-broader evidence fields pending.
+This registered-target expansion was added in a fast delivery pass. No focused
+tests, linting, independent review, runtime interaction, package build,
+installed-app exercise, or screen capture was run for this feature. The local
+completeness inventory records source paths and the documentation article while
+keeping localization, test, capture, packaged interaction, and broader evidence
+fields pending. Source registration does not establish every-element lock
+coverage, a successful vault operation, a completed unlock, or a rendered
+desktop interaction.
 
 ## Public landing-page browser-local companion
 
