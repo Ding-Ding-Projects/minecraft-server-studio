@@ -21,6 +21,44 @@ The public companion site now has documentation and a per-surface inventory entr
 ### Verification boundary
 
 No tests, linting, independent review, build, package, runtime interaction, deployment verification, or screenshots were run or claimed for this documentation candidate under the active fast-delivery workflow. The documentation intentionally does not state universal completion. Localization, interaction, test, and capture evidence remain incomplete until real implementation and proof are recorded independently.
+
+## Browser-local companion-site logo customization candidate
+
+The public companion site has a browser-local logo-customization foundation.
+It exposes Studio Aqua, Server Slate, and World Spruce as shipped rendered
+presets, plus a bounded local PNG/JPEG route. The page validates actual image
+bytes, source size, decoded dimensions, and pixel area before retaining only a
+downscaled, bounded PNG/JPEG data URL with format, dimensions, fit,
+background, and focal-point metadata. It never retains a selected file path or
+filename, sends the image to a network service, or changes desktop-app,
+package, installer, updater, or release identity.
+
+The local preset search has its own anchored regular-expression builder.
+School mode shows the shipped Studio Aqua mark and suppresses custom-logo
+input, custom image data, and custom mark rendering while retaining the prior
+browser-local preference. Reset clears only the derived browser-local custom
+representation and returns to Studio Aqua; it never changes the source file.
+
+### Directly related paths
+
+- `site/contract.js`
+- `site/app.js`
+- `site/index.html`
+- `site/styles.css`
+- `docs/features/site-logo-customization.md`
+- `docs/features/README.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, browser interaction, build, package,
+release, Pages publication, deployment verification, or real capture ran for
+this source and documentation candidate. It does not establish browser decode
+compatibility, persisted storage availability, localized or assistive-technology
+operation, a deployed public-site interaction, or desktop-app rendering. Those
+remain explicit follow-up evidence items.
 ## Browser-local landing-page authenticator and toy-lock candidate
 
 The public landing page now has a separate `site/authenticator-locks.js` module
