@@ -4,9 +4,9 @@ This article records the desktop source contract for a bounded notification hist
 
 ## Delivery and evidence boundary
 
-Minecraft Server Studio already has a renderer-local `toast()` helper and an `openDestructiveConfirmation()` helper in `src/renderer/renderer.js`. The former shows short-lived feedback, while the latter currently protects selected consequential command actions with two independent checkboxes and a full-range slider. The backup and Paper-replacement routes also validate confirmation state and a current reviewed-plan digest in `src/main/server-backup-manager.cjs`.
+Minecraft Server Studio now has a renderer-local `toast()` helper and a reusable `openDestructiveConfirmation()` helper in `src/renderer/renderer.js`. The former writes only a fixed safe summary to `src/main/notification-center-service.cjs`; the latter protects selected consequential command actions, snapshot restore, Paper JAR replacement/rollback, and notification-history removal with two independent checkboxes and a full-range slider. The backup and Paper-replacement routes also validate confirmation state and a current reviewed-plan digest in `src/main/server-backup-manager.cjs`. Notification-history removal receives its own reviewed selection digest at the main-process boundary.
 
-This feature record defines the next shared desktop behavior: a notification center must retain a bounded safe history of presentation events, and a destructive-action caller must use one reusable decision surface rather than inventing a one-off authorization shortcut. A source-level record is not proof that a notification was rendered, persisted, dismissed, announced to assistive technology, or that a confirmation prevented a real write in a packaged application.
+The app-private notification center retains a bounded safe history of presentation events, and every covered irreversible caller uses the same renderer decision surface instead of inventing a one-off authorization shortcut. This source-level record is not proof that a notification was rendered, persisted, dismissed, announced to assistive technology, or that a confirmation prevented a real write in a packaged application.
 
 Tests, linting, review, packaging, runtime interaction, and captures were not run in this fast-delivery lane.
 
@@ -16,13 +16,13 @@ Notifications communicate information, progress, success, warning, and non-decis
 
 The notification contract is deliberately narrow:
 
-- Every item carries a bounded kind, title or message, creation time, optional safe action label, and an explicit state such as active, dismissed, or unavailable.
+- Every item carries a bounded kind, fixed safe title/detail summary, creation time, and an explicit state such as active, dismissed, or unavailable.
 - Informational, success, and progress items may auto-dismiss from the transient stack. Warnings and errors remain reviewable and must not be represented as resolved merely because their transient presentation ended.
 - A user can dismiss an individual item without changing the underlying server, app, backup, configuration, or history record. Clearing a notification list is a presentation action, not a proof that the triggering condition recovered.
 - A notification describes the application result it actually received. It must not claim that a remote server, RCON endpoint, management protocol, filesystem replacement, editor handoff, or update succeeded unless that route returned that result.
 - The center is local to the app. It does not send telemetry, analytics, notification contents, credentials, or server data to a network service.
 
-The existing renderer-only toast timeout is a fallback presentation detail, not a durable-notification guarantee. In particular, the current helper removes ordinary items after five seconds and errors after nine seconds; that source behavior is not evidence of a persisted or fully accessible notification-history result.
+The renderer removes informational and success items after five seconds and progress items after eight seconds. Warning and error toasts remain visible until a user dismisses them. These source behaviors are not evidence of a fully accessible notification-history result.
 
 ## Reusable destructive confirmation behavior
 
@@ -35,7 +35,7 @@ A destructive or irreversible operation must name the exact action and affected 
 
 The slider stays disabled until both independent controls are selected, and the final action stays disabled until the slider reaches its full value. A caller must not treat a keyboard submit, a synthetic click, a retained DOM value, or a visible dialog as authorization. The action callback is invoked only after the complete local confirmation state is present.
 
-For operations backed by a reviewed plan, the main-process boundary must additionally bind the confirmation to the current plan digest. `src/main/server-backup-manager.cjs` already rejects missing confirmation controls, an incomplete slider, and a stale digest for snapshot restore and Paper JAR replacement/rollback. A stale or changed plan must be refreshed and confirmed again; displaying an old plan does not authorize a write.
+For operations backed by a reviewed plan, the main-process boundary additionally binds the confirmation to the current plan digest. `src/main/server-backup-manager.cjs` rejects missing confirmation controls, an incomplete slider, and a stale digest for snapshot restore and Paper JAR replacement/rollback. `src/main/notification-center-service.cjs` independently rejects a notification-clear request whose selected-record digest no longer matches the reviewed selection. A stale or changed plan must be refreshed and confirmed again; displaying an old plan does not authorize a write.
 
 The decision surface provides an Emergency exit/cancel route. Cancelling, closing, or pressing Escape leaves the action unperformed and returns focus to the originating control where the renderer can do so safely. The confirmation UI is a user-experience safety boundary, not a substitute for operating-system permissions, a backup, credential management, server-side authorization, or a validation check in the main process.
 
@@ -55,7 +55,7 @@ Any optional notification action must be explicitly allowlisted by the owning re
 | State | Required result |
 | --- | --- |
 | Notification center is unavailable | Preserve the underlying operation result separately, show an honest local fallback, and do not claim a history item was recorded. |
-| Notification payload is malformed or exceeds a bound | Reject the payload or replace it with a bounded generic error without rendering raw untrusted content. |
+| Notification payload is malformed or exceeds a bound | Reject the payload without rendering or persisting raw untrusted content. |
 | User dismisses or clears a notification | Update only the local presentation state; do not retry, undo, delete, or mark the underlying operation successful. |
 | Confirmation is cancelled or Escape is used | Leave the destructive action unperformed and return focus to the initiating control where possible. |
 | One confirmation control or slider value is missing | Keep authorization unavailable and do not invoke the action. |

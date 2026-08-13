@@ -9,6 +9,10 @@ const state = {
   localHistory: null,
   localHistoryResult: null,
   localHistoryFilterError: '',
+  notificationCenter: null,
+  notificationSearch: { enabled: false, query: '', pattern: '', flags: 'i', sample: '' },
+  notificationSelection: new Set(),
+  notificationSelectionNotice: '',
   externalEditor: null,
   buildToolsMetadata: null,
   buildToolsPlan: null,
@@ -161,6 +165,7 @@ const FALLBACK_COMMAND_CATALOG = {
 
 let commandCatalog = FALLBACK_COMMAND_CATALOG;
 let selectedCommandAction = null;
+let activeDestructiveConfirmation = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -752,9 +757,46 @@ function selectedServer() {
   return state.servers.find((server) => server.id === state.selectedId) || null;
 }
 
+function notificationSummaryFor(kind) {
+  return ({
+    info: { severity: 'info', title: 'Information', detail: 'An app action reported an informational update.' },
+    success: { severity: 'success', title: 'Completed', detail: 'An app action completed.' },
+    progress: { severity: 'progress', title: 'In progress', detail: 'An app action reported progress.' },
+    warning: { severity: 'warning', title: 'Attention needed', detail: 'An app action needs attention.' },
+    error: { severity: 'error', title: 'Action failed', detail: 'An app action reported an error.' }
+  })[kind] || { severity: 'info', title: 'Information', detail: 'An app action reported an informational update.' };
+}
+
+function persistToastNotification(kind) {
+  if (typeof window.studio?.recordNotification !== 'function') return Promise.resolve(null);
+  return Promise.resolve(window.studio.recordNotification(notificationSummaryFor(kind)))
+    .then((result) => result?.record?.id || null)
+    .catch(() => null);
+}
+
+function dismissRenderedToast(item, notificationRecord) {
+  if (item.dataset.dismissed === 'true') return;
+  item.dataset.dismissed = 'true';
+  item.remove();
+  Promise.resolve(notificationRecord).then(async (id) => {
+    if (!id || typeof window.studio?.dismissNotifications !== 'function') return;
+    try {
+      const snapshot = await window.studio.dismissNotifications([id]);
+      if (snapshot) {
+        state.notificationCenter = snapshot;
+        renderNotificationCenter();
+      }
+    } catch {
+      // The visible toast already closed. A persistence failure must not create
+      // another toast and recurse through notification recording.
+    }
+  });
+}
+
 function toast(message, kind = 'info') {
   const item = document.createElement('div');
   item.className = `toast ${kind}`;
+  item.setAttribute('role', kind === 'error' || kind === 'warning' ? 'alert' : 'status');
   if (currentExperienceLocal().dialogEmoji) {
     const decoration = document.createElement('span');
     decoration.className = 'toast-emoji';
@@ -767,6 +809,14 @@ function toast(message, kind = 'info') {
   const messageValue = messageText(message);
   copy.textContent = `${toastPrefix(kind)}: ${messageValue}`;
   item.append(copy);
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'toast-dismiss';
+  dismiss.setAttribute('aria-label', 'Dismiss notification');
+  dismiss.textContent = '×';
+  const notificationRecord = persistToastNotification(kind);
+  dismiss.addEventListener('click', () => dismissRenderedToast(item, notificationRecord));
+  item.append(dismiss);
   $('#toast-region').append(item);
   const experienceCopy = window.StudioExperienceCopy;
   const levels = storedExperienceLocal().funnyLevels;
@@ -783,7 +833,9 @@ function toast(message, kind = 'info') {
     english: `${englishPrefix}: ${englishMessage}`,
     cantonese: `${cantonesePrefix}: ${cantoneseMessage}`
   });
-  setTimeout(() => item.remove(), kind === 'error' ? 9000 : 5000);
+  if (!['warning', 'error'].includes(kind)) {
+    setTimeout(() => dismissRenderedToast(item, notificationRecord), kind === 'progress' ? 8000 : 5000);
+  }
 }
 
 async function safely(work, successMessage) {
@@ -2529,6 +2581,320 @@ function clearHistoryFilters() {
   refreshLocalHistory();
 }
 
+function notificationRecords() {
+  return Array.isArray(state.notificationCenter?.records) ? state.notificationCenter.records : [];
+}
+
+function notificationSearchText(record) {
+  return [record.severity, record.title, record.detail, record.state].filter(Boolean).join(' ');
+}
+
+function notificationRegexProblem({ pattern, flags }) {
+  const source = String(pattern || '');
+  const selectedFlags = String(flags || '');
+  if (!source) return 'Enter a regular expression before enabling regex search.';
+  if (source.length > 128) return 'Regular expressions must be 128 characters or fewer.';
+  if (!/^[imu]{0,3}$/.test(selectedFlags) || new Set(selectedFlags).size !== selectedFlags.length) return 'Use unique i, m, and u flags only.';
+  if (/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(source) || /(?:\.\*|\.\+){2,}/.test(source) || /\{\d{4,}(?:,\d*)?\}/.test(source)) {
+    return 'This pattern contains a nested or oversized quantifier shape that the bounded local search rejects.';
+  }
+  try {
+    new RegExp(source, selectedFlags);
+  } catch {
+    return 'The pattern is invalid. Correct it before applying regex search.';
+  }
+  return '';
+}
+
+function notificationMatcher() {
+  const search = state.notificationSearch;
+  if (!search.enabled) {
+    const query = String(search.query || '').trim().toLocaleLowerCase();
+    return {
+      valid: true,
+      mode: 'plain',
+      matches: (record) => !query || notificationSearchText(record).toLocaleLowerCase().includes(query)
+    };
+  }
+  const problem = notificationRegexProblem(search);
+  if (problem) return { valid: false, mode: 'regex', problem, matches: () => false };
+  const expression = new RegExp(search.pattern, search.flags);
+  return {
+    valid: true,
+    mode: 'regex',
+    expression,
+    matches: (record) => expression.test(notificationSearchText(record))
+  };
+}
+
+function notificationRegexFeedback() {
+  const target = $('#notification-regex-status');
+  const captures = $('#notification-regex-captures');
+  if (!target || !captures) return;
+  const search = state.notificationSearch;
+  if (!search.enabled) {
+    target.dataset.state = 'plain';
+    target.textContent = 'Plain-text search is active. Enable this builder to use a bounded regular expression.';
+    captures.textContent = 'Capture groups appear here for a matching local sample.';
+    return;
+  }
+  const problem = notificationRegexProblem(search);
+  if (problem) {
+    target.dataset.state = 'invalid';
+    target.textContent = problem;
+    captures.textContent = 'No capture groups are available while the expression is invalid.';
+    return;
+  }
+  const expression = new RegExp(search.pattern, search.flags);
+  target.dataset.state = 'active';
+  if (!search.sample) {
+    target.textContent = 'The expression is valid. Enter an optional local sample to inspect live matches and capture groups.';
+    captures.textContent = 'No sample text is entered.';
+    return;
+  }
+  const match = expression.exec(search.sample);
+  if (!match) {
+    target.textContent = 'The expression is valid but does not match the current local sample.';
+    captures.textContent = 'No capture groups matched the local sample.';
+    return;
+  }
+  target.textContent = 'The expression is valid and matches the current local sample.';
+  captures.textContent = match.length > 1
+    ? `Capture groups: ${match.slice(1).map((value, index) => `${index + 1}: ${value || 'empty'}`).join(' · ')}`
+    : 'The expression matched without capture groups.';
+}
+
+function insertNotificationRegexToken(token) {
+  const input = $('#notification-regex-pattern');
+  if (!input) return;
+  const value = String(token || '');
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.setRangeText(value, start, end, 'end');
+  input.value = input.value.slice(0, 128);
+  state.notificationSearch.pattern = input.value;
+  state.notificationSearch.query = input.value;
+  $('#notification-search').value = input.value;
+  input.focus();
+  notificationRegexFeedback();
+  renderNotificationCenter();
+}
+
+async function copyNotificationRegexPattern() {
+  const pattern = state.notificationSearch.pattern;
+  const problem = notificationRegexProblem(state.notificationSearch);
+  if (problem) {
+    notificationRegexFeedback();
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(pattern);
+    $('#notification-regex-status').dataset.state = 'active';
+    $('#notification-regex-status').textContent = 'The bounded notification-search pattern was copied.';
+  } catch {
+    $('#notification-regex-status').dataset.state = 'invalid';
+    $('#notification-regex-status').textContent = 'Clipboard access was unavailable. Select the pattern text instead.';
+  }
+}
+
+function notificationEmptyState(title, detail) {
+  const item = document.createElement('article');
+  item.className = 'notification-record-card';
+  const content = document.createElement('div');
+  content.className = 'notification-record-content';
+  const heading = document.createElement('strong');
+  heading.textContent = title;
+  const copy = document.createElement('p');
+  copy.textContent = detail;
+  content.append(heading, copy);
+  item.append(content);
+  return item;
+}
+
+function notificationStatusLabel(status) {
+  return ({
+    ready: 'Ready',
+    starting: 'Starting',
+    'metadata-unavailable': 'Unavailable'
+  })[status] || 'Unavailable';
+}
+
+function notificationTime(value) {
+  if (!value || !Number.isFinite(Date.parse(value))) return 'No timestamp';
+  return new Date(value).toLocaleString();
+}
+
+function pruneNotificationSelection(records) {
+  const validIds = new Set(records.map((record) => record.id));
+  state.notificationSelection = new Set([...state.notificationSelection].filter((id) => validIds.has(id)));
+}
+
+function setNotificationSelection(id, selected) {
+  if (selected && !state.notificationSelection.has(id) && state.notificationSelection.size >= 100) {
+    state.notificationSelectionNotice = 'Selection is limited to 100 local notification records. Clear or deselect a record before adding another.';
+    renderNotificationCenter();
+    return;
+  }
+  state.notificationSelectionNotice = '';
+  if (selected) state.notificationSelection.add(id);
+  else state.notificationSelection.delete(id);
+  renderNotificationCenter();
+}
+
+function renderNotificationCenter() {
+  const destination = $('#notification-center-destination');
+  if (!destination) return;
+  const open = state.workspaceDestination === 'notifications';
+  destination.hidden = !open;
+  if (!open) return;
+  const snapshot = state.notificationCenter;
+  const status = snapshot?.status || {};
+  const statusTarget = $('#notification-center-status');
+  statusTarget.dataset.state = status.state || 'starting';
+  statusTarget.textContent = snapshot
+    ? `${notificationStatusLabel(status.state)} · ${status.detail || 'Notification history state is unavailable.'}`
+    : 'Loading app-private notification history…';
+  const records = notificationRecords();
+  pruneNotificationSelection(records);
+  const matcher = notificationMatcher();
+  notificationRegexFeedback();
+  const visible = matcher.valid ? records.filter((record) => matcher.matches(record)) : [];
+  const selection = [...state.notificationSelection];
+  const selectionStatus = $('#notification-selection-status');
+  const countCopy = `${visible.length} of ${records.length} local record${records.length === 1 ? '' : 's'} shown`;
+  selectionStatus.textContent = state.notificationSelectionNotice || `${countCopy}; ${selection.length} selected.`;
+  const disabled = selection.length === 0 || status.state !== 'ready';
+  ['dismiss-selected-notifications-button', 'restore-selected-notifications-button', 'clear-selected-notifications-button'].forEach((id) => {
+    const control = $(`#${id}`);
+    control.disabled = disabled;
+    control.title = disabled ? (selection.length ? (status.detail || 'Notification history is unavailable.') : 'Select one or more notification records first.') : '';
+  });
+  const container = $('#notification-record-list');
+  container.replaceChildren();
+  if (!snapshot) {
+    container.append(notificationEmptyState('Loading notification history', 'The app-private notification store has not returned a list yet.'));
+    return;
+  }
+  if (!matcher.valid) {
+    container.append(notificationEmptyState('Fix the notification search', matcher.problem));
+    return;
+  }
+  if (!visible.length) {
+    container.append(notificationEmptyState(
+      records.length ? 'No matching notification records' : 'No notification records yet',
+      records.length ? 'Change the plain-text search or return the builder to a valid local expression.' : 'App actions will add fixed safe summaries here without storing raw output or secret material.'
+    ));
+    return;
+  }
+  visible.forEach((record) => {
+    const card = document.createElement('article');
+    card.className = 'notification-record-card';
+    card.dataset.state = record.state;
+    card.dataset.severity = record.severity;
+    card.setAttribute('role', 'listitem');
+    const selectionControl = document.createElement('input');
+    selectionControl.type = 'checkbox';
+    selectionControl.className = 'notification-select';
+    selectionControl.checked = state.notificationSelection.has(record.id);
+    selectionControl.setAttribute('aria-label', `Select ${record.title} notification for bounded actions`);
+    selectionControl.addEventListener('change', () => setNotificationSelection(record.id, selectionControl.checked));
+    const content = document.createElement('div');
+    content.className = 'notification-record-content';
+    const header = document.createElement('header');
+    header.className = 'notification-record-header';
+    const heading = document.createElement('strong');
+    heading.textContent = record.title;
+    const severity = document.createElement('span');
+    severity.className = 'notification-record-severity';
+    severity.dataset.severity = record.severity;
+    severity.textContent = record.severity;
+    header.append(heading, severity);
+    const detail = document.createElement('p');
+    detail.textContent = record.detail;
+    const timing = document.createElement('small');
+    timing.textContent = record.dismissedAt
+      ? `Recorded ${notificationTime(record.createdAt)} · dismissed ${notificationTime(record.dismissedAt)}.`
+      : `Recorded ${notificationTime(record.createdAt)} · active in notification history.`;
+    const actions = document.createElement('div');
+    actions.className = 'notification-record-actions';
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'outlined-action';
+    dismiss.textContent = record.dismissedAt ? 'Restore' : 'Dismiss';
+    dismiss.addEventListener('click', () => changeNotificationDismissal([record.id], !record.dismissedAt));
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'danger-action';
+    clear.textContent = 'Clear record';
+    clear.addEventListener('click', () => requestNotificationClear([record.id]));
+    actions.append(dismiss, clear);
+    content.append(header, detail, timing, actions);
+    card.append(selectionControl, content);
+    container.append(card);
+  });
+}
+
+async function notificationCenterCall(work, { quiet = false } = {}) {
+  try {
+    return await work();
+  } catch (error) {
+    if (!quiet) {
+      const target = $('#notification-center-status');
+      if (target) {
+        target.dataset.state = 'metadata-unavailable';
+        target.textContent = error?.message || 'Notification history is unavailable.';
+      }
+    }
+    return null;
+  }
+}
+
+async function refreshNotificationCenter(options = {}) {
+  const snapshot = await notificationCenterCall(() => window.studio.notificationCenter(), options);
+  if (snapshot) state.notificationCenter = snapshot;
+  renderNotificationCenter();
+}
+
+async function changeNotificationDismissal(ids, dismissed) {
+  if (!Array.isArray(ids) || !ids.length) return;
+  const snapshot = await notificationCenterCall(() => dismissed
+    ? window.studio.dismissNotifications(ids)
+    : window.studio.restoreNotifications(ids));
+  if (!snapshot) return;
+  state.notificationCenter = snapshot;
+  if (dismissed) ids.forEach((id) => state.notificationSelection.delete(id));
+  renderNotificationCenter();
+}
+
+function requestNotificationClear(ids) {
+  if (!Array.isArray(ids) || !ids.length) return;
+  notificationCenterCall(() => window.studio.notificationClearPreview(ids)).then((preview) => {
+    if (!preview?.authority?.digest || !Number.isInteger(preview.count) || preview.count < 1) return;
+    openDestructiveConfirmation({
+      title: 'Confirm notification-history removal',
+      copy: `This permanently removes ${preview.count} selected app-private notification record${preview.count === 1 ? '' : 's'}. The affected records cannot be restored after removal.`,
+      target: `Affected local notification history: ${preview.count} record${preview.count === 1 ? '' : 's'} · ${preview.activeCount || 0} active · ${preview.dismissedCount || 0} dismissed`,
+      execute: async () => {
+        const result = await notificationCenterCall(() => window.studio.clearNotifications({
+          ids,
+          confirmation: destructiveConfirmationFor(preview)
+        }));
+        if (!result) return;
+        ids.forEach((id) => state.notificationSelection.delete(id));
+        state.notificationSelectionNotice = '';
+        await refreshNotificationCenter({ quiet: true });
+      }
+    });
+  });
+}
+
+async function openNotificationCenter() {
+  state.workspaceDestination = 'notifications';
+  renderAll();
+  await refreshNotificationCenter({ quiet: true });
+  $('#notification-search')?.focus();
+}
+
 function formatBytes(value) {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown size';
@@ -2903,15 +3269,18 @@ function renderEditor() {
     empty.classList.add('hidden');
     $('#authenticator-destination')?.classList.add('hidden');
     $('#support-tickets-destination')?.classList.add('hidden');
+    $('#notification-center-destination')?.classList.add('hidden');
     return;
   }
   const authenticatorDestination = $('#authenticator-destination');
   const supportTicketsDestination = $('#support-tickets-destination');
+  const notificationCenterDestination = $('#notification-center-destination');
   if (state.workspaceDestination === 'support-tickets') {
     editor.classList.add('hidden');
     empty.classList.add('hidden');
     authenticatorDestination.classList.add('hidden');
     supportTicketsDestination.classList.remove('hidden');
+    notificationCenterDestination.classList.add('hidden');
     $('#server-title').textContent = 'Local Support Tickets';
     $('#server-software').textContent = 'ON-DEVICE RECOVERY DESK';
     $('#server-status').textContent = 'Local only';
@@ -2924,6 +3293,7 @@ function renderEditor() {
     empty.classList.add('hidden');
     authenticatorDestination.classList.remove('hidden');
     supportTicketsDestination.classList.add('hidden');
+    notificationCenterDestination.classList.add('hidden');
     $('#server-title').textContent = 'Local authenticator';
     $('#server-software').textContent = 'PRIVATE LOCAL CODES AND TOY LOCKS';
     $('#server-status').textContent = 'Local only';
@@ -2931,8 +3301,22 @@ function renderEditor() {
     ['open-folder-button', 'open-editor-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
     return;
   }
+  if (state.workspaceDestination === 'notifications') {
+    editor.classList.add('hidden');
+    empty.classList.add('hidden');
+    authenticatorDestination.classList.add('hidden');
+    supportTicketsDestination.classList.add('hidden');
+    notificationCenterDestination.classList.remove('hidden');
+    $('#server-title').textContent = 'Notification center';
+    $('#server-software').textContent = 'APP-PRIVATE SAFE SUMMARIES';
+    $('#server-status').textContent = 'Local only';
+    $('#server-status').className = 'status-chip';
+    ['open-folder-button', 'open-editor-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
+    return;
+  }
   authenticatorDestination.classList.add('hidden');
   supportTicketsDestination.classList.add('hidden');
+  notificationCenterDestination.classList.add('hidden');
   if (!server) {
     editor.classList.add('hidden');
     empty.classList.remove('hidden');
@@ -4406,6 +4790,7 @@ function renderAll() {
   renderAuthenticator();
   renderToyLocks();
   renderSupportTickets();
+  renderNotificationCenter();
   renderConsole();
   renderLocalStatus();
   renderLocalHistory();
@@ -5586,6 +5971,13 @@ async function executeCommandAction({ action, command, transport, transportState
 function openDestructiveConfirmation({ title, copy, target, execute }) {
   const dialog = $('#command-confirmation-dialog');
   if (!dialog) return;
+  if (dialog.open || activeDestructiveConfirmation) {
+    toast('Another destructive decision is already waiting for a response.', 'warning');
+    return;
+  }
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const confirmation = { execute, returnFocus, authorizing: false };
+  activeDestructiveConfirmation = confirmation;
   $('#command-confirmation-title').textContent = title;
   $('#command-confirmation-copy').textContent = copy;
   $('#command-confirmation-target').textContent = target;
@@ -5593,17 +5985,58 @@ function openDestructiveConfirmation({ title, copy, target, execute }) {
   const second = $('#command-confirmation-second');
   const slider = $('#command-confirmation-slider');
   const confirm = $('#command-confirmation-accept');
+  const cancel = $('#command-confirmation-cancel');
+  const progress = $('#command-confirmation-progress');
+  const fill = $('#command-confirmation-progress-fill');
   first.checked = false;
   second.checked = false;
   slider.value = '0';
-  const update = () => { slider.disabled = !(first.checked && second.checked); confirm.disabled = !(first.checked && second.checked && Number(slider.value) >= 100); };
+  dialog.returnValue = '';
+  dialog.dataset.complete = 'false';
+  const update = () => {
+    const acknowledged = first.checked && second.checked;
+    const amount = acknowledged ? Math.max(0, Math.min(100, Number(slider.value) || 0)) : 0;
+    slider.disabled = !acknowledged;
+    confirm.disabled = !(acknowledged && amount >= 100) || confirmation.authorizing;
+    fill.style.width = `${amount}%`;
+    progress.textContent = !acknowledged
+      ? 'Complete both independent confirmations before the authorization slider becomes available.'
+      : amount >= 100
+        ? 'Authorization is ready. Choose Authorize operation to start the reviewed action.'
+        : `Authorization slider: ${amount}%. Move it to 100% to enable the reviewed action.`;
+  };
   first.onchange = update;
   second.onchange = update;
   slider.oninput = update;
-  confirm.onclick = () => { dialog.close('confirmed'); execute(); };
-  $('#command-confirmation-cancel').onclick = () => dialog.close('cancelled');
+  confirm.onclick = () => {
+    if (confirm.disabled || confirmation.authorizing) return;
+    confirmation.authorizing = true;
+    dialog.dataset.complete = 'true';
+    progress.textContent = 'Authorization complete. Starting the reviewed action.';
+    confirm.disabled = true;
+    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 0 : 180;
+    setTimeout(() => {
+      if (activeDestructiveConfirmation !== confirmation || !dialog.open) return;
+      const approved = confirmation.execute;
+      dialog.close('confirmed');
+      Promise.resolve(approved()).catch((error) => toast(error?.message || 'The authorized action could not start.', 'error'));
+    }, delay);
+  };
+  cancel.onclick = () => dialog.close('cancelled');
+  dialog.oncancel = () => {
+    progress.textContent = 'The reviewed action was cancelled. No action was started.';
+  };
+  dialog.onclose = () => {
+    const completed = dialog.returnValue === 'confirmed';
+    const active = activeDestructiveConfirmation;
+    activeDestructiveConfirmation = null;
+    dialog.dataset.complete = 'false';
+    if (!completed && progress) progress.textContent = 'The reviewed action was cancelled. No action was started.';
+    if (active?.returnFocus?.isConnected) setTimeout(() => active.returnFocus.focus(), 0);
+  };
   update();
   dialog.showModal();
+  first.focus();
 }
 
 function openCommandConfirmation(payload) {
@@ -5657,6 +6090,11 @@ function handleStudioEvent(event) {
   if (event?.type === 'local-history-recording-failed') {
     toast(event.detail || 'The requested change completed, but its local history event could not be recorded.', 'error');
     refreshLocalHistory();
+    return;
+  }
+  if (event?.type === 'notification-center' && event.notificationCenter) {
+    state.notificationCenter = event.notificationCenter;
+    renderNotificationCenter();
     return;
   }
   if (event?.type === 'ollama-suite') {
@@ -5843,8 +6281,62 @@ function bindEvents() {
   $('#tab-dock').addEventListener('change', changeTabDock);
   $('#authenticator-destination-button').addEventListener('click', openAuthenticatorDestination);
   $('#support-tickets-destination-button').addEventListener('click', openSupportTicketsDestination);
+  $('#notification-center-destination-button').addEventListener('click', openNotificationCenter);
   $('#return-to-servers-button').addEventListener('click', returnToServers);
   $('#return-from-support-tickets-button').addEventListener('click', returnToServers);
+  $('#return-from-notification-center-button').addEventListener('click', returnToServers);
+  $('#notification-center-refresh-button').addEventListener('click', refreshNotificationCenter);
+  $('#notification-search').addEventListener('input', () => {
+    const query = $('#notification-search').value.slice(0, 128);
+    state.notificationSearch.query = query;
+    if (state.notificationSearch.enabled) {
+      state.notificationSearch.pattern = query;
+      $('#notification-regex-pattern').value = query;
+    }
+    renderNotificationCenter();
+  });
+  $('#notification-regex-toggle').addEventListener('click', () => {
+    const builder = $('#notification-regex-builder');
+    builder.hidden = !builder.hidden;
+    $('#notification-regex-toggle').setAttribute('aria-expanded', String(!builder.hidden));
+    if (!builder.hidden) {
+      $('#notification-regex-pattern').value = state.notificationSearch.pattern || state.notificationSearch.query;
+      $('#notification-regex-flags').value = state.notificationSearch.flags;
+      $('#notification-regex-sample').value = state.notificationSearch.sample;
+      $('#notification-regex-pattern').focus();
+    }
+    notificationRegexFeedback();
+  });
+  $('#notification-regex-enabled').addEventListener('change', () => {
+    state.notificationSearch.enabled = $('#notification-regex-enabled').checked;
+    if (state.notificationSearch.enabled) {
+      state.notificationSearch.pattern = state.notificationSearch.pattern || state.notificationSearch.query;
+      state.notificationSearch.query = state.notificationSearch.pattern;
+      $('#notification-search').value = state.notificationSearch.pattern;
+      $('#notification-regex-pattern').value = state.notificationSearch.pattern;
+    }
+    renderNotificationCenter();
+  });
+  $('#notification-regex-pattern').addEventListener('input', () => {
+    const pattern = $('#notification-regex-pattern').value.slice(0, 128);
+    state.notificationSearch.pattern = pattern;
+    state.notificationSearch.query = pattern;
+    $('#notification-search').value = pattern;
+    renderNotificationCenter();
+  });
+  $('#notification-regex-flags').addEventListener('input', () => {
+    state.notificationSearch.flags = $('#notification-regex-flags').value.slice(0, 3);
+    renderNotificationCenter();
+  });
+  $('#notification-regex-sample').addEventListener('input', () => {
+    state.notificationSearch.sample = $('#notification-regex-sample').value.slice(0, 512);
+    notificationRegexFeedback();
+  });
+  $('#notification-regex-copy').addEventListener('click', copyNotificationRegexPattern);
+  $$('[data-notification-regex-token]').forEach((button) => button.addEventListener('click', () => insertNotificationRegexToken(button.dataset.notificationRegexToken || '')));
+  $('#dismiss-selected-notifications-button').addEventListener('click', () => changeNotificationDismissal([...state.notificationSelection], true));
+  $('#restore-selected-notifications-button').addEventListener('click', () => changeNotificationDismissal([...state.notificationSelection], false));
+  $('#clear-selected-notifications-button').addEventListener('click', () => requestNotificationClear([...state.notificationSelection]));
   $$('.authenticator-tab-strip .tab').forEach((button) => button.addEventListener('click', () => setAuthenticatorTab(button.dataset.authenticatorTab)));
   $('#authenticator-entry-form').addEventListener('submit', createAuthenticatorEntry);
   $('#authenticator-entry-form').addEventListener('input', () => { state.unsaved.authenticatorEntry = true; });
@@ -6221,10 +6713,11 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshOfflineChangelog(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshNotificationCenter({ quiet: true }), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshOfflineChangelog(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
   renderCommandCenter();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });
+    if (state.workspaceDestination === 'notifications') refreshNotificationCenter({ quiet: true });
   }, 1_000);
 }
 

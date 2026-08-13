@@ -20,6 +20,7 @@
         <button class="primary-action" id="new-server-button" type="button" data-i18n="nav.createServer">Create server</button>
         <button class="text-action" id="authenticator-destination-button" type="button" aria-controls="authenticator-destination">Authenticator and toy locks</button>
         <button class="text-action" id="support-tickets-destination-button" type="button" aria-controls="support-tickets-destination">Support Tickets</button>
+        <button class="text-action" id="notification-center-destination-button" type="button" aria-controls="notification-center-destination">Notification center</button>
         <label class="field search-field" for="server-search">
           <span data-i18n="nav.findServer">Find a server</span>
           <input id="server-search" type="search" placeholder="Filter by name or software" data-i18n-placeholder="nav.searchPlaceholder" autocomplete="off">
@@ -429,6 +430,46 @@
             <code id="support-ticket-recovery-directory" class="support-ticket-directory">Loading local recovery folder…</code>
             <div class="authenticator-entry-actions"><button id="open-support-ticket-recovery-folder" class="primary-action" type="button">Open recovery folder</button><button id="copy-support-ticket-recovery-folder" class="outlined-action" type="button">Copy folder path</button></div>
             <p class="support-ticket-disclosure">Nothing is sent anywhere. No ticket exists outside this computer. No network request is made. Nobody is reading it.</p>
+          </section>
+        </section>
+
+        <section id="notification-center-destination" class="notification-center-destination hidden" aria-labelledby="notification-center-destination-title">
+          <div class="panel-heading authenticator-heading">
+            <div>
+              <p class="eyebrow">APP-PRIVATE NOTIFICATION HISTORY</p>
+              <h3 id="notification-center-destination-title">Notification center</h3>
+              <p class="muted">This local history stores only fixed safe notification summaries. It does not store server output, command text, credentials, current codes, paths, or raw error payloads.</p>
+            </div>
+            <button id="return-from-notification-center-button" class="outlined-action" type="button">Return to servers</button>
+          </div>
+
+          <div id="notification-center-status" class="authenticator-status" aria-live="polite">Loading app-private notification history…</div>
+
+          <section class="authenticator-card" aria-labelledby="notification-center-list-title">
+            <div class="panel-heading">
+              <div>
+                <h4 id="notification-center-list-title">Recent app notifications</h4>
+                <p class="muted">Info, success, and progress toasts disappear after their normal timeout. Warning and error toasts remain visible until dismissed. Every stored record remains local until you clear it through the confirmation flow.</p>
+              </div>
+              <button id="notification-center-refresh-button" class="outlined-action" type="button">Refresh notifications</button>
+            </div>
+            <div class="authenticator-search-row">
+              <label class="field" for="notification-search"><span>Find notification records</span><input id="notification-search" type="search" maxlength="128" autocomplete="off" placeholder="Plain text by default"></label>
+              <button id="notification-regex-toggle" class="outlined-action" type="button" aria-expanded="false" aria-controls="notification-regex-builder">Regex builder</button>
+            </div>
+            <section id="notification-regex-builder" class="regex-builder" hidden aria-labelledby="notification-regex-title">
+              <div><h5 id="notification-regex-title">Notification history regex builder</h5><p class="muted">Plain text is the default. This bounded local expression filters only the fixed safe summaries already visible in this center.</p></div>
+              <label class="switch-field"><input id="notification-regex-enabled" type="checkbox"><span><strong>Use regex for this notification search</strong><small>Invalid patterns produce an honest no-match state and never alter stored records.</small></span></label>
+              <label class="field"><span>Pattern</span><input id="notification-regex-pattern" type="text" maxlength="128" autocomplete="off" placeholder="For example: ^Action"></label>
+              <label class="field"><span>Flags</span><input id="notification-regex-flags" type="text" maxlength="3" autocomplete="off" value="i" placeholder="i, m, or u"></label>
+              <label class="field wide"><span>Sample text</span><textarea id="notification-regex-sample" rows="3" maxlength="512" placeholder="Optional local sample for match feedback"></textarea></label>
+              <div class="regex-token-row" aria-label="Guided notification regex construction"><button type="button" data-notification-regex-token="^">Start anchor</button><button type="button" data-notification-regex-token="$">End anchor</button><button type="button" data-notification-regex-token="[A-Za-z]">Character class</button><button type="button" data-notification-regex-token="(group)">Group</button><button type="button" data-notification-regex-token="|">Alternation</button><button type="button" data-notification-regex-token="+">Quantifier</button><button id="notification-regex-copy" type="button" class="outlined-action">Copy pattern</button></div>
+              <p id="notification-regex-status" class="muted" aria-live="polite">Plain-text search is active.</p>
+              <p id="notification-regex-captures" class="muted" aria-live="polite">Capture groups appear here for a matching local sample.</p>
+            </section>
+            <p id="notification-selection-status" class="muted" aria-live="polite">No notification records are selected.</p>
+            <div class="notification-bulk-actions"><button id="dismiss-selected-notifications-button" class="outlined-action" type="button" disabled>Dismiss selected</button><button id="restore-selected-notifications-button" class="outlined-action" type="button" disabled>Restore selected</button><button id="clear-selected-notifications-button" class="danger-action" type="button" disabled>Clear selected history</button></div>
+            <div id="notification-record-list" class="notification-record-list" role="list" aria-live="polite"></div>
           </section>
         </section>
 
@@ -1121,14 +1162,16 @@
       </form>
     </dialog>
 
-    <dialog id="command-confirmation-dialog" aria-labelledby="command-confirmation-title">
+    <dialog id="command-confirmation-dialog" aria-labelledby="command-confirmation-title" aria-describedby="command-confirmation-copy command-confirmation-target">
       <section class="confirmation-dialog">
         <div class="dialog-heading"><div><p class="eyebrow">CONSEQUENTIAL SERVER ACTION</p><h2 id="command-confirmation-title">Confirm operation</h2></div><span class="dialog-emoji" aria-hidden="true">⚠️</span></div>
         <p id="command-confirmation-copy">Review this operation before it is sent.</p>
         <p id="command-confirmation-target" class="confirmation-target"></p>
         <label class="switch-field"><input id="command-confirmation-first" type="checkbox"><span><strong>First independent confirmation</strong><small>I reviewed the affected local server and the action's impact.</small></span></label>
         <label class="switch-field"><input id="command-confirmation-second" type="checkbox"><span><strong>Second independent confirmation</strong><small>I understand that this operation can change live server or world state.</small></span></label>
-        <label class="field"><span>Slide to authorize</span><input id="command-confirmation-slider" type="range" min="0" max="100" value="0" disabled><small>Both confirmations are required before the full-range authorization control becomes available.</small></label>
+        <label class="field"><span>Slide to authorize</span><input id="command-confirmation-slider" type="range" min="0" max="100" value="0" disabled aria-describedby="command-confirmation-progress"><small>Both confirmations are required before the full-range authorization control becomes available.</small></label>
+        <div class="confirmation-progress" aria-hidden="true"><span id="command-confirmation-progress-fill" class="confirmation-progress-fill"></span></div>
+        <p id="command-confirmation-progress" class="confirmation-progress-status" role="status">Complete both confirmations, then move the authorization slider to 100%.</p>
         <div class="dialog-actions"><button id="command-confirmation-cancel" type="button" class="outlined-action">Emergency exit</button><button id="command-confirmation-accept" type="button" class="danger-action" disabled>Authorize operation</button></div>
       </section>
     </dialog>
