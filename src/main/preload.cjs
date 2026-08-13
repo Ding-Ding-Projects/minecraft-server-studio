@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('studio', {
   createToyLock: (input) => ipcRenderer.invoke('studio:create-toy-lock', input),
   unlockToyLock: (lockId, credential) => ipcRenderer.invoke('studio:unlock-toy-lock', lockId, credential),
   relockToyLock: (lockId) => ipcRenderer.invoke('studio:relock-toy-lock', lockId),
+  removeToyLock: (lockId) => ipcRenderer.invoke('studio:remove-toy-lock', lockId),
   supportTicketStatus: () => ipcRenderer.invoke('studio:support-ticket-status'),
   listSupportTickets: () => ipcRenderer.invoke('studio:list-support-tickets'),
   createSupportTicket: (input) => ipcRenderer.invoke('studio:create-support-ticket', input),

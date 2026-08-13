@@ -4,6 +4,52 @@
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
+## Desktop registered-target toy-lock coverage candidate
+
+The desktop toy-lock foundation now has a fixed catalog of 20
+application-owned targets. It covers the authenticator destination, 15 server
+settings tabs, three appearance targets, and the authenticator-entry form.
+`src/main/main.cjs` owns this catalog, while `src/main/toy-lock-service.cjs`
+accepts only a registered target and its exact canonical label when creating a
+new record. The renderer presents a registered-target picker rather than
+free-form target fields, exposes plain-text-first local lock discovery with a
+bounded regular-expression mode, and keeps all displayed metadata non-secret.
+The authenticator header and the authenticator-entry form each have a direct
+registered-target configuration route, alongside registered server-tab and
+selected-appearance routes.
+
+The guarded routes are authenticator entry, registered server-tab selection,
+selected appearance preview/save/reset, and authenticator-entry submission.
+Each record still has an independent password or TOTP credential held through
+the protected vault boundary. Per-record unlock, relock, and removal are local;
+removal passes through the existing two-control/full-slider confirmation, then
+removes metadata and attempts protected-vault cleanup without exposing a
+credential. Legacy records remain listable and unlockable, but no new arbitrary
+target record can be created.
+
+This is deliberately bounded registered-target coverage. It does not claim a
+wizard for every rendered element, universal context-menu or keyboard access,
+QR pairing/import, secret export, synchronization, localization completeness,
+or any browser-local companion-site change.
+
+### Directly related paths
+
+- `docs/features/authenticator-and-toy-locks.md`
+- `docs/features/local-status-and-completeness.md`
+- `README.md`
+- `ROADMAP.md`
+- `CHANGELOG.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, installed-app
+interaction, runtime verification, screen capture, release, or deployment ran
+for this fast-delivery candidate. Documentation records source-level scope
+only; it does not establish a successful credential-vault operation, a
+completed lock/unlock/removal interaction, every-element enforcement, or a
+packaged desktop result.
+
 ## Browser-local history and safe-export documentation candidate
 
 The public companion site now has a dedicated documentation record and

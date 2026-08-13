@@ -50,6 +50,32 @@ try {
 
 app.setName('Minecraft Server Studio');
 
+// This is the bounded catalog of desktop controls that have a real lock route
+// in this build. It deliberately does not imply universal every-element
+// coverage; the renderer receives only these stable application-owned targets.
+const TOY_LOCK_TARGETS = Object.freeze([
+  Object.freeze({ targetType: 'tab', targetId: 'authenticator', targetLabel: 'Authenticator and toy locks' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.general', targetLabel: 'General server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.world', targetLabel: 'World server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.gameplay', targetLabel: 'Gameplay server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.network', targetLabel: 'Network server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.runtime', targetLabel: 'Runtime server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.paper-cli', targetLabel: 'Paper JAR CLI server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.buildtools', targetLabel: 'BuildTools server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.backups', targetLabel: 'Backups and updates server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.live', targetLabel: 'Live management server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.commands', targetLabel: 'Command Center server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.status', targetLabel: 'Local status server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.history', targetLabel: 'History and exports server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.advanced', targetLabel: 'Advanced server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.plugins', targetLabel: 'Plugins server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.console', targetLabel: 'Console server settings tab' }),
+  Object.freeze({ targetType: 'appearance', targetId: 'appearance.shell', targetLabel: 'App shell appearance target' }),
+  Object.freeze({ targetType: 'appearance', targetId: 'appearance.tabStrip', targetLabel: 'Settings-tab strip appearance target' }),
+  Object.freeze({ targetType: 'appearance', targetId: 'appearance.primaryAction', targetLabel: 'Primary actions appearance target' }),
+  Object.freeze({ targetType: 'element', targetId: 'authenticator.entry-form', targetLabel: 'Authenticator entry form' })
+]);
+
 let mainWindow;
 let serverManager;
 let credentialVault;
@@ -415,6 +441,7 @@ app.whenReady().then(async () => {
     dataDir: path.join(app.getPath('userData'), 'toy-locks'),
     recoveryDirectory: app.getPath('userData'),
     credentialVault,
+    targets: TOY_LOCK_TARGETS,
     onChange: () => sendToRenderer({ type: 'toy-locks-changed' })
   }) : null;
   supportTicketService = SupportTicketService ? new SupportTicketService({
@@ -942,6 +969,17 @@ ipcMain.handle('studio:relock-toy-lock', async (_event, lockId) => {
     detail: 'A local toy lock state changed. Sensitive values were omitted from history.'
   });
   return relocked;
+});
+ipcMain.handle('studio:remove-toy-lock', async (_event, lockId) => {
+  const removed = await requireToyLocks().removeLock(lockId);
+  await recordLocalHistory({
+    action: 'record-deleted',
+    subject: 'toy-lock',
+    subjectId: String(lockId),
+    label: 'Toy lock record removed',
+    detail: 'A local toy lock record was removed. Sensitive values were omitted from history.'
+  });
+  return removed;
 });
 ipcMain.handle('studio:support-ticket-status', () => requireSupportTickets().getStatus());
 ipcMain.handle('studio:list-support-tickets', () => requireSupportTickets().listTickets());
