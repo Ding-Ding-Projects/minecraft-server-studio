@@ -9,6 +9,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Download official Paper builds with publisher-provided SHA-256 validation.
 - Build Spigot from the official BuildTools process for the selected revision.
 - Detect Java and Git, select the Java feature required by the chosen Paper or Spigot/BuildTools revision, install missing tools from Windows package managers, and fall back to an app-private portable toolchain when no package manager is available.
+- Plan typed Paper JAR CLI arguments after `-jar server.jar`, including bounded help/version evidence, configuration and plugin-directory paths, world/network overrides, startup/console/JFR controls, and a read-only direct-argv preview. World-changing Paper upgrade/cache/region flags remain disabled until an exact destructive-confirmation preflight is wired.
 - Configure gameplay, world generation, network/RCON, Java runtime, resource-pack, plugin, and server-property settings with switches, sliders, number steppers, selects, type-ahead version input, file pickers, and browse controls.
 - Start and stop a local Java process safely without a shell, read live output, and send console commands.
 - Inspect, dependency-plan, stage, and atomically promote local Paper/Spigot plugin JARs through a file picker without acquiring third-party downloads.
@@ -26,7 +27,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 2. Read and accept the Minecraft EULA for that server.
 3. Use **Install missing tools** if the Java runtime required by the selected version or Git is not detected. The app uses Winget or Chocolatey where available, then downloads a user-scoped portable Java/Git fallback itself. The app never requires a manual prerequisite installation before setup can continue.
 4. Select **Set up server**. Paper is downloaded from the Paper API; Spigot is built through BuildTools with the selected revision.
-5. Edit the structured controls on the General, World, Gameplay, Network, Runtime, BuildTools, Live management, Command Center, Plugins, Console, and Local status tabs.
+5. Edit the structured controls on the General, World, Gameplay, Network, Runtime, Paper JAR CLI, BuildTools, Live management, Command Center, Plugins, Console, and Local status tabs.
 6. Start the server and use the local console. Enable RCON and save its protected password in the desktop app only when the external CLI must issue commands to a running server.
 
 ## Command-line interface
@@ -75,6 +76,7 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 - Spigot setup uses a dedicated BuildTools workspace and a preflight-driven stage/swap/rollback plan. Java and Git are automatically detected and installable from the app.
 - The management protocol is TLS-first and stores any bearer credential reference through protected storage. The generic WebSocket transport does not invent a provider-specific bearer handshake; it never enables methods before `rpc.discover` advertises them and is not a Paper HTTP API.
 - Command discovery never scrapes or invents commands. It runs only selected-JAR `--help`/`--version` probes with direct Java arguments, or user-selected fixed `help`, `plugins`, and Paper `paper` queries against an already-running local console or protected loopback RCON route. Every bounded response keeps source, route, timestamp, truncation, and failure state; plugin descriptor metadata remains non-executable until live runtime evidence confirms the command name.
+- Paper JAR CLI controls build only typed server tokens after `-jar`; the Runtime profile owns JVM tokens before it. The app rejects raw argument strings, argument files, Java/native agents, class-path routes, and shell syntax, and requires custom Paper configuration/plugin/PID paths to remain inside the selected server folder.
 - RCON passwords and management bearer credentials are stored through the operating system protected-storage boundary and omitted from the local registry, exports, and console logs. Minecraft still requires its active RCON password in its local configuration; treat the server folder as sensitive.
 - The CLI never accepts an RCON password from command-line arguments, environment variables, stdin, or `servers.json`. Its one-shot local gateway reads the app-private protected value only under the same Windows account, uses it only for a fixed loopback connection, and emits no credential data.
 - Plugins are local JARs selected through the operating-system file picker. Minecraft Server Studio calculates SHA-256 and inspects bounded JAR, manifest, descriptor, dependency, duplicate, and cycle evidence before staging, but it does not claim to audit or trust third-party plugin safety.
@@ -89,6 +91,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Server lifecycle and Paper/Spigot setup](docs/features/server-orchestration.md)
 - [Automatic dependency installation](docs/features/dependency-bootstrap.md)
 - [Version-aware Java runtime and launch profiles](docs/features/java-runtime-and-launch.md)
+- [Paper JAR CLI controls](docs/features/paper-jar-cli-controls.md)
 - [Spigot BuildTools planning](docs/features/spigot-buildtools.md)
 - [Command Center](docs/features/command-center.md)
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)

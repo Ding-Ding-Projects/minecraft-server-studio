@@ -29,6 +29,7 @@ const {
 } = require('./command-runtime-discovery.cjs');
 const configPluginSafety = require('./config-plugin-safety.cjs');
 const backupLifecycle = require('./server-backup-manager.cjs');
+const paperCli = require('./paper-cli-profile.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
 const SPIGOT_BUILDTOOLS_URL = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
@@ -113,7 +114,7 @@ const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'status-hub-bridge': { implementationPath: ['src/main/shared-status-hub-client.cjs', 'src/main/main.cjs', 'src/main/preload.cjs', 'src/main/desktop-status-model.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/shared-status-hub-bridge.md', 'docs/features/local-status-and-completeness.md'], localization: { state: 'pending', detail: 'Desktop localization resources are not yet complete.' }, test: { state: 'pending', detail: 'No test was run in this delivery pass.' }, capture: { state: 'pending', detail: 'No capture was run in this delivery pass.' }, evidence: { state: 'in-progress', detail: 'The opt-in main-process Status Hub bridge source is registered; no external registration, update, poll, reply delivery, or runtime verification is claimed.' } },
   'server-creation': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Structured Paper and Spigot server creation source is registered; verification remains pending.' } },
   'dependency-bootstrap': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/dependency-bootstrap.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Detection, installation, retry, and status source is registered; verification remains pending.' } },
-  'paper': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection and setup source is registered; verification remains pending.' } },
+  'paper': { implementationPath: ['src/main/paper-cli-profile.cjs', 'src/main/server-manager.cjs', 'src/main/main.cjs', 'src/main/preload.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/server-orchestration.md', 'docs/features/paper-jar-cli-controls.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection, typed direct JAR CLI planning, and setup source are registered; verification remains pending.' } },
   'spigot-buildtools': { implementationPath: ['src/main/buildtools-adapter.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/spigot-buildtools.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'BuildTools preflight and rich-control source is registered; verification remains pending.' } },
   'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, persistent app-managed runtime records, official portable-source metadata, direct probes, and launch preflight source are registered; verification remains pending.' } },
   'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Endpoint-bound, time-limited discovery metadata and the provider-authentication boundary are registered; verification remains pending.' } },
@@ -776,6 +777,14 @@ function copyPublicPaperUpdate(record) {
   };
 }
 
+function paperCliProfileForServer(server) {
+  try {
+    return paperCli.normalizePaperCliProfile(server?.paperCliProfile, { serverRoot: server?.serverPath });
+  } catch {
+    return paperCli.normalizePaperCliProfile({}, { serverRoot: server?.serverPath });
+  }
+}
+
 function copyPublicServer(server) {
   return {
     id: server.id,
@@ -786,6 +795,7 @@ function copyPublicServer(server) {
     memoryGb: server.memoryGb,
     javaPath: server.javaPath || '',
     launchProfile: { ...normalizeLaunchProfile(server.launchProfile) },
+    paperCliProfile: { ...paperCliProfileForServer(server) },
     rconSecretConfigured: Boolean(server.rconSecretConfigured),
     eulaAccepted: Boolean(server.eulaAccepted),
     gameRules: { ...normalizeGameRules(server.gameRules) },
@@ -1442,6 +1452,24 @@ class ServerManager {
     };
   }
 
+  async paperCliPreflight(id, profile) {
+    const server = await this.getServer(id);
+    return paperCli.createPaperCliPreflight({
+      software: server.software,
+      serverRoot: server.serverPath,
+      serverJar: path.join(server.serverPath, 'server.jar'),
+      profile: profile === undefined ? server.paperCliProfile : profile
+    });
+  }
+
+  async collectPaperCliJarEvidence(id) {
+    const server = await this.getServer(id);
+    if (server.software !== 'paper') {
+      throw new Error('Paper JAR evidence is available only for a selected Paper server. Spigot uses its separate BuildTools controls.');
+    }
+    return this.refreshCommandDiscovery(id, { sources: ['selected-jar'], queries: [] });
+  }
+
   async buildCommandRegistry(server) {
     const runtime = {
       flavor: server.software,
@@ -1933,6 +1961,7 @@ class ServerManager {
       memoryGb,
       javaPath: stringValue(draft.javaPath).trim(),
       launchProfile: normalizeLaunchProfile(draft.launchProfile),
+      paperCliProfile: paperCli.normalizePaperCliProfile(draft.paperCliProfile, { serverRoot: serverPath }),
       eulaAccepted: Boolean(draft.eulaAccepted),
       settings,
       gameRules: normalizeGameRules(draft.gameRules),
@@ -2020,6 +2049,7 @@ class ServerManager {
     if (patch.memoryGb !== undefined) existing.memoryGb = parseMemoryGb(patch.memoryGb);
     if (patch.javaPath !== undefined) existing.javaPath = stringValue(patch.javaPath).trim();
     if (patch.launchProfile !== undefined) existing.launchProfile = normalizeLaunchProfile(patch.launchProfile);
+    if (patch.paperCliProfile !== undefined) existing.paperCliProfile = paperCli.normalizePaperCliProfile(patch.paperCliProfile, { serverRoot: existing.serverPath });
     if (patch.rconSecretConfigured !== undefined) existing.rconSecretConfigured = Boolean(patch.rconSecretConfigured);
     if (patch.eulaAccepted !== undefined) existing.eulaAccepted = Boolean(patch.eulaAccepted);
     let changedPropertyUpdates = {};
@@ -2530,13 +2560,22 @@ class ServerManager {
     const { jarPath } = await this.provisionServer(id);
     const java = await this.resolveJava(server);
     const runtime = await this.inspectJavaRuntime(java, server);
+    const paperCliPreflight = server.software === 'paper'
+      ? paperCli.createPaperCliPreflight({
+        software: server.software,
+        serverRoot: server.serverPath,
+        serverJar: jarPath,
+        profile: server.paperCliProfile
+      })
+      : null;
+    if (paperCliPreflight && paperCliPreflight.state !== 'ready') throw new Error(paperCliPreflight.message);
     const preflight = await javaRuntime.createJavaLaunchPreflight({
       requirement: javaRuntime.javaRequirementForServer(server),
       runtime,
       serverJar: jarPath,
       memoryGb: server.memoryGb,
       profile: normalizeLaunchProfile(server.launchProfile),
-      serverArgs: ['nogui'],
+      serverArgs: paperCliPreflight ? paperCliPreflight.serverArgs : ['nogui'],
       diagnosticsDirectory: path.join(server.serverPath, '.minecraft-server-studio', 'diagnostics')
     });
     if (preflight.state !== 'ready') throw new Error(preflight.issues[0].message);

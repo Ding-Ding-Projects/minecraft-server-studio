@@ -4,6 +4,7 @@
 - [Configuration and plugin safety](configuration-and-plugin-safety.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)
 - [Version-aware Java runtime and launch profiles](java-runtime-and-launch.md)
+- [Paper JAR CLI controls](paper-jar-cli-controls.md)
 - [Spigot BuildTools planning](spigot-buildtools.md)
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
 - [Command Center](command-center.md)

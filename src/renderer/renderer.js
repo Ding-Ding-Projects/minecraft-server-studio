@@ -8,6 +8,7 @@ const state = {
   statusHubBridge: null,
   buildToolsMetadata: null,
   buildToolsPlan: null,
+  paperCliPlan: null,
   backupOverview: null,
   backupPlan: null,
   restorePlan: null,
@@ -489,6 +490,135 @@ function gameRulesFromForm() {
     commandBlocksEnabled: $('#gamerule-commandBlocksEnabled').checked,
     spawnerBlocksEnabled: $('#gamerule-spawnerBlocksEnabled').checked
   };
+}
+
+function paperCliProfileFromForm() {
+  return {
+    disableConsole: $('#paper-cli-disable-console').checked,
+    emulateVanillaConsole: $('#paper-cli-vanilla-console').checked,
+    initializeSettingsOnly: $('#paper-cli-init-settings').checked,
+    demo: $('#paper-cli-demo').checked,
+    bonusChest: $('#paper-cli-bonus-chest').checked,
+    safeMode: $('#paper-cli-safe-mode').checked,
+    jfrProfile: $('#paper-cli-jfr').checked,
+    commandSettingsPath: $('#paper-cli-commands-settings').value.trim(),
+    bukkitSettingsPath: $('#paper-cli-bukkit-settings').value.trim(),
+    serverPropertiesPath: $('#paper-cli-server-properties').value.trim(),
+    paperSettingsDirectory: $('#paper-cli-paper-directory').value.trim(),
+    pluginsDirectory: $('#paper-cli-plugins-directory').value.trim(),
+    pidFilePath: $('#paper-cli-pid-file').value.trim(),
+    host: $('#paper-cli-host').value.trim(),
+    port: $('#paper-cli-port').value.trim(),
+    maxPlayers: $('#paper-cli-max-players').value.trim(),
+    onlineMode: $('#paper-cli-online-mode').value,
+    worldName: $('#paper-cli-world-name').value.trim(),
+    serverName: $('#paper-cli-server-name').value.trim(),
+    serverId: $('#paper-cli-server-id').value.trim(),
+    forceUpgrade: false,
+    eraseCache: false,
+    recreateRegionFiles: false
+  };
+}
+
+function setPaperCliValue(id, value) {
+  const control = $(`#${id}`);
+  if (!control) return;
+  if (control.type === 'checkbox') control.checked = Boolean(value);
+  else control.value = value ?? '';
+}
+
+function quoteArgvToken(value) {
+  return JSON.stringify(String(value));
+}
+
+function renderPaperCliPlan(server) {
+  const plan = state.paperCliPlan?.serverId === server?.id ? state.paperCliPlan : null;
+  const stateCopy = $('#paper-cli-preview-state');
+  const preview = $('#paper-cli-argv-preview');
+  if (!server) {
+    stateCopy.textContent = 'Choose a local server to prepare a Paper CLI profile.';
+    preview.textContent = 'No server is selected.';
+    return;
+  }
+  if (!plan) {
+    stateCopy.textContent = server.software === 'paper'
+      ? 'Prepare the profile to validate its typed direct argument vector. Java/JVM tokens appear before -jar; Paper tokens appear after the JAR.'
+      : 'Paper JAR CLI controls are unavailable for this server flavor. Use the separate BuildTools controls for Spigot.';
+    preview.textContent = 'No Paper CLI preflight has been prepared.';
+    return;
+  }
+  stateCopy.textContent = plan.message || 'Paper CLI preflight has no explanatory state.';
+  if (plan.state !== 'ready' || !plan.preview) {
+    preview.textContent = 'No executable Paper argv preview is available: ' + (plan.message || 'preflight blocked.');
+    return;
+  }
+  const tokens = [
+    plan.preview.executable,
+    plan.preview.jvmBoundary,
+    plan.preview.jarFlag,
+    plan.preview.jarPath,
+    ...(plan.preview.serverArgs || [])
+  ];
+  preview.textContent = 'Direct argv tokens (not a shell command):\n' + tokens.map((token, index) => `${String(index).padStart(2, '0')}: ${quoteArgvToken(token)}`).join('\n');
+}
+
+function renderPaperCli(server) {
+  const isPaper = server?.software === 'paper';
+  const profile = server?.paperCliProfile || {};
+  const controls = $$('[data-paper-cli-control]');
+  for (const control of controls) {
+    if (control.id === 'paper-cli-no-gui') continue;
+    control.disabled = !isPaper;
+    control.title = isPaper ? '' : 'Paper JAR CLI controls are available only for a selected Paper server.';
+  }
+  $('#paper-cli-boundary').textContent = isPaper
+    ? 'Typed Paper options appear after -jar server.jar. JVM controls stay in Runtime; this surface never accepts a shell command, raw argument file, Java agent, native agent, or plugin command.'
+    : 'Paper JAR CLI controls are disabled for this server flavor. Spigot launch and BuildTools options stay in the separately documented BuildTools flow.';
+  $('#paper-cli-probe-copy').textContent = isPaper
+    ? `Choose this explicitly to run only java -jar server.jar --help and java -jar server.jar --version with the existing bounded direct-probe adapter. ${server.commandDiscovery?.jarProbeCount || 0} prior JAR probe record(s) are stored as local evidence.`
+    : 'Selected-JAR help and version evidence is shown only for Paper in this panel. Spigot keeps its BuildTools and command-discovery boundaries separate.';
+  $('#paper-cli-no-gui').checked = true;
+  setPaperCliValue('paper-cli-disable-console', profile.disableConsole);
+  setPaperCliValue('paper-cli-vanilla-console', profile.emulateVanillaConsole);
+  setPaperCliValue('paper-cli-init-settings', profile.initializeSettingsOnly);
+  setPaperCliValue('paper-cli-demo', profile.demo);
+  setPaperCliValue('paper-cli-bonus-chest', profile.bonusChest);
+  setPaperCliValue('paper-cli-safe-mode', profile.safeMode);
+  setPaperCliValue('paper-cli-jfr', profile.jfrProfile);
+  setPaperCliValue('paper-cli-commands-settings', profile.commandSettingsPath);
+  setPaperCliValue('paper-cli-bukkit-settings', profile.bukkitSettingsPath);
+  setPaperCliValue('paper-cli-server-properties', profile.serverPropertiesPath);
+  setPaperCliValue('paper-cli-paper-directory', profile.paperSettingsDirectory);
+  setPaperCliValue('paper-cli-plugins-directory', profile.pluginsDirectory);
+  setPaperCliValue('paper-cli-pid-file', profile.pidFilePath);
+  setPaperCliValue('paper-cli-world-name', profile.worldName);
+  setPaperCliValue('paper-cli-world-path', profile.worldPath);
+  setPaperCliValue('paper-cli-server-name', profile.serverName);
+  setPaperCliValue('paper-cli-server-id', profile.serverId);
+  setPaperCliValue('paper-cli-host', profile.host);
+  setPaperCliValue('paper-cli-port', profile.port);
+  setPaperCliValue('paper-cli-max-players', profile.maxPlayers);
+  setPaperCliValue('paper-cli-online-mode', profile.onlineMode === null || profile.onlineMode === undefined ? '' : String(profile.onlineMode));
+  renderPaperCliPlan(server);
+}
+
+async function preparePaperCliPreflight() {
+  const server = selectedServer();
+  if (!server) return;
+  const plan = await safely(() => window.studio.paperCliPreflight(server.id, paperCliProfileFromForm()));
+  if (!plan) return;
+  state.paperCliPlan = { ...plan, serverId: server.id };
+  renderPaperCliPlan(server);
+  toast(plan.state === 'ready' ? 'Read-only Paper direct argv preview prepared. Server startup still performs runtime and lifecycle preflight.' : plan.message || 'Paper CLI preflight is blocked.', plan.state === 'ready' ? 'success' : 'error');
+}
+
+async function collectPaperCliJarEvidence() {
+  const server = selectedServer();
+  if (!server) return;
+  const result = await safely(() => window.studio.collectPaperCliJarEvidence(server.id));
+  if (!result) return;
+  toast('Bounded Paper JAR --help and --version evidence collection was requested. Read the stored source state; this does not claim command availability.', 'success');
+  await refreshServers();
 }
 
 function renderAdvancedControls() {
@@ -1418,6 +1548,7 @@ function renderEditor() {
   $('#gamerule-commandBlocksEnabled').checked = Boolean(gameRules.commandBlocksEnabled);
   $('#gamerule-spawnerBlocksEnabled').checked = Boolean(gameRules.spawnerBlocksEnabled);
   renderGameRuleStatus(server);
+  renderPaperCli(server);
   $('#view-distance-output').value = $('#view-distance').value;
   $('#simulation-distance-output').value = $('#simulation-distance').value;
   renderManagement();
@@ -1481,7 +1612,10 @@ async function refreshServers() {
   const previouslySelected = state.selectedId;
   state.servers = servers;
   if (!selectedServer() && servers.length) state.selectedId = servers[0].id;
-  if (previouslySelected !== state.selectedId) resetBackupLifecycleState();
+  if (previouslySelected !== state.selectedId) {
+    resetBackupLifecycleState();
+    state.paperCliPlan = null;
+  }
   renderAll();
   await refreshCommandCatalog();
   await refreshDependencies();
@@ -2149,12 +2283,13 @@ async function saveSettings(event) {
     name: $('#edit-name').value,
     memoryGb: $('#memory-gb').value,
     javaPath: $('#java-runtime').value || $('#java-path').value,
-    launchProfile: {
-      gc: $('#jvm-gc').value,
-      diagnostics: $('#jvm-diagnostics').value,
-      expertTokens: $('#jvm-expert-tokens').value
-    },
-    eulaAccepted: $('#eula-accepted').checked,
+      launchProfile: {
+        gc: $('#jvm-gc').value,
+        diagnostics: $('#jvm-diagnostics').value,
+        expertTokens: $('#jvm-expert-tokens').value
+      },
+      paperCliProfile: paperCliProfileFromForm(),
+      eulaAccepted: $('#eula-accepted').checked,
     settings: settingsFromForm()
   }), 'Server properties and local settings saved.');
   if (saved) {
@@ -2654,6 +2789,26 @@ function bindEvents() {
   $('#clear-java-button').addEventListener('click', () => { $('#java-path').value = ''; });
   $('#browse-java-button').addEventListener('click', async () => { const selected = await safely(() => window.studio.pickJava()); if (selected) { $('#java-path').value = selected; $('#java-runtime').value = ''; } });
   $('#refresh-runtimes-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const inventory = await safely(() => window.studio.runtimeInventory(server.id)); if (inventory) renderRuntimeInventory(inventory); });
+  $('#prepare-paper-cli-button').addEventListener('click', preparePaperCliPreflight);
+  $('#paper-cli-probe-button').addEventListener('click', collectPaperCliJarEvidence);
+  $('#paper-cli-open-plugins-button').addEventListener('click', () => setActiveTab('plugins'));
+  $$('[data-paper-cli-browse]').forEach((button) => button.addEventListener('click', async () => {
+    const selected = await safely(() => window.studio.pickPaperCliPath(button.dataset.paperCliBrowse));
+    const target = document.getElementById(button.dataset.paperCliTarget || '');
+    if (!selected || !target) return;
+    target.value = selected;
+    state.paperCliPlan = null;
+    state.unsaved.settings = true;
+    renderPaperCliPlan(selectedServer());
+  }));
+  $$('[data-paper-cli-control]').filter((control) => ['INPUT', 'SELECT', 'TEXTAREA'].includes(control.tagName) && !control.disabled).forEach((control) => {
+    const invalidate = () => {
+      state.paperCliPlan = null;
+      renderPaperCliPlan(selectedServer());
+    };
+    control.addEventListener('input', invalidate);
+    control.addEventListener('change', invalidate);
+  });
   $('#refresh-spigot-versions-button').addEventListener('click', refreshSpigotVersions);
   $('#browse-buildtools-workspace').addEventListener('click', async () => { const folder = await safely(() => window.studio.pickFolder()); if (folder) $('#buildtools-workspace').value = folder; });
   $('#plan-buildtools-button').addEventListener('click', prepareBuildToolsPlan);

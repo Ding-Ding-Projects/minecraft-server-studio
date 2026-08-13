@@ -160,6 +160,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .runtime-requirement-card p, .guarded-action-card p, .capability-card p { margin-top: 6px; }
 .runtime-requirement-card code, .capability-card code { color: var(--primary); }
 .live-connection-actions { display: flex; gap: 8px; align-items: end; }
+.paper-cli-disabled-flags { display: grid; flex: 1 1 440px; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 10px; }
+.paper-cli-disabled-flags .switch-field { opacity: .78; }
+#paper-cli-argv-preview { min-height: 180px; max-height: 320px; }
 .capability-card { align-items: start; }
 .capability-list { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .capability-list span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; border-radius: 999px; padding: 7px 10px; color: var(--primary); background: var(--primary-container); white-space: nowrap; font-size: .78rem; }
@@ -203,6 +206,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 850px) {
   .live-resource-grid { grid-template-columns: 1fr; }
   .status-summary-grid, .status-detail-card { grid-template-columns: 1fr; }
+  .paper-cli-disabled-flags { grid-template-columns: 1fr; }
   .runtime-requirement-card, .guarded-action-card, .capability-card { align-items: stretch; flex-direction: column; }
   .capability-list { justify-content: flex-start; }
   .live-connection-actions { align-items: stretch; flex-wrap: wrap; }
