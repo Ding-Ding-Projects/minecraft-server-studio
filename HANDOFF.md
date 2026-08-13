@@ -13,10 +13,12 @@ The application source provides a Windows Electron control center, shared CLI, s
 - `src/cli/mss.cjs`: shared local CLI.
 - `site/`: public marketing and browser-local interaction source, including a local Status destination.
 - `.github/workflows/windows-package.yml`: unsigned Windows Squirrel packaging source with artifact collection only.
+- `assets/minecraft-server-studio.svg`, `assets/minecraft-server-studio.ico`, and `scripts/generate-app-icon.ps1`: original vector master and reproducible multi-resolution Windows icon source.
+- `package.json`: local Windows executable icon plus an immutable commit-pinned Squirrel icon metadata URL.
 
 ### Verification state
 
-This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. The local status/completeness inventories intentionally show those evidence types as pending rather than verified. Any packaging result must be pinned to the final immutable candidate and reported separately; no release, deployment, tag, or publish action was performed here.
+This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. The local status/completeness inventories intentionally show those evidence types as pending rather than verified. A packaging attempt against `7671f55f2cc6642df274d2352015661b534253b1` reached Squirrel.Windows but stopped because `squirrelWindows.iconUrl` was absent; that output is superseded. The follow-up candidate pins both the local executable icon and an immutable Squirrel icon metadata URL. No release, deployment, tag, or publish action was performed here.
 
 ### Remaining work
 

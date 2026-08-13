@@ -15,5 +15,6 @@
 - Independent local desktop status destination and browser-local public-site status destination, both with explicit no-external-bridge boundaries and incomplete-evidence disclosure.
 - Pages-ready public marketing source with `contract.js` loaded before its browser-local interaction engine.
 - Windows-only unsigned Squirrel.Windows package workflow source with package artifact collection and no test or lint jobs.
+- Original vector application mark, multi-resolution Windows ICO, local executable icon wiring, and immutable Squirrel icon metadata source.
 
 Commit link: pending the consolidated implementation commit.

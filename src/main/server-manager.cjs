@@ -984,7 +984,8 @@ class ServerManager {
     for (const id of requested) {
       const dependency = id === 'java' ? javaDependencyForFeature(javaFeature) : DEPENDENCIES[id];
       const before = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null);
-      if (before.available) {
+      const javaBeforeMatches = id !== 'java' || (before.available && (await this.inspectJavaRuntime(before.path, requestedServer)).feature === javaFeature);
+      if (before.available && javaBeforeMatches) {
         results.push({ id, status: 'already-installed', path: before.path });
         continue;
       }
@@ -1007,7 +1008,11 @@ class ServerManager {
           lastError = error.message;
         }
       }
-      let after = await this.findDependency(id, dependency);
+      let after = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null);
+      if (id === 'java' && after.available) {
+        const inspected = await this.inspectJavaRuntime(after.path, requestedServer);
+        if (inspected.feature !== javaFeature) after = { ...after, available: false };
+      }
       if (!after.available) {
         try {
           after = await this.installPortableDependency(id, id === 'java' ? javaFeature : null);
@@ -1088,11 +1093,12 @@ class ServerManager {
         throw new Error('The configured Java path does not exist. Select an installed Java runtime or clear the custom path.');
       }
     } else {
-      const java = await this.findDependency('java');
-      if (!java.available) {
+      const inventory = await this.runtimeInventory(server.id);
+      const compatible = inventory.find((runtime) => runtime.compatible && path.isAbsolute(runtime.path));
+      if (!compatible) {
         throw new Error(`Java ${requirement.feature} is required for this server. Use the in-app dependency installer before setting up or starting it.`);
       }
-      candidate = java.path || 'java';
+      candidate = compatible.path;
     }
     const runtime = await this.inspectJavaRuntime(candidate, server);
     if (runtime.feature !== requirement.feature) {
