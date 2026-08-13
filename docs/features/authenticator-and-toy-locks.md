@@ -88,10 +88,10 @@ New desktop locks can be created only for the fixed application-owned target
 catalog returned by the main process. The renderer does not accept a free-form
 target identifier or label: the service rejects an unknown target and rejects a
 label that does not exactly match the selected catalog record. The current
-catalog contains 20 targets:
+catalog contains 21 targets:
 
-- 16 tabs: the authenticator destination and the General, World, Gameplay,
-  Network, Runtime, Paper JAR CLI, BuildTools, Backups and updates, Live
+- 17 tabs: the authenticator destination and the General, World, Gameplay,
+  Network, Access records, Runtime, Paper JAR CLI, BuildTools, Backups and updates, Live
   management, Command Center, Local status, History and exports, Advanced,
   Plugins, and Console server-settings tabs;
 - three appearance targets: the app shell, settings-tab strip, and primary

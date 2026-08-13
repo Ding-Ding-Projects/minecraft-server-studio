@@ -133,6 +133,32 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .switch-field { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; min-height: 60px; padding: 14px; border: 1px solid var(--outline-variant); border-radius: 16px; background: #151922; }
+.access-records-status { margin: 0; padding: 13px 15px; border: 1px solid var(--outline-variant); border-radius: 16px; color: var(--on-surface-variant); background: #151922; line-height: 1.5; }
+.access-records-status[data-state="blocked"], .access-records-status[data-state="unavailable"] { border-color: var(--error); color: var(--error); }
+.access-records-status[data-state="running"] { border-color: var(--warning); }
+.access-records-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .95fr); gap: 18px; align-items: start; }
+.access-records-card { display: grid; gap: 15px; min-width: 0; padding: 18px; border: 1px solid var(--outline-variant); border-radius: 20px; background: #151922; }
+.access-records-card h4 { margin: 0; }
+.access-records-card > div > .muted { margin-top: 6px; line-height: 1.45; }
+.access-records-card-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; align-items: end; }
+.access-records-card-heading > div { min-width: min(100%, 220px); }
+.access-record-kind-field { min-width: min(100%, 210px); margin: 0; }
+.access-record-search-anchor { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.access-record-search-anchor > .field { margin: 0; }
+.access-record-regex-builder { position: absolute; z-index: 45; top: calc(100% + 8px); left: 0; display: grid; gap: 12px; width: min(700px, calc(100vw - 48px)); max-height: min(600px, 68vh); overflow: auto; padding: 16px; border: 1px solid var(--outline); border-radius: 18px; color: var(--on-surface); background: var(--surface-container-highest); box-shadow: 0 16px 42px #0009; }
+.access-record-regex-builder[hidden] { display: none; }
+.access-record-search-status { min-height: 1.35em; margin: 0; color: var(--on-surface-variant); font-size: .85rem; line-height: 1.45; }
+.access-record-search-status[data-state="invalid"] { color: var(--error); }
+.access-record-list { display: grid; gap: 10px; min-height: 72px; max-height: min(500px, 56vh); overflow: auto; }
+.access-record-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 14px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container); }
+.access-record-card-main { display: grid; gap: 5px; min-width: 0; }
+.access-record-card-main strong { overflow-wrap: anywhere; }
+.access-record-card-detail { margin: 0; color: var(--on-surface-variant); font-size: .85rem; line-height: 1.4; overflow-wrap: anywhere; }
+.access-record-card-state { margin: 0; color: var(--on-surface-variant); font-size: .78rem; line-height: 1.35; }
+.access-record-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }
+.access-record-empty { margin: 0; padding: 16px; border: 1px dashed var(--outline); border-radius: 14px; color: var(--on-surface-variant); line-height: 1.45; }
+.access-record-add-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.access-record-add-actions .muted { flex: 1 1 260px; margin: 0; line-height: 1.45; }
 .switch-field input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--primary); }
 .switch-field strong { display: block; color: var(--on-surface); font-size: .9rem; }
 .switch-field small { display: block; margin-top: 3px; }
@@ -689,6 +715,7 @@ button.server-tab-workspace-group-heading::after { content: '⌄'; margin-left: 
   .server-editor, .server-editor[data-tab-dock="right"] { grid-template-columns: 1fr; }
   .server-editor[data-tab-dock="right"] > .tab-navigation, .server-editor[data-tab-dock="right"] > #settings-form { grid-column: auto; grid-row: auto; }
   .server-editor[data-tab-dock="right"] > .tab-navigation { order: -1; }
+  .access-records-layout { grid-template-columns: 1fr; }
   .appearance-settings-grid, .appearance-target-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -703,6 +730,11 @@ button.server-tab-workspace-group-heading::after { content: '⌄'; margin-left: 
   .tab-group-create-row, .tab-group-card-controls { grid-template-columns: 1fr; }
   .tab-workspace-actions > button { width: 100%; }
   .tab-context-menu, .tab-group-picker { width: calc(100vw - 24px); max-width: none; }
+  .access-record-search-anchor { grid-template-columns: 1fr; }
+  .access-record-search-anchor > .outlined-action { width: 100%; }
+  .access-record-regex-builder { width: calc(100vw - 28px); max-width: none; }
+  .access-record-card { grid-template-columns: 1fr; }
+  .access-record-actions { justify-content: start; }
 }
 
 /* Local app-logo customization is renderer-only and never changes installed identity. */

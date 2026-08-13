@@ -2,6 +2,7 @@ const { app, autoUpdater, BrowserWindow, dialog, ipcMain, nativeImage, safeStora
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
+const { ServerAccessRecordsService } = require('./server-access-records.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
 const { StudioSettingsService } = require('./studio-settings.cjs');
 const { NarrationScheduleSettingsService } = require('./narration-schedule-settings.cjs');
@@ -65,6 +66,7 @@ const TOY_LOCK_TARGETS = Object.freeze([
   Object.freeze({ targetType: 'tab', targetId: 'server.world', targetLabel: 'World server settings tab' }),
   Object.freeze({ targetType: 'tab', targetId: 'server.gameplay', targetLabel: 'Gameplay server settings tab' }),
   Object.freeze({ targetType: 'tab', targetId: 'server.network', targetLabel: 'Network server settings tab' }),
+  Object.freeze({ targetType: 'tab', targetId: 'server.access', targetLabel: 'Access records server settings tab' }),
   Object.freeze({ targetType: 'tab', targetId: 'server.runtime', targetLabel: 'Runtime server settings tab' }),
   Object.freeze({ targetType: 'tab', targetId: 'server.paper-cli', targetLabel: 'Paper JAR CLI server settings tab' }),
   Object.freeze({ targetType: 'tab', targetId: 'server.buildtools', targetLabel: 'BuildTools server settings tab' }),
@@ -84,6 +86,7 @@ const TOY_LOCK_TARGETS = Object.freeze([
 
 let mainWindow;
 let serverManager;
+let serverAccessRecords;
 let credentialVault;
 let studioSettings;
 let narrationScheduleSettings;
@@ -487,6 +490,7 @@ app.whenReady().then(async () => {
     },
     onEvent: sendToRenderer
   });
+  serverAccessRecords = new ServerAccessRecordsService({ serverManager });
   buildToolsController = new BuildToolsOrchestrationController({
     serverManager,
     repositoryRoots: [app.getAppPath()]
@@ -538,6 +542,11 @@ app.on('before-quit', () => {
 function requireManager() {
   if (!serverManager) throw new Error('Minecraft Server Studio is still starting.');
   return serverManager;
+}
+
+function requireAccessRecords() {
+  if (!serverAccessRecords) throw new Error('Local server access records are still starting.');
+  return serverAccessRecords;
 }
 
 function requireUpdater() {
@@ -659,6 +668,30 @@ function requireSupportTickets() {
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
+ipcMain.handle('studio:access-records', (_event, serverId) => requireAccessRecords().snapshot(serverId));
+ipcMain.handle('studio:add-access-record', async (_event, serverId, input) => {
+  const result = await requireAccessRecords().add(serverId, input);
+  await recordLocalHistory({
+    action: 'record-created',
+    subject: 'server',
+    subjectId: serverId,
+    label: 'Local server access record added',
+    detail: 'A validated local access record changed. Player names, UUIDs, IP addresses, reasons, expiry values, paths, and raw file data were omitted from history.'
+  });
+  return result;
+});
+ipcMain.handle('studio:access-record-removal-preview', (_event, serverId, request) => requireAccessRecords().removalPreview(serverId, request));
+ipcMain.handle('studio:remove-access-record', async (_event, serverId, request) => {
+  const result = await requireAccessRecords().remove(serverId, request);
+  await recordLocalHistory({
+    action: 'record-deleted',
+    subject: 'server',
+    subjectId: serverId,
+    label: 'Local server access record removed',
+    detail: 'A validated local access record changed. Player names, UUIDs, IP addresses, reasons, expiry values, paths, and raw file data were omitted from history.'
+  });
+  return result;
+});
 ipcMain.handle('studio:experience-settings', () => experienceSnapshot());
 ipcMain.handle('studio:update-experience-settings', async (_event, patch) => {
   requireStudioSettings().updateLocal(patch);

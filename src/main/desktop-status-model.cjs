@@ -85,6 +85,7 @@ const DESKTOP_SURFACES = deepFreeze([
   surface('command-center', 'Command center', 'Structured Minecraft command forms, capability badges, and bounded raw fallback.'),
   surface('plugins', 'Plugin management', 'Local plugin inspection, selection, installation, compatibility reporting, and removal controls.'),
   surface('configuration', 'Server configuration', 'Rich controls for server, world, gameplay, network, runtime, and property configuration.'),
+  surface('server-access-records', 'Server access records', 'Bounded local operators, allowlist, player-ban, and IP-ban file inspection and mutation for controlled server roots.'),
   surface('console-and-rcon', 'Console and RCON', 'Local console, RCON configuration, credential handling, command delivery, and recovery states.'),
   surface('backups-and-updates', 'Backups and updates', 'Local backup, restore, update discovery, staging, rollback, and progress controls.'),
   surface('application-updates', 'Application updates', 'Unsigned Squirrel application-update discovery, download, restart, and recovery controls.'),

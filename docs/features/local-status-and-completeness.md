@@ -52,6 +52,7 @@ The template includes these desktop surface rows:
 | `command-center` | Command center |
 | `plugins` | Plugin management |
 | `configuration` | Server configuration |
+| `server-access-records` | Local operators, allowlist, player-ban, and IP-ban records for controlled server roots |
 | `console-and-rcon` | Console and RCON |
 | `backups-and-updates` | Backup, restore, and Paper server-JAR update/rollback controls |
 | `application-updates` | Unsigned Squirrel application-update controls |
@@ -67,6 +68,12 @@ The template includes these desktop surface rows:
 | `export` | Export |
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
+
+## Server access-record inventory boundary
+
+The `server-access-records` row is independent from lifecycle control, the Command Center, RCON, protocol management, and configuration toggles. It names only the local typed models, fixed IPC, renderer tab, redacted history event, and documentation for the four fixed root-level files: `ops.json`, `whitelist.json`, `banned-players.json`, and `banned-ips.json`.
+
+It remains incomplete until localization, focused checks, accessible packaged interaction, and real captures are recorded. Source registration is not proof that a Minecraft process reloaded a file, recognized a player, applied an operator change, applied a ban or unban, or received a network or console command. See [local server access records](server-access-records.md) for the exact controlled-root, identity, atomic-write, and confirmation boundary.
 
 ## Command-palette inventory boundary
 
@@ -134,8 +141,8 @@ The settings-appearance-and-localization record also includes the local app-logo
 
 ## Authenticator and toy-lock inventory boundary
 
-The `authenticator-and-toy-locks` row now includes a bounded registry of 20
-application-owned toy-lock targets: the authenticator destination, 15 server
+The `authenticator-and-toy-locks` row now includes a bounded registry of 21
+application-owned toy-lock targets: the authenticator destination, 16 server
 settings tabs, three direct appearance targets, and the authenticator-entry
 form. The main process is the authority for target type, identifier, and label;
 new lock creation fails closed for an unknown target or a label mismatch. The

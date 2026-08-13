@@ -39,6 +39,12 @@ The optional Minecraft Server Management Protocol connection begins with `rpc.di
 
 The generic client is TLS-first. It permits an insecure connection only for an explicitly local loopback endpoint. It does not send a generic bearer token, custom authentication header, or WebSocket subprotocol handshake. An endpoint that requires authentication is therefore unavailable to this generic client until an explicit, documented provider adapter exists. A protected credential record is never transmitted by the generic management-protocol client.
 
+## Local access records
+
+The Access records tab separately manages only four validated local JSON files within the selected app-managed server root: `ops.json`, `whitelist.json`, `banned-players.json`, and `banned-ips.json`. It reads bounded typed models, reports a missing file as an uncreated empty default, preserves malformed existing content instead of replacing it, and uses same-directory atomic writes only after a deliberate validated mutation.
+
+Player-based records require a user-supplied exact UUID and name; IP bans require an IP literal. The app does not invent, resolve, or look up identities. Removing an operator or allowlist record, and unbanning a player or IP, uses a two-acknowledgement/full-slider decision bound to the current reviewed record selection. The tab never sends console, RCON, protocol, whitelist, op, deop, ban, unban, reload, or restart commands. A stopped server can read the changed local file at its next start; a running server may not apply it until its own later reload or restart. See [local server access records](server-access-records.md) for the exact file, privacy, provenance, and verification boundary.
+
 ## Plugin installation
 
 The Plugins tab accepts a user-selected local `.jar` file only. Before staging it, the app checks a bounded JAR signature, SHA-256, manifest, Bukkit or Paper descriptor identity, declared dependencies, aliases, API target, destination collision, and load-order cycle plan. A running managed server receives the JAR only in app-managed staging outside `plugins`; promotion is revalidated, atomic, and only permitted while stopped. The app does not claim that a third-party plugin is compatible, trusted, or safe beyond that local descriptor evidence. Restart the server after promotion; ordinary plugin reload is not the update path.
@@ -63,6 +69,7 @@ This initial implementation records the intended lifecycle and configuration beh
 ## Suggested related articles
 
 - [CLI RCON gateway](cli-rcon-gateway.md)
+- [Local server access records](server-access-records.md)
 - [Command Center](command-center.md)
 - [Paper JAR CLI controls](paper-jar-cli-controls.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)

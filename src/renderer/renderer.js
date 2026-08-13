@@ -13,6 +13,13 @@ const state = {
   notificationSearch: { enabled: false, query: '', pattern: '', flags: 'i', sample: '' },
   notificationSelection: new Set(),
   notificationSelectionNotice: '',
+  accessRecords: null,
+  accessSearch: {
+    mode: 'plain',
+    query: '',
+    pattern: '',
+    flags: { i: true, m: false, u: true }
+  },
   externalEditor: null,
   buildToolsMetadata: null,
   buildToolsPlan: null,
@@ -201,7 +208,7 @@ const regexSearches = {
 };
 
 const SERVER_TAB_IDS = Object.freeze([
-  'general', 'world', 'gameplay', 'network', 'runtime', 'paper-cli', 'buildtools', 'backups',
+  'general', 'world', 'gameplay', 'network', 'access', 'runtime', 'paper-cli', 'buildtools', 'backups',
   'live', 'commands', 'status', 'history', 'advanced', 'plugins', 'console'
 ]);
 const COMMAND_PALETTE_MAX_ENTRIES = 512;
@@ -3347,6 +3354,7 @@ function renderServers() {
       refreshCommandCatalog();
       refreshDependencies();
       refreshBackupOverview();
+      refreshAccessRecords();
     });
     container.append(item);
   }
@@ -3409,6 +3417,345 @@ function renderGameRuleStatus(server) {
   target.textContent = entries.length
     ? entries.join(' · ')
     : `These controls are Minecraft 1.21.9+ game rules. They are never written as obsolete server.properties keys. The generic management protocol remains unavailable here until discovery provides its exact parameter schema.`;
+}
+
+const ACCESS_RECORD_KIND_LABELS = Object.freeze({
+  ops: 'Operators',
+  whitelist: 'Allowlist',
+  bannedPlayers: 'Player bans',
+  bannedIps: 'IP bans'
+});
+
+const ACCESS_REGEX_TOKENS = Object.freeze({
+  literal: 'text',
+  class: '[A-Za-z]',
+  anchor: '^$',
+  group: '(text)',
+  alternation: 'first|second',
+  quantifier: '+'
+});
+
+function accessRecordKindLabel(kind) {
+  return ACCESS_RECORD_KIND_LABELS[kind] || 'Access records';
+}
+
+function selectedAccessRecordKind() {
+  const control = $('#access-record-kind');
+  const kind = String(control?.value || 'ops');
+  return Object.prototype.hasOwnProperty.call(ACCESS_RECORD_KIND_LABELS, kind) ? kind : 'ops';
+}
+
+function accessRecordList(kind = selectedAccessRecordKind()) {
+  const lists = Array.isArray(state.accessRecords?.lists) ? state.accessRecords.lists : [];
+  return lists.find((candidate) => candidate?.kind === kind) || null;
+}
+
+function accessRecordSearchText(record) {
+  if (!record || typeof record !== 'object') return '';
+  return [record.label, record.name, record.uuid, record.ip, record.reason, record.expires, record.detail]
+    .filter((value) => typeof value === 'string' || typeof value === 'number')
+    .map((value) => String(value))
+    .join(' ')
+    .slice(0, 1_024);
+}
+
+function accessRecordMatcher() {
+  const search = state.accessSearch;
+  const query = String($('#access-record-search')?.value || search.query || '').slice(0, 128);
+  search.query = query;
+  if (search.mode !== 'regex') {
+    const normalized = query.trim().toLocaleLowerCase();
+    return {
+      valid: true,
+      mode: 'plain',
+      query,
+      test: (value) => !normalized || String(value || '').toLocaleLowerCase().includes(normalized)
+    };
+  }
+  const pattern = String($('#access-record-regex-pattern')?.value || search.pattern || query).slice(0, 128);
+  search.pattern = pattern;
+  const flags = ['i', 'm', 'u'].filter((flag) => search.flags?.[flag] === true).join('');
+  if (!pattern.trim()) return { valid: false, mode: 'regex', problem: 'Enter a bounded local regular expression before enabling regex search.' };
+  if (/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(pattern) || /(?:\.\*|\.\+){2,}/.test(pattern) || /\{\d{4,}(?:,\d*)?\}/.test(pattern)) {
+    return { valid: false, mode: 'regex', problem: 'This expression is rejected because nested or oversized quantifiers can make local search unresponsive.' };
+  }
+  try {
+    const expression = new RegExp(pattern, flags);
+    return {
+      valid: true,
+      mode: 'regex',
+      query: pattern,
+      expression,
+      test: (value) => {
+        expression.lastIndex = 0;
+        return expression.test(String(value || '').slice(0, 1_024));
+      }
+    };
+  } catch {
+    return { valid: false, mode: 'regex', problem: 'The local regular expression is invalid.' };
+  }
+}
+
+function accessRecordDetail(record) {
+  const details = [];
+  if (record?.uuid) details.push(`UUID ${record.uuid}`);
+  if (record?.ip) details.push(`IP ${record.ip}`);
+  if (Number.isInteger(record?.level)) details.push(`operator level ${record.level}`);
+  if (record?.bypassesPlayerLimit === true) details.push('bypasses player limit');
+  if (record?.reason) details.push(`reason: ${record.reason}`);
+  if (record?.expires) details.push(`expires: ${record.expires}`);
+  if (record?.detail && !details.length) details.push(String(record.detail));
+  return details.length ? details.join(' · ') : 'No additional record fields are exposed.';
+}
+
+function renderAccessAddFields() {
+  const server = selectedServer();
+  const kind = String($('#access-record-add-kind')?.value || 'ops');
+  const player = ['ops', 'whitelist', 'bannedPlayers'].includes(kind);
+  const ip = kind === 'bannedIps';
+  const operator = kind === 'ops';
+  const ban = ['bannedPlayers', 'bannedIps'].includes(kind);
+  $$('[data-access-add-field="player"]').forEach((field) => { field.hidden = !player; });
+  $$('[data-access-add-field="ip"]').forEach((field) => { field.hidden = !ip; });
+  $$('[data-access-add-field="operator"]').forEach((field) => { field.hidden = !operator; });
+  $$('[data-access-add-field="ban"]').forEach((field) => { field.hidden = !ban; });
+  ['access-record-name', 'access-record-uuid'].forEach((id) => {
+    const field = $(`#${id}`);
+    if (field) {
+      field.disabled = !player;
+      field.required = player;
+    }
+  });
+  const ipField = $('#access-record-ip');
+  if (ipField) {
+    ipField.disabled = !ip;
+    ipField.required = ip;
+  }
+  ['access-record-level', 'access-record-bypasses-limit'].forEach((id) => {
+    const field = $(`#${id}`);
+    if (field) field.disabled = !operator;
+  });
+  ['access-record-reason', 'access-record-expires'].forEach((id) => {
+    const field = $(`#${id}`);
+    if (field) field.disabled = !ban;
+  });
+  const addStatus = $('#access-record-add-status');
+  const addButton = $('#add-access-record-button');
+  if (addButton) {
+    addButton.disabled = !server;
+    addButton.title = !server ? 'Choose a managed local server before adding a local access record.' : '';
+  }
+  if (addStatus) {
+    addStatus.textContent = !server
+      ? 'Choose a managed local server before creating a local access record.'
+      : server.status === 'running'
+        ? 'The local file can change, but no command will be sent to the running server. It may not apply the record until its own next reload or restart.'
+        : 'The local file can change while the server is stopped. The server can read the record at its next start.';
+  }
+}
+
+function renderAccessRecords() {
+  const status = $('#access-records-status');
+  const provenance = $('#access-record-provenance');
+  const searchStatus = $('#access-record-search-status');
+  const container = $('#access-record-list');
+  if (!status || !provenance || !searchStatus || !container) return;
+  renderAccessAddFields();
+  const server = selectedServer();
+  const snapshot = state.accessRecords;
+  if (!server || !snapshot || snapshot.serverId !== server.id) {
+    status.dataset.state = 'unavailable';
+    status.textContent = !server
+      ? 'Choose a managed local server to inspect its local access-record files.'
+      : 'Loading the selected server’s bounded local access-record files.';
+    provenance.textContent = 'No selected local access-record list is available.';
+    searchStatus.dataset.state = 'idle';
+    searchStatus.textContent = 'No local records are loaded.';
+    container.replaceChildren();
+    const empty = document.createElement('p');
+    empty.className = 'access-record-empty';
+    empty.textContent = 'The desktop does not create, modify, or apply an access record until a selected managed local server returns a validated list.';
+    container.append(empty);
+    return;
+  }
+  const stateName = snapshot.serverState === 'running' ? 'running' : 'stopped';
+  status.dataset.state = stateName;
+  status.textContent = snapshot.consequence || (stateName === 'running'
+    ? 'The managed process is running. Changes affect only its local JSON files; this desktop sends no live server command and does not claim the files were applied.'
+    : 'The managed process is stopped. Changes affect only its local JSON files and can be read by the server at its next start.');
+  const kind = selectedAccessRecordKind();
+  const list = accessRecordList(kind);
+  provenance.textContent = list?.provenance || list?.detail || 'The selected record file has no validated provenance state.';
+  const matcher = accessRecordMatcher();
+  const feedback = $('#access-record-regex-feedback');
+  const sampleFeedback = $('#access-record-regex-sample-feedback');
+  if (feedback) {
+    feedback.dataset.state = matcher.valid ? 'ready' : 'invalid';
+    feedback.textContent = matcher.mode === 'plain'
+      ? 'Regex matching is off; this local list uses plain-text matching.'
+      : matcher.valid
+        ? 'Regex matching is on for this bounded local list only.'
+        : matcher.problem;
+  }
+  if (sampleFeedback) {
+    const sample = String($('#access-record-regex-sample')?.value || '').slice(0, 256);
+    if (matcher.mode !== 'regex') {
+      sampleFeedback.textContent = 'A local sample result appears here when regex matching is on.';
+    } else if (!matcher.valid) {
+      sampleFeedback.textContent = 'Fix the local regular expression before inspecting the sample.';
+    } else if (!sample) {
+      sampleFeedback.textContent = 'Enter bounded local sample text to inspect live matches and capture groups.';
+    } else {
+      matcher.expression.lastIndex = 0;
+      const match = matcher.expression.exec(sample);
+      if (!match) {
+        sampleFeedback.textContent = 'The local sample does not match this expression.';
+      } else {
+        const captures = match.slice(1).map((capture, captureIndex) => capture === undefined
+          ? `group ${captureIndex + 1}: unmatched`
+          : `group ${captureIndex + 1}: ${String(capture).slice(0, 128)}`);
+        sampleFeedback.textContent = captures.length
+          ? `The local sample matches. Captures: ${captures.join(' · ')}`
+          : 'The local sample matches. This expression has no capture groups.';
+      }
+    }
+  }
+  const records = Array.isArray(list?.records) ? list.records.slice(0, 512) : [];
+  if (!matcher.valid) {
+    searchStatus.dataset.state = 'invalid';
+    searchStatus.textContent = matcher.problem;
+    container.replaceChildren();
+    const empty = document.createElement('p');
+    empty.className = 'access-record-empty';
+    empty.textContent = 'Fix the local regular expression to view the current validated records.';
+    container.append(empty);
+    return;
+  }
+  const visible = records.filter((record) => matcher.test(accessRecordSearchText(record)));
+  searchStatus.dataset.state = visible.length ? 'ready' : 'empty';
+  searchStatus.textContent = `${visible.length} of ${records.length} ${accessRecordKindLabel(kind).toLocaleLowerCase()} record${records.length === 1 ? '' : 's'} match ${matcher.mode === 'regex' ? 'the local expression' : 'the plain-text search'}.`;
+  container.replaceChildren();
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'access-record-empty';
+    empty.textContent = records.length
+      ? 'No stored local record matches the active search.'
+      : `${accessRecordKindLabel(kind)} has no validated stored records. A missing file remains an empty default until you deliberately add a record.`;
+    container.append(empty);
+    return;
+  }
+  visible.forEach((record) => {
+    const card = document.createElement('article');
+    card.className = 'access-record-card';
+    card.setAttribute('role', 'listitem');
+    const main = document.createElement('div');
+    main.className = 'access-record-card-main';
+    const title = document.createElement('strong');
+    title.textContent = String(record?.label || record?.name || record?.ip || 'Validated local access record');
+    const detail = document.createElement('p');
+    detail.className = 'access-record-card-detail';
+    detail.textContent = accessRecordDetail(record);
+    const recordState = document.createElement('p');
+    recordState.className = 'access-record-card-state';
+    recordState.textContent = stateName === 'running'
+      ? 'Running-server consequence: this view has not sent a command or confirmed a live reload.'
+      : 'Stopped-server consequence: this is a local file record for the next server start.';
+    main.append(title, detail, recordState);
+    const actions = document.createElement('div');
+    actions.className = 'access-record-actions';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'danger-action';
+    const unban = ['bannedPlayers', 'bannedIps'].includes(kind);
+    remove.textContent = unban ? 'Unban locally…' : 'Remove locally…';
+    remove.addEventListener('click', () => requestAccessRecordRemoval(kind, record));
+    actions.append(remove);
+    card.append(main, actions);
+    container.append(card);
+  });
+}
+
+function accessRecordAddInput() {
+  const kind = String($('#access-record-add-kind')?.value || 'ops');
+  const base = { kind };
+  if (['ops', 'whitelist', 'bannedPlayers'].includes(kind)) {
+    base.name = $('#access-record-name').value.trim();
+    base.uuid = $('#access-record-uuid').value.trim();
+  }
+  if (kind === 'ops') {
+    base.level = Number($('#access-record-level').value);
+    base.bypassesPlayerLimit = $('#access-record-bypasses-limit').checked;
+  }
+  if (kind === 'bannedIps') base.ip = $('#access-record-ip').value.trim();
+  if (['bannedPlayers', 'bannedIps'].includes(kind)) {
+    const reason = $('#access-record-reason').value.trim();
+    const expires = $('#access-record-expires').value;
+    const parsedExpiry = expires ? Date.parse(expires) : NaN;
+    if (expires && !Number.isFinite(parsedExpiry)) return null;
+    if (reason) base.reason = reason;
+    if (expires) base.expires = new Date(parsedExpiry).toISOString();
+  }
+  return base;
+}
+
+async function refreshAccessRecords(options = {}) {
+  const server = selectedServer();
+  if (!server) {
+    state.accessRecords = null;
+    renderAccessRecords();
+    return null;
+  }
+  const snapshot = await safely(() => window.studio.accessRecords(server.id));
+  if (!snapshot || selectedServer()?.id !== server.id) return null;
+  state.accessRecords = snapshot;
+  renderAccessRecords();
+  if (options.announce === true) toast('Validated local access records refreshed. No server command was sent.', 'success');
+  return snapshot;
+}
+
+async function addAccessRecord() {
+  const server = selectedServer();
+  if (!server) return toast('Choose a managed local server before adding a local access record.', 'error');
+  const input = accessRecordAddInput();
+  if (!input) return toast('Enter a valid optional expiry timestamp or leave it blank.', 'error');
+  const result = await safely(() => window.studio.addAccessRecord(server.id, input));
+  if (!result) return;
+  ['access-record-name', 'access-record-uuid', 'access-record-ip', 'access-record-reason', 'access-record-expires'].forEach((id) => {
+    const control = $(`#${id}`);
+    if (control) control.value = '';
+  });
+  state.accessRecords = result.snapshot || result;
+  await refreshAccessRecords();
+  toast('The reviewed local access file changed. No server command or live-application claim was made.', 'success');
+}
+
+function requestAccessRecordRemoval(kind, record) {
+  const server = selectedServer();
+  if (!server || !record?.id) return;
+  safely(() => window.studio.accessRecordRemovalPreview(server.id, { kind, recordId: record.id })).then((preview) => {
+    if (!preview?.authority?.digest) return;
+    const unban = ['bannedPlayers', 'bannedIps'].includes(kind);
+    openDestructiveConfirmation({
+      title: `Confirm local ${unban ? 'unban' : 'record removal'}`,
+      copy: unban
+        ? 'This removes one stored local ban record. It does not send an unban command and does not claim a running server applied the change.'
+        : 'This removes one stored local access record. It does not send a de-operator or allowlist command and does not claim a running server applied the change.',
+      target: `Affected local record: ${accessRecordKindLabel(kind)} · ${String(record.label || 'selected record').slice(0, 160)}`,
+      execute: async () => {
+        const result = await safely(() => window.studio.removeAccessRecord(server.id, {
+          kind,
+          recordId: record.id,
+          confirmation: accessRecordRemovalConfirmationFor(preview)
+        }));
+        if (!result) return;
+        state.accessRecords = result.snapshot || result;
+        await refreshAccessRecords();
+        toast(unban
+          ? 'The reviewed local ban record was removed. No server command was sent.'
+          : 'The reviewed local access record was removed. No server command was sent.', 'success');
+      }
+    });
+  });
 }
 
 function renderEditor() {
@@ -5593,6 +5940,7 @@ function renderAll() {
   renderServers();
   renderDependencies();
   renderEditor();
+  renderAccessRecords();
   renderExternalEditor();
   renderBuildToolsPlan();
   renderAuthenticator();
@@ -6827,6 +7175,7 @@ async function refreshServers() {
   await refreshCommandCatalog();
   await refreshDependencies();
   await refreshBackupOverview();
+  await refreshAccessRecords();
 }
 
 async function refreshDependencies() {
@@ -7596,6 +7945,15 @@ function destructiveConfirmationFor(plan) {
   };
 }
 
+function accessRecordRemovalConfirmationFor(plan) {
+  return {
+    authorityDigest: plan?.authority?.digest || '',
+    firstAcknowledged: true,
+    secondAcknowledged: true,
+    sliderValue: 100
+  };
+}
+
 async function prepareBackup() {
   const server = selectedServer();
   if (!server) return;
@@ -8329,11 +8687,64 @@ function bindEvents() {
       state.unsaved.statusHubBridge = true;
       return;
     }
-    if (['commands', 'console', 'plugins', 'history'].includes(panel)) return;
+    if (['access', 'commands', 'console', 'plugins', 'history'].includes(panel)) return;
     state.unsaved.settings = true;
   };
   $('#settings-form').addEventListener('input', markSettingsDraft);
   $('#settings-form').addEventListener('change', markSettingsDraft);
+  $('#refresh-access-records-button').addEventListener('click', () => { void refreshAccessRecords({ announce: true }); });
+  $('#access-record-kind').addEventListener('change', renderAccessRecords);
+  $('#access-record-add-kind').addEventListener('change', renderAccessAddFields);
+  $('#access-record-search').addEventListener('input', () => {
+    state.accessSearch.query = $('#access-record-search').value.slice(0, 128);
+    if (state.accessSearch.mode === 'regex') $('#access-record-regex-pattern').value = state.accessSearch.query;
+    renderAccessRecords();
+  });
+  $('#access-record-regex-toggle').addEventListener('click', () => {
+    const builder = $('#access-record-regex-builder');
+    builder.hidden = !builder.hidden;
+    $('#access-record-regex-toggle').setAttribute('aria-expanded', String(!builder.hidden));
+    if (!builder.hidden) {
+      state.accessSearch.mode = 'regex';
+      if (!$('#access-record-regex-pattern').value) $('#access-record-regex-pattern').value = $('#access-record-search').value.slice(0, 128);
+      $('#access-record-regex-pattern').focus();
+    }
+    renderAccessRecords();
+  });
+  $('#access-record-regex-pattern').addEventListener('input', () => {
+    state.accessSearch.mode = 'regex';
+    state.accessSearch.pattern = $('#access-record-regex-pattern').value.slice(0, 128);
+    $('#access-record-search').value = state.accessSearch.pattern;
+    renderAccessRecords();
+  });
+  $('#access-record-regex-sample').addEventListener('input', renderAccessRecords);
+  ['i', 'm', 'u'].forEach((flag) => {
+    $(`#access-record-regex-flag-${flag}`).addEventListener('change', () => {
+      state.accessSearch.mode = 'regex';
+      state.accessSearch.flags[flag] = $(`#access-record-regex-flag-${flag}`).checked;
+      renderAccessRecords();
+    });
+  });
+  $$('[data-access-regex-token]').forEach((button) => button.addEventListener('click', () => {
+    const input = $('#access-record-regex-pattern');
+    const token = ACCESS_REGEX_TOKENS[button.dataset.accessRegexToken] || '';
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    input.setRangeText(token, start, end, 'end');
+    state.accessSearch.mode = 'regex';
+    state.accessSearch.pattern = input.value.slice(0, 128);
+    $('#access-record-search').value = state.accessSearch.pattern;
+    input.focus();
+    renderAccessRecords();
+  }));
+  $('#access-record-regex-use-plain').addEventListener('click', () => {
+    state.accessSearch.mode = 'plain';
+    state.accessSearch.query = $('#access-record-search').value.slice(0, 128);
+    $('#access-record-regex-builder').hidden = true;
+    $('#access-record-regex-toggle').setAttribute('aria-expanded', 'false');
+    renderAccessRecords();
+  });
+  $('#add-access-record-button').addEventListener('click', () => { void addAccessRecord(); });
   $('#browse-root-button').addEventListener('click', async () => {
     const folder = await safely(() => window.studio.pickFolder());
     if (folder) $('#create-root').value = folder;
@@ -8629,7 +9040,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshNotificationCenter({ quiet: true }), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshOfflineChangelog(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshNotificationCenter({ quiet: true }), refreshAccessRecords(), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshOfflineChangelog(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
   renderCommandCenter();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });

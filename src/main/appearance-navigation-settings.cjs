@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const APPEARANCE_NAVIGATION_VERSION = 2;
+const APPEARANCE_NAVIGATION_VERSION = 3;
 const MAX_RECORD_BYTES = 64 * 1024;
 const THEME_MODES = Object.freeze(['system', 'light', 'dark']);
 const DENSITY_MODES = Object.freeze(['comfortable', 'compact', 'spacious']);
@@ -12,7 +12,7 @@ const FONT_FAMILIES = Object.freeze(['system-ui', 'Segoe UI', 'Arial', 'Georgia'
 const FONT_WEIGHTS = Object.freeze([400, 500, 600, 700]);
 const TAB_DOCKS = Object.freeze(['left', 'right', 'top', 'bottom']);
 const TAB_IDS = Object.freeze([
-  'general', 'world', 'gameplay', 'network', 'runtime', 'paper-cli', 'buildtools', 'backups',
+  'general', 'world', 'gameplay', 'network', 'access', 'runtime', 'paper-cli', 'buildtools', 'backups',
   'live', 'commands', 'status', 'history', 'advanced', 'plugins', 'console'
 ]);
 const ELEMENT_TARGETS = Object.freeze(['shell', 'tabStrip', 'primaryAction']);
@@ -156,6 +156,14 @@ function normalizeTabs(value, options = {}) {
   return { dock: value.dock, activeTab, order, pinned, groups, closed };
 }
 
+function migrateTabsWithAccess(value) {
+  if (!isPlainRecord(value) || !Array.isArray(value.order) || value.order.includes('access')) return value;
+  const order = [...value.order];
+  const networkIndex = order.indexOf('network');
+  order.splice(networkIndex < 0 ? order.length : networkIndex + 1, 0, 'access');
+  return { ...value, order };
+}
+
 function normalizeElementOverride(value, target) {
   assertExactKeys(value, ['surface', 'onSurface', 'radius'], `The ${target} appearance override is invalid.`);
   return {
@@ -184,7 +192,7 @@ function defaultAppearanceNavigationSettings() {
 
 function normalizeAppearanceNavigationSettings(value) {
   assertExactKeys(value, ['version', 'theme', 'density', 'seedColor', 'typography', 'tabs', 'elementOverrides'], 'Appearance and tab-navigation settings are invalid.');
-  if (value.version !== 1 && value.version !== APPEARANCE_NAVIGATION_VERSION) {
+  if (value.version !== 1 && value.version !== 2 && value.version !== APPEARANCE_NAVIGATION_VERSION) {
     throw settingsError('APPEARANCE_NAVIGATION_UNSUPPORTED_VERSION', 'Appearance and tab-navigation settings use an unsupported version.');
   }
   if (!THEME_MODES.includes(value.theme)) throw settingsError('APPEARANCE_NAVIGATION_INVALID_VALUE', 'Theme must be system, light, or dark.');
@@ -195,7 +203,7 @@ function normalizeAppearanceNavigationSettings(value) {
     density: value.density,
     seedColor: normalizeColor(value.seedColor, 'Seed color'),
     typography: normalizeTypography(value.typography),
-    tabs: normalizeTabs(value.tabs, { legacy: value.version === 1 }),
+    tabs: normalizeTabs(value.version === 2 ? migrateTabsWithAccess(value.tabs) : value.tabs, { legacy: value.version === 1 }),
     elementOverrides: normalizeElementOverrides(value.elementOverrides)
   };
 }

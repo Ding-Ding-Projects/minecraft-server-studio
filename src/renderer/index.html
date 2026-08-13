@@ -508,6 +508,7 @@
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" data-i18n="tab.world">World</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay" data-i18n="tab.gameplay">Gameplay</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network" data-i18n="tab.network">Network</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-access" data-tab="access">Access records</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime" data-i18n="tab.runtime">Runtime</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-paper-cli" data-tab="paper-cli">Paper JAR CLI</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools" data-i18n="tab.buildtools">BuildTools</button>
@@ -577,7 +578,7 @@
                 <label class="field wide"><span>Server message of the day</span><textarea id="motd" rows="3" maxlength="256"></textarea></label>
                 <label class="switch-field"><input id="eula-accepted" type="checkbox"><span><strong>Accept the Minecraft EULA</strong><small>Starting the server writes the acceptance state to eula.txt. Read Mojang's terms before selecting this.</small></span></label>
                 <label class="switch-field"><input id="online-mode" type="checkbox"><span><strong>Require authenticated Minecraft accounts</strong><small>Keep this enabled for normal online-mode server authentication.</small></span></label>
-                <label class="switch-field"><input id="white-list" type="checkbox"><span><strong>Enable whitelist</strong><small>Use server commands to add permitted players after startup.</small></span></label>
+                <label class="switch-field"><input id="white-list" type="checkbox"><span><strong>Enable whitelist</strong><small>Manage validated local allowlist records in Access records. A running server may need its own later reload or restart; this toggle does not send one.</small></span></label>
               </div>
               <section class="external-editor-card" aria-labelledby="external-editor-title">
                 <div>
@@ -650,6 +651,60 @@
                 <label class="switch-field"><input id="broadcast-rcon-to-ops" type="checkbox"><span><strong>Broadcast RCON commands to operators</strong><small>Show remote-console command execution to online operators.</small></span></label>
                 <label class="switch-field"><input id="enforce-secure-profile" type="checkbox"><span><strong>Enforce secure player profiles</strong><small>Require secure chat profile validation when supported.</small></span></label>
                 <label class="switch-field"><input id="prevent-proxy-connections" type="checkbox"><span><strong>Prevent proxy connections</strong><small>Use Mojang session server checks when appropriate for your network.</small></span></label>
+              </div>
+            </section>
+
+            <section id="panel-access" class="settings-panel" role="tabpanel" data-panel="access" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">LOCAL ACCESS RECORDS</p>
+                  <h3>Operators, allowlist, and bans</h3>
+                  <p class="muted">This surface reads and writes only the selected managed server's bounded local JSON access files. It never sends a console command, calls RCON, changes online-mode, resolves player identities, or claims a running server applied the change.</p>
+                </div>
+                <button id="refresh-access-records-button" type="button" class="outlined-action">Refresh local records</button>
+              </div>
+              <p id="access-records-status" class="access-records-status" aria-live="polite">Choose a managed local server to inspect its local access-record files.</p>
+              <div class="access-records-layout">
+                <section class="access-records-card" aria-labelledby="access-record-list-title">
+                  <div class="access-records-card-heading">
+                    <div>
+                      <h4 id="access-record-list-title">Stored access records</h4>
+                      <p id="access-record-provenance" class="muted">The selected list has not been loaded.</p>
+                    </div>
+                    <label class="field access-record-kind-field"><span>Record list</span><select id="access-record-kind"><option value="ops">Operators</option><option value="whitelist">Allowlist</option><option value="bannedPlayers">Player bans</option><option value="bannedIps">IP bans</option></select></label>
+                  </div>
+                  <div class="access-record-search-anchor">
+                    <label class="field" for="access-record-search"><span>Search this local list</span><input id="access-record-search" type="search" maxlength="128" autocomplete="off" spellcheck="false" placeholder="Plain text is the default"></label>
+                    <button id="access-record-regex-toggle" type="button" class="outlined-action" aria-controls="access-record-regex-builder" aria-expanded="false">Build regex</button>
+                    <section id="access-record-regex-builder" class="access-record-regex-builder" aria-label="Access-record search regex builder" hidden>
+                      <div class="settings-grid"><label class="field"><span>Raw pattern</span><input id="access-record-regex-pattern" type="text" maxlength="128" autocomplete="off" spellcheck="false" placeholder="Example: ^Alex$"></label><label class="field wide"><span>Local sample text</span><input id="access-record-regex-sample" type="text" maxlength="256" autocomplete="off" spellcheck="false" placeholder="Inspect a record label without sending it anywhere"></label></div>
+                      <fieldset class="regex-flags"><legend>Regex flags</legend><label><input id="access-record-regex-flag-i" type="checkbox" checked> Ignore case</label><label><input id="access-record-regex-flag-m" type="checkbox"> Multiline</label><label><input id="access-record-regex-flag-u" type="checkbox" checked> Unicode</label></fieldset>
+                      <div class="regex-token-row" role="group" aria-label="Guided regular-expression tokens"><button type="button" class="outlined-action" data-access-regex-token="literal">Literal</button><button type="button" class="outlined-action" data-access-regex-token="class">Character class</button><button type="button" class="outlined-action" data-access-regex-token="anchor">Anchor</button><button type="button" class="outlined-action" data-access-regex-token="group">Group</button><button type="button" class="outlined-action" data-access-regex-token="alternation">Either</button><button type="button" class="outlined-action" data-access-regex-token="quantifier">Repeat</button><button id="access-record-regex-use-plain" type="button" class="outlined-action">Use plain text</button></div>
+                      <p id="access-record-regex-feedback" class="regex-feedback" aria-live="polite">Regex matching is off; this local list uses plain-text matching.</p>
+                      <p id="access-record-regex-sample-feedback" class="regex-feedback" aria-live="polite">A local sample result appears here when regex matching is on.</p>
+                    </section>
+                  </div>
+                  <p id="access-record-search-status" class="access-record-search-status" aria-live="polite">No local access records are loaded.</p>
+                  <div id="access-record-list" class="access-record-list" role="list" aria-live="polite"></div>
+                </section>
+
+                <section class="access-records-card" aria-labelledby="access-record-add-title">
+                  <div>
+                    <h4 id="access-record-add-title">Add a local record</h4>
+                    <p class="muted">Supply an exact existing player UUID and player name for player-based records, or an exact IP literal for an IP ban. This app does not look up, infer, or create identities.</p>
+                  </div>
+                  <div class="settings-grid">
+                    <label class="field wide"><span>Record type</span><select id="access-record-add-kind"><option value="ops">Operator</option><option value="whitelist">Allowlist member</option><option value="bannedPlayers">Player ban</option><option value="bannedIps">IP ban</option></select></label>
+                    <label class="field" data-access-add-field="player"><span>Player name</span><input id="access-record-name" type="text" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Exact existing player name"></label>
+                    <label class="field" data-access-add-field="player"><span>Player UUID</span><input id="access-record-uuid" type="text" maxlength="36" autocomplete="off" spellcheck="false" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
+                    <label class="field" data-access-add-field="ip" hidden><span>IP address</span><input id="access-record-ip" type="text" maxlength="45" autocomplete="off" spellcheck="false" placeholder="IPv4 or IPv6 literal"></label>
+                    <label class="field" data-access-add-field="operator"><span>Operator level</span><select id="access-record-level"><option value="1">1 — bypass spawn protection</option><option value="2">2 — use commands</option><option value="3">3 — manage players</option><option value="4" selected>4 — all commands</option></select></label>
+                    <label class="switch-field" data-access-add-field="operator"><input id="access-record-bypasses-limit" type="checkbox"><span><strong>Bypass the player limit</strong><small>This sets only the local operator-record flag. It does not change the current process.</small></span></label>
+                    <label class="field wide" data-access-add-field="ban"><span>Reason (optional)</span><input id="access-record-reason" type="text" maxlength="160" autocomplete="off" spellcheck="false" placeholder="Local record text only"></label>
+                    <label class="field" data-access-add-field="ban"><span>Expires (optional)</span><input id="access-record-expires" type="datetime-local"><small>Leave blank for no expiry. The local file records the chosen timestamp; no live unban is sent.</small></label>
+                  </div>
+                  <div class="access-record-add-actions"><button id="add-access-record-button" type="button" class="primary-action">Add local record</button><p id="access-record-add-status" class="muted" aria-live="polite">A selected server is required. Records are written only through a validated controlled local root.</p></div>
+                </section>
               </div>
             </section>
 

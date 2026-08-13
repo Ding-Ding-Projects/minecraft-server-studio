@@ -28,6 +28,7 @@ const MAX_SEARCH_TEXT_LENGTH = 16 * 1024;
 const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('feature-documentation', 'README.md', 'Feature documentation', 'Browse every bundled feature article.'),
   entry('server-orchestration', 'server-orchestration.md', 'Server orchestration', 'Create, configure, and operate local Paper or Spigot servers.'),
+  entry('server-access-records', 'server-access-records.md', 'Local server access records', 'Inspect and manage only validated local operators, allowlist, player-ban, and IP-ban records for a controlled server root.'),
   entry('configuration-and-plugin-safety', 'configuration-and-plugin-safety.md', 'Configuration and plugin safety', 'Preserve server configuration and safely stage local plugin JARs.'),
   entry('dependency-bootstrap', 'dependency-bootstrap.md', 'Automatic dependency bootstrap', 'Detect and install required Java and Git tooling.'),
   entry('java-runtime-and-launch', 'java-runtime-and-launch.md', 'Version-aware Java runtime and launch profiles', 'Select compatible Java runtimes and launch profiles.'),
