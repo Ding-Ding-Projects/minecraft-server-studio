@@ -61,6 +61,7 @@ The template includes these desktop surface rows:
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
 | `docs-history-and-notifications` | Offline documentation, history, and notifications |
 | `changelog-viewer` | Offline bundled version records, local filtering, copy/export, and validated commit handoff |
+| `local-history-and-safe-exports` | Redacted append-only local history metadata and safe structured exports |
 | `export` | Export |
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
