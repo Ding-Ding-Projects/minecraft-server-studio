@@ -60,6 +60,8 @@ const state = {
   workspaceDestination: 'servers',
   authenticator: null,
   authenticatorStatus: null,
+  totpPairing: null,
+  totpPairingTimer: null,
   toyLocks: null,
   toyLockStatus: null,
   supportTickets: null,
@@ -4723,8 +4725,10 @@ function renderAuthenticator() {
     } else {
       statusTarget.textContent = `${status.detail} ${status.clock?.detail || ''}`.trim();
       statusTarget.dataset.state = status.state || 'unavailable';
-      $('#authenticator-qr-unavailable').disabled = status.registration?.qr?.available !== true;
-      $('#authenticator-qr-boundary').textContent = status.registration?.qr?.reason || 'QR pairing is unavailable.';
+      const pairingButton = $('#begin-authenticator-pairing');
+      if (pairingButton) pairingButton.disabled = status.registration?.qrPairing?.available !== true;
+      const importBoundary = $('#authenticator-qr-import-boundary');
+      if (importBoundary) importBoundary.textContent = status.registration?.qrImport?.reason || 'QR image, clipboard, and camera import are unavailable.';
     }
   }
 
@@ -5137,6 +5141,7 @@ async function openSupportTicketsFromUnlock() {
 }
 
 function setAuthenticatorTab(tab) {
+  if (tab !== 'codes' && state.totpPairing) clearTotpPairing({ cancel: true, status: 'The local pairing reveal was cleared when you left the authenticator tab.' });
   state.activeAuthenticatorTab = tab;
   $$('.authenticator-tab-strip .tab').forEach((button) => {
     const active = button.dataset.authenticatorTab === tab;
@@ -5169,6 +5174,7 @@ async function openAuthenticatorDestination() {
 }
 
 function returnToServers() {
+  if (state.totpPairing) clearTotpPairing({ cancel: true, status: 'The local pairing reveal was cleared when you left the authenticator destination.' });
   state.pendingAuthenticatorDestination = false;
   state.workspaceDestination = 'servers';
   renderAll();
@@ -5238,27 +5244,107 @@ function toyLockForAppearanceTarget(target) {
   return toyLockForTarget('appearance', `appearance.${target}`);
 }
 
-async function persistAuthenticatorEntry(input) {
-  const result = await safely(() => window.studio.createAuthenticatorEntry(input));
-  if (!result) return;
+async function beginAuthenticatorPairing(input) {
+  clearTotpPairing({ cancel: true });
+  const pairing = await safely(() => window.studio.beginAuthenticatorPairing(input));
+  if (!pairing) return;
   ['authenticator-issuer', 'authenticator-account', 'authenticator-label', 'authenticator-manual-secret', 'authenticator-uri'].forEach((id) => { $(`#${id}`).value = ''; });
   $('#authenticator-group').value = 'Ungrouped';
   state.unsaved.authenticatorEntry = false;
-  toast(`Local authenticator entry saved: ${result.label}.`, 'success');
-  await refreshAuthenticator();
+  showTotpPairing(pairing);
+  toast('Local pairing reveal is ready. Confirm a current code before the entry is stored.', 'info');
+}
+
+function groupedBase32(value) {
+  const normalized = String(value || '').replace(/\s+/g, '');
+  return normalized.match(/.{1,4}/g)?.join(' ') || '';
+}
+
+function clearTotpPairing(options = {}) {
+  const active = state.totpPairing;
+  if (state.totpPairingTimer) clearTimeout(state.totpPairingTimer);
+  state.totpPairingTimer = null;
+  state.totpPairing = null;
+  const host = $('#totp-pairing-reveal');
+  const canvas = $('#totp-pairing-canvas');
+  if (canvas) { canvas.width = 1; canvas.height = 1; }
+  const secret = $('#totp-pairing-manual-secret');
+  if (secret) secret.textContent = '';
+  const parameters = $('#totp-pairing-parameters');
+  if (parameters) parameters.textContent = 'The one-minute reveal will show the issuer, account, algorithm, digits, and period.';
+  const code = $('#totp-pairing-code');
+  if (code) code.value = '';
+  const status = $('#totp-pairing-confirmation-status');
+  if (status) status.textContent = options.status || 'No entry or TOTP toy lock is stored until the current code matches.';
+  if (host) host.hidden = true;
+  if (active && options.cancel !== false) {
+    window.studio.cancelTotpPairing(active.id).catch(() => {});
+  }
+}
+
+function showTotpPairing(pairing) {
+  state.totpPairing = pairing;
+  const host = $('#totp-pairing-reveal');
+  const summary = $('#totp-pairing-summary');
+  const canvas = $('#totp-pairing-canvas');
+  const textAlternative = $('#totp-pairing-text-alternative');
+  const secret = $('#totp-pairing-manual-secret');
+  const parameters = $('#totp-pairing-parameters');
+  const status = $('#totp-pairing-confirmation-status');
+  const expiresAt = Date.parse(pairing.expiresAt);
+  const seconds = Number.isFinite(expiresAt) ? Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)) : 60;
+  if (host) host.hidden = false;
+  if (summary) summary.textContent = `Pair ${pairing.issuer} · ${pairing.account}. This explicit local reveal clears in about ${seconds} seconds.`;
+  if (textAlternative) textAlternative.textContent = `A local QR code pairs the ${pairing.issuer} TOTP record for ${pairing.account}. Scan it with an authenticator, or use the manual Base32 value below.`;
+  if (canvas) canvas.setAttribute('aria-label', `Local TOTP pairing QR code for ${pairing.issuer} and ${pairing.account}`);
+  if (secret) secret.textContent = groupedBase32(pairing.manualSecret);
+  if (parameters) parameters.textContent = `${pairing.issuer} · ${pairing.account} · ${pairing.algorithm} · ${pairing.digits} digits · ${pairing.period} seconds. This value is shown only for this local one-minute reveal.`;
+  if (status) status.textContent = 'Scan or enter the manual value in your authenticator, then enter its current code here. Nothing is stored until it matches.';
+  try {
+    if (!pairing.qr?.available) throw new Error(pairing.qr?.reason || 'The local QR encoder cannot render this URI.');
+    if (!window.StudioTotpQr?.draw) throw new Error('The bundled local QR renderer is unavailable.');
+    window.StudioTotpQr.draw(canvas, pairing.otpauthUri);
+  } catch (error) {
+    if (canvas) { canvas.width = 1; canvas.height = 1; }
+    if (status) status.textContent = `${error?.message || 'The local QR renderer is unavailable.'} The manual Base32 reveal remains available.`;
+  }
+  const delay = Number.isFinite(expiresAt) ? Math.max(0, expiresAt - Date.now()) : 60_000;
+  state.totpPairingTimer = setTimeout(() => {
+    clearTotpPairing({ cancel: true, status: 'This local pairing reveal expired after 60 seconds. No entry or toy lock was stored.' });
+    toast('The local pairing reveal expired. No authenticator entry or toy lock was stored.', 'info');
+  }, delay);
+  $('#totp-pairing-code')?.focus();
+}
+
+async function confirmTotpPairing(event) {
+  event.preventDefault();
+  const pairing = state.totpPairing;
+  if (!pairing) {
+    $('#totp-pairing-confirmation-status').textContent = 'Start a new local pairing reveal before confirming a code.';
+    return;
+  }
+  const result = await safely(() => window.studio.confirmTotpPairing(pairing.id, $('#totp-pairing-code').value.trim()));
+  if (!result) return;
+  clearTotpPairing({ cancel: false, status: 'Pairing confirmed and stored locally.' });
+  if (result.kind === 'authenticator-entry') {
+    toast(`Local authenticator entry saved: ${result.created.label}.`, 'success');
+    await refreshAuthenticator();
+  } else if (result.kind === 'toy-lock') {
+    toast(`TOTP toy lock created for ${result.created.targetLabel}.`, 'success');
+    await refreshToyLocks();
+  }
 }
 
 async function createAuthenticatorEntry(event) {
   event.preventDefault();
-  const input = authenticatorEntryInput();
   const lock = toyLockForTarget('element', 'authenticator.entry-form');
   if (lock) {
-    state.pendingToyLockAction = () => persistAuthenticatorEntry(input);
+    state.pendingToyLockAction = () => beginAuthenticatorPairing(authenticatorEntryInput());
     openToyLockUnlockDialog(lock);
     toast('The authenticator entry form is locked by its configured toy lock.', 'info');
     return;
   }
-  await persistAuthenticatorEntry(input);
+  await beginAuthenticatorPairing(authenticatorEntryInput());
 }
 
 function toggleToyLockMethod() {
@@ -5271,7 +5357,7 @@ async function createToyLock(event) {
   event.preventDefault();
   const target = selectedToyLockTarget();
   if (!target) return toast('Choose a registered local target before creating a toy lock.', 'error');
-  const result = await safely(() => window.studio.createToyLock({
+  const input = {
     targetType: target.targetType,
     targetId: target.targetId,
     targetLabel: target.targetLabel,
@@ -5280,7 +5366,18 @@ async function createToyLock(event) {
     passwordConfirmation: $('#toy-lock-password-confirmation').value,
     totpSecret: $('#toy-lock-totp-secret').value,
     unlockMinutes: $('#toy-lock-duration').value
-  }));
+  };
+  if (input.method === 'totp') {
+    clearTotpPairing({ cancel: true });
+    const pairing = await safely(() => window.studio.beginToyLockPairing(input));
+    if (!pairing) return;
+    $('#toy-lock-totp-secret').value = '';
+    state.unsaved.toyLockDraft = false;
+    showTotpPairing(pairing);
+    toast('Local TOTP toy-lock pairing is ready. Confirm a current code before the lock is stored.', 'info');
+    return;
+  }
+  const result = await safely(() => window.studio.createToyLock(input));
   if (!result) return;
   ['toy-lock-password', 'toy-lock-password-confirmation', 'toy-lock-totp-secret'].forEach((id) => { $(`#${id}`).value = ''; });
   state.unsaved.toyLockDraft = false;
@@ -8123,6 +8220,11 @@ function bindEvents() {
   $('#clear-selected-notifications-button').addEventListener('click', () => requestNotificationClear([...state.notificationSelection]));
   $$('.authenticator-tab-strip .tab').forEach((button) => button.addEventListener('click', () => setAuthenticatorTab(button.dataset.authenticatorTab)));
   $('#authenticator-entry-form').addEventListener('submit', createAuthenticatorEntry);
+  $('#totp-pairing-confirmation-form').addEventListener('submit', confirmTotpPairing);
+  $('#totp-pairing-cancel').addEventListener('click', () => {
+    clearTotpPairing({ cancel: true, status: 'The local pairing reveal was cancelled. No entry or toy lock was stored.' });
+    toast('The local pairing reveal was cancelled. No entry or toy lock was stored.', 'info');
+  });
   $('#authenticator-entry-form').addEventListener('input', () => { state.unsaved.authenticatorEntry = true; });
   $('#authenticator-entry-form').addEventListener('change', () => { state.unsaved.authenticatorEntry = true; });
   $('#authenticator-refresh-button').addEventListener('click', refreshAuthenticator);

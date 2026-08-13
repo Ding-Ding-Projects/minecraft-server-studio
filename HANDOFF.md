@@ -582,10 +582,10 @@ lint, review, build, package, release, or capture is claimed here.
 The desktop source now includes a local RFC 6238 authenticator destination and
 an independent toy-lock record model. `src/main/totp-engine.cjs` computes
 bounded HOTP/TOTP codes with SHA-1, SHA-256, or SHA-512. `src/main/authenticator-service.cjs`
-keeps only non-secret metadata in application data and stores each manual
-Base32 or `otpauth://totp/` secret through the protected credential vault. The
-renderer receives short-lived code snapshots only; it never receives the
-original secret.
+keeps only non-secret metadata in application data and stores each confirmed
+manual Base32 or `otpauth://totp/` secret through the protected credential
+vault. Outside an explicit one-minute pairing reveal, the renderer receives
+only short-lived code snapshots and never receives the original secret.
 
 `src/main/toy-lock-service.cjs` stores per-target metadata separately from
 password verifiers or TOTP secrets. Password locks use a salted `scrypt`
@@ -594,19 +594,24 @@ protected storage, and session/minute unlock state remains in memory. The
 authenticator tab is the first actively guarded target. Other element records
 are intentionally not represented as complete every-element enforcement.
 
-`src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/index.html`,
+`src/main/totp-pairing-service.cjs`, `src/main/main.cjs`,
+`src/main/preload.cjs`, `src/renderer/totp-qr.js`, `src/renderer/index.html`,
 `src/renderer/renderer.js`, and `src/renderer/styles.css` expose the local
 destination, safe code-only IPC, list search with an anchored regex-builder
-route, manual-entry form, independently credentialed lock list, unlock/relock
-flow, and an explicit self-service application-data deletion recovery route.
+route, manual-entry form, a 60-second local QR/manual reveal, current-code
+confirmation, independently credentialed lock list, unlock/relock flow, and an
+explicit self-service application-data deletion recovery route.
 
-QR pairing and QR import are explicitly unavailable because no bundled
-in-process QR renderer/decoder is registered. The app does not simulate either
-flow. `docs/features/authenticator-and-toy-locks.md` records the privacy,
-failure, scope, and verification boundaries, and the desktop completeness row
-now names the implementation and documentation paths while leaving localization,
-tests, captures, history, bulk actions, broad context-menu coverage, and runtime
-evidence pending.
+The pairing session exists only in memory, generates a canonical standard
+`otpauth://totp/` URI, draws its bounded QR code locally, discards session
+secret/URI material on completion, cancellation, expiry, or leaving the codes
+tab, and clears renderer QR pixels and typed values at the same boundary. A new
+entry or TOTP lock is not created until a current code matches. QR image,
+clipboard, and camera import remain explicitly unavailable:
+the app has no decoder or capture route and does not simulate either. The
+associated article and completeness row record those privacy, failure, scope,
+and verification boundaries while leaving localization, tests, captures, bulk
+actions, broad context-menu coverage, and runtime evidence pending.
 
 No tests, linting, runtime interaction, package build, release, or capture was
 run for this fast-delivery source candidate.

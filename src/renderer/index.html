@@ -347,8 +347,19 @@
                 <label class="field"><span>Algorithm</span><select id="authenticator-algorithm"><option value="SHA-1">SHA-1</option><option value="SHA-256">SHA-256</option><option value="SHA-512">SHA-512</option></select></label>
                 <label class="field"><span>Digits</span><select id="authenticator-digits"><option value="6">6 digits</option><option value="7">7 digits</option><option value="8">8 digits</option></select></label>
                 <label class="field"><span>Period</span><input id="authenticator-period" type="number" min="1" max="86400" step="1" value="30"></label>
-                <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Save local authenticator entry</button><button id="configure-authenticator-entry-toy-lock" class="outlined-action" type="button">Configure entry-form toy lock…</button><button id="authenticator-qr-unavailable" class="outlined-action" type="button" disabled aria-describedby="authenticator-qr-boundary">QR pairing/import unavailable</button><p id="authenticator-qr-boundary" class="muted">A bundled in-process QR renderer and decoder are not registered in this foundation, so no QR image, clipboard, or camera path is simulated.</p></div>
+                <div class="authenticator-action-stack wide"><button id="begin-authenticator-pairing" class="primary-action" type="submit">Reveal local QR pairing</button><button id="configure-authenticator-entry-toy-lock" class="outlined-action" type="button">Configure entry-form toy lock…</button><button id="authenticator-qr-import-unavailable" class="outlined-action" type="button" disabled aria-describedby="authenticator-qr-import-boundary">QR image, clipboard, and camera import unavailable</button><p id="authenticator-qr-import-boundary" class="muted">This app can draw a local QR pairing code after an explicit reveal. It does not decode QR images, clipboard images, or camera input, and does not simulate those routes.</p></div>
               </form>
+              <section id="totp-pairing-reveal" class="authenticator-pairing" hidden aria-labelledby="totp-pairing-title">
+                <div><h5 id="totp-pairing-title">Confirm a local TOTP pairing</h5><p id="totp-pairing-summary" class="muted">A pairing reveal appears here only after you explicitly start it.</p></div>
+                <canvas id="totp-pairing-canvas" role="img" aria-describedby="totp-pairing-text-alternative" aria-label="Local TOTP pairing QR code"></canvas>
+                <p id="totp-pairing-text-alternative" class="muted">The QR code pairs the selected local TOTP record. Scan it with an authenticator, or use the manual Base32 value below.</p>
+                <div class="authenticator-manual-secret"><strong>Manual Base32 value</strong><output id="totp-pairing-manual-secret" aria-live="polite"></output><small id="totp-pairing-parameters">The one-minute reveal will show the issuer, account, algorithm, digits, and period.</small></div>
+                <form id="totp-pairing-confirmation-form" class="totp-pairing-confirmation" novalidate>
+                  <label class="field"><span>Current code from your authenticator</span><input id="totp-pairing-code" type="text" inputmode="numeric" pattern="[0-9]{6,8}" maxlength="8" autocomplete="one-time-code" spellcheck="false" aria-describedby="totp-pairing-confirmation-status"></label>
+                  <div class="authenticator-entry-actions"><button class="primary-action" type="submit">Confirm and save locally</button><button id="totp-pairing-cancel" class="outlined-action" type="button">Cancel pairing</button></div>
+                  <p id="totp-pairing-confirmation-status" class="muted" aria-live="polite">No entry or TOTP toy lock is stored until the current code matches.</p>
+                </form>
+              </section>
             </section>
 
             <section class="authenticator-card" aria-labelledby="authenticator-list-title">
@@ -381,7 +392,7 @@
                 <label class="field"><span>Credential method</span><select id="toy-lock-method"><option value="password">Password</option><option value="totp">TOTP</option></select></label>
                 <label class="field"><span>Unlock duration</span><select id="toy-lock-duration"><option value="session">Until app closes</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">60 minutes</option></select></label>
                 <div id="toy-lock-password-fields" class="settings-grid wide"><label class="field"><span>New password</span><input id="toy-lock-password" type="password" maxlength="256" autocomplete="new-password"></label><label class="field"><span>Confirm password</span><input id="toy-lock-password-confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div>
-                <div id="toy-lock-totp-fields" class="settings-grid wide" hidden><label class="field"><span>Manual Base32 TOTP secret</span><input id="toy-lock-totp-secret" type="password" maxlength="4096" autocomplete="new-password" spellcheck="false"><small>QR pairing is not available in this foundation. Use a manually supplied secret only if you understand it is a toy lock.</small></label></div>
+                <div id="toy-lock-totp-fields" class="settings-grid wide" hidden><label class="field"><span>Manual Base32 TOTP secret</span><input id="toy-lock-totp-secret" type="password" maxlength="4096" autocomplete="new-password" spellcheck="false"><small>A TOTP toy lock opens the same explicit 60-second local pairing reveal and is created only after its current code matches.</small></label></div>
                 <div class="authenticator-action-stack wide"><button id="create-toy-lock-button" class="primary-action" type="submit">Create toy lock</button><button id="open-support-tickets-from-toy-locks" class="outlined-action" type="button">Open local Support Tickets</button><p id="toy-lock-disclosure" class="muted">Toy locks are a user-experience speed bump, not encryption or security. Delete the application-data folder yourself to reset every toy lock.</p><code id="toy-lock-recovery-directory">Loading local recovery folder…</code></div>
               </form>
             </section>
@@ -1267,6 +1278,7 @@
     <script src="rcon-response-safety.js"></script>
     <script src="markdown-renderer.js"></script>
     <script src="narrator.js"></script>
+    <script src="totp-qr.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

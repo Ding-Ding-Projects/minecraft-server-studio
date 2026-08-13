@@ -133,6 +133,21 @@ function normalizePersistedLock(value) {
   });
 }
 
+function normalizeTotpLockPairingInput(value) {
+  const input = value || {};
+  assertKnownKeys(input, new Set(['targetType', 'targetId', 'targetLabel', 'method', 'password', 'passwordConfirmation', 'totpSecret', 'unlockMinutes']), 'Toy-lock input is invalid.');
+  const method = normalizeMethod(input.method);
+  if (method !== 'totp') throw lockError('TOY_LOCK_INVALID_INPUT', 'Only a TOTP toy lock can use the pairing flow.');
+  return Object.freeze({
+    targetType: normalizeTargetType(input.targetType),
+    targetId: normalizeTargetId(input.targetId),
+    targetLabel: normalizeText(input.targetLabel, LIMITS.targetLabelChars, 'Toy-lock target label'),
+    method,
+    totpSecret: normalizeBase32Secret(input.totpSecret || ''),
+    unlockMinutes: normalizeUnlockMinutes(input.unlockMinutes)
+  });
+}
+
 function scryptVerifier(password, salt) {
   return crypto.scryptSync(Buffer.from(password, 'utf8'), salt, 32, { N: 16_384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 });
 }
@@ -472,6 +487,7 @@ class ToyLockService {
 
 module.exports = Object.freeze({
   LIMITS,
+  normalizeTotpLockPairingInput,
   TOY_LOCK_SCHEMA_VERSION,
   ToyLockService
 });
