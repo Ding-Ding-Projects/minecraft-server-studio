@@ -10,7 +10,6 @@ const {
 } = require('./desktop-status-model.cjs');
 const {
   createBuildToolsPreflight,
-  authorizeBuildToolsPreflight,
   fetchOfficialLiveVersionMetadata,
   inspectPluginJarFile
 } = require('./buildtools-adapter.cjs');
@@ -1130,50 +1129,8 @@ class ServerManager {
     return preflight;
   }
 
-  async executeBuildToolsPlan(id, confirmation = {}) {
-    const server = await this.getServer(id);
-    if (server.software !== 'spigot') throw new Error('BuildTools execution is available only for a Spigot server definition.');
-    if (this.processes.has(id)) throw new Error('Stop the selected server before promoting a new BuildTools JAR.');
-    const preflight = this.buildToolsPlans.get(id);
-    if (!preflight) throw new Error('Prepare a BuildTools preflight in the BuildTools tab before starting a build.');
-    const authorized = authorizeBuildToolsPreflight(preflight, confirmation);
-    const operationId = this.beginStatusOperation(`buildtools-execution-${id}`, `Build Spigot ${preflight.revision}`, 'Downloading official BuildTools into the isolated workspace.');
-    try {
-      const git = await this.findDependency('git');
-      if (!git.available) throw new Error('Spigot BuildTools requires Git. Use the in-app installer before starting this build.');
-      await fs.mkdir(preflight.workspace.buildDirectory, { recursive: true });
-      await fs.mkdir(preflight.workspace.outputDirectory, { recursive: true });
-      await downloadFile(preflight.buildTools.downloadUrl, preflight.buildTools.jarPath, null, (message) => this.emit({ type: 'provision-output', serverId: id, message }));
-      this.emit({ type: 'provision-output', serverId: id, message: `Building Spigot ${preflight.revision} in the isolated BuildTools workspace.` });
-      const result = await runCommand(authorized.command.executable, authorized.command.args, (line) => this.emit({ type: 'provision-output', serverId: id, message: line }));
-      if (result.code !== 0) throw new Error(`BuildTools failed: ${redactOutput(result.stderr || result.stdout).slice(-1000)}`);
-      const stagedSource = authorized.promotion.sourceBuildOutput;
-      const stat = await fs.stat(stagedSource);
-      if (!stat.isFile() || stat.size < 64 || stat.size > 2 * 1024 * 1024 * 1024) throw new Error('BuildTools did not produce a valid bounded server JAR at the planned output path.');
-      const jarHandle = await fs.open(stagedSource, 'r');
-      const header = Buffer.alloc(4);
-      try {
-        await jarHandle.read(header, 0, header.length, 0);
-      } finally {
-        await jarHandle.close();
-      }
-      if (!header.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) && !header.equals(Buffer.from([0x50, 0x4b, 0x05, 0x06]))) {
-        throw new Error('BuildTools output did not have a JAR/ZIP signature. The existing server JAR was not changed.');
-      }
-      const promotion = authorized.promotion;
-      await fs.mkdir(path.dirname(promotion.sameFilesystemStage), { recursive: true });
-      await fs.mkdir(path.dirname(promotion.rollbackJar), { recursive: true });
-      await fs.copyFile(stagedSource, promotion.sameFilesystemStage);
-      if (await pathExists(promotion.finalJar)) await fs.rename(promotion.finalJar, promotion.rollbackJar);
-      await fs.rename(promotion.sameFilesystemStage, promotion.finalJar);
-      this.recordLocalEvidence(`buildtools-output-${id}`, 'Staged Spigot server JAR', `BuildTools produced and promoted Spigot ${preflight.revision}; the prior JAR remains in the rollback path when one existed.`, promotion.finalJar);
-      this.completeStatusOperation(operationId, 'complete', `Spigot ${preflight.revision} was staged and promoted using the rollback plan.`);
-      this.emit({ type: 'server-provisioned', serverId: id, message: `Spigot ${preflight.revision} is ready with a rollback record.` });
-      return { server: copyPublicServer(server), jarPath: promotion.finalJar, reused: false, rollbackJar: promotion.rollbackJar };
-    } catch (error) {
-      this.completeStatusOperation(operationId, 'failed', error.message);
-      throw error;
-    }
+  async executeBuildToolsPlan() {
+    throw new Error('BuildTools execution is unavailable in this plan-only build. No downloader, process runner, JAR promotion, or rollback executor is registered.');
   }
 
   pluginStagingDirectory(server) {
