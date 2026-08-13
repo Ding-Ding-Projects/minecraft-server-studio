@@ -190,66 +190,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          $catalogRecord = 'hk-dish-0001'
-          $codeName = 'Classic Har Gow · 蝦餃'
-          $photoUrl = 'https://github.com/Ding-Ding-Projects/dim-sum-photos/releases/download/catalog-v1/hk-dish-0001-classic-har-gow.png'
-          $currentTag = $env:RELEASE_TAG
           $metadataPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\dim-sum-release-metadata.md'
-          $omissionReason = $null
-          $canAssignCodeName = $false
-
-          try {
-            $releaseHistoryJson = & gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" 2>$null
-            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseHistoryJson)) {
-              throw 'release history could not be read'
-            }
-
-            $releasePages = $releaseHistoryJson | ConvertFrom-Json -Depth 100
-            $priorReleases = @()
-            foreach ($page in @($releasePages)) {
-              foreach ($release in @($page)) {
-                if ($null -ne $release -and [string]$release.tag_name -ne $currentTag) {
-                  $priorReleases += $release
-                }
-              }
-            }
-
-            $priorAssignments = @($priorReleases | Where-Object {
-              $releaseName = [string]$_.name
-              $releaseBody = [string]$_.body
-              $releaseName.Contains($codeName) -or
-                $releaseBody.Contains($codeName) -or
-                $releaseBody.Contains($catalogRecord) -or
-                $releaseBody.Contains($photoUrl)
-            })
-
-            if ($priorAssignments.Count -eq 0) {
-              $canAssignCodeName = $true
-            } else {
-              $priorTags = @($priorAssignments | ForEach-Object {
-                if ([string]::IsNullOrWhiteSpace([string]$_.tag_name)) { '<untagged release>' } else { [string]$_.tag_name }
-              }) -join ', '
-              $omissionReason = "catalog record $catalogRecord is already recorded by $priorTags"
-            }
-          } catch {
-            $omissionReason = 'release history could not be read, so the verified catalog record remains unassigned'
-            Write-Warning $omissionReason
-          }
-
-          if ($canAssignCodeName) {
-            @(
-              '## Release code name and public photo',
-              "- Code name: $codeName",
-              "- Catalog record: $catalogRecord",
-              "- Public photo: [$codeName]($photoUrl)",
-              '- The photo remains hosted by Ding-Ding-Projects/dim-sum-photos. This release links to it only; it does not download, copy, bundle, or attach the image.'
-            ) | Set-Content -LiteralPath $metadataPath -Encoding utf8
-          } else {
-            @(
-              '## Release code name and public photo',
-              "- No dim sum code name was assigned. Reason: $omissionReason.",
-              '- This workflow did not download, copy, bundle, or attach a photo.'
-            ) | Set-Content -LiteralPath $metadataPath -Encoding utf8
+          & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/resolve-dim-sum-release-metadata.ps1 `
+            -OutputPath $metadataPath `
+            -CurrentReleaseTag $env:RELEASE_TAG `
+            -ProductRepository $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
+            throw 'The dim-sum release-metadata resolver did not produce release-note metadata.'
           }
 
           Add-Content -Path $env:GITHUB_ENV -Value "DIM_SUM_RELEASE_NOTES_PATH=$metadataPath"
