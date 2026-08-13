@@ -213,6 +213,10 @@ const COMMAND_PALETTE_REGEX_TOKENS = Object.freeze({
 const COMMAND_PALETTE_DESTINATIONS = Object.freeze([
   Object.freeze({ id: 'destination-server-workspace', title: 'Server workspace', detail: 'Return to the local server workspace and its selected server.', route: 'servers', targetId: 'server-search' }),
   Object.freeze({ id: 'destination-create-server', title: 'Create server', detail: 'Open the structured local server-creation dialog.', route: 'create', targetId: 'create-name' }),
+  Object.freeze({ id: 'destination-required-tools', title: 'Required tools', detail: 'Reveal the local Java and Git dependency inspection controls.', route: 'servers', targetId: 'refresh-dependencies-button' }),
+  Object.freeze({ id: 'destination-application-updates', title: 'Application updates', detail: 'Reveal the existing unsigned Squirrel update preferences and actions.', route: 'servers', targetId: 'updates-enabled' }),
+  Object.freeze({ id: 'destination-local-ollama', title: 'Local Ollama suite', detail: 'Reveal the fixed-loopback local runtime observer and its bounded inventory.', route: 'servers', targetId: 'refresh-ollama-button' }),
+  Object.freeze({ id: 'destination-file-converter', title: 'Local file converter', detail: 'Reveal the local file-inspection and disabled adapter-catalog foundation.', route: 'servers', targetId: 'converter-source-path' }),
   Object.freeze({ id: 'destination-offline-documentation', title: 'Offline documentation', detail: 'Browse the fixed app-bundled documentation inventory without a network request.', route: 'documentation', targetId: 'documentation-search' }),
   Object.freeze({ id: 'destination-offline-changelog', title: 'Offline changelog', detail: 'Browse locally bundled version records and their recorded commit links.', route: 'changelog', targetId: 'changelog-search' }),
   Object.freeze({ id: 'destination-authenticator', title: 'Authenticator and toy locks', detail: 'Open the local authenticator and toy-lock destination.', route: 'authenticator', targetId: 'authenticator-codes-tab' }),
