@@ -27,6 +27,9 @@ const state = {
     pattern: '',
     flags: 'i'
   },
+  converterSnapshot: null,
+  converterSource: null,
+  converterRegexBuilderOpen: false,
   unsaved: {
     settings: false,
     createDraft: false,
@@ -1014,6 +1017,167 @@ function formatBytes(value) {
   return `${amount >= 10 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
 }
 
+function converterRegexEvaluation() {
+  const mode = $('#converter-regex-mode')?.checked === true;
+  const search = $('#converter-adapter-search');
+  const patternInput = $('#converter-regex-pattern');
+  const sampleInput = $('#converter-regex-sample');
+  const query = String(search?.value || '').slice(0, 128);
+  const pattern = String(patternInput?.value || query).slice(0, 128);
+  if (!mode) {
+    const normalized = query.trim().toLowerCase();
+    return {
+      valid: true,
+      mode: 'plain',
+      matches: (adapter) => !normalized || converterAdapterSearchText(adapter).toLowerCase().includes(normalized),
+      feedback: normalized ? `Plain-text filtering is active for “${query}”.` : 'Plain-text search is active. Enter text to filter the visible adapter catalog.'
+    };
+  }
+  if (!pattern) {
+    return {
+      valid: true,
+      mode: 'regex',
+      matches: () => true,
+      feedback: 'Regular-expression mode is active with an empty pattern, so every adapter remains visible.'
+    };
+  }
+  // Catalog strings and optional sample input are bounded; this additionally
+  // rejects the common nested-quantifier shape before evaluation.
+  if (/\((?:[^()\\]|\\.)*[+*][^)]*\)[+*{]/.test(pattern)) {
+    return {
+      valid: false,
+      mode: 'regex',
+      matches: () => false,
+      feedback: 'This bounded helper refuses nested quantified groups. Simplify the pattern before filtering.'
+    };
+  }
+  const flags = `${$('#converter-regex-flag-ignore-case')?.checked ? 'i' : ''}${$('#converter-regex-flag-multiline')?.checked ? 'm' : ''}`;
+  try {
+    const expression = new RegExp(pattern, flags);
+    const sample = String(sampleInput?.value || '').slice(0, 512);
+    const sampleResult = sample ? ` Sample: ${expression.test(sample) ? 'matches' : 'does not match'}.` : '';
+    return {
+      valid: true,
+      mode: 'regex',
+      matches: (adapter) => expression.test(converterAdapterSearchText(adapter)),
+      feedback: `Regular-expression filtering is active with ECMAScript flags “${flags || 'none'}”.${sampleResult}`
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      mode: 'regex',
+      matches: () => false,
+      feedback: `The regular expression is invalid: ${String(error?.message || 'unknown pattern error').slice(0, 220)}`
+    };
+  }
+}
+
+function converterAdapterSearchText(adapter) {
+  return [adapter.title, ...(adapter.sourceKinds || []), ...(adapter.targets || []), adapter.reason].filter(Boolean).join(' ');
+}
+
+function converterStatusState(value) {
+  if (value === 'ready') return 'idle';
+  if (value === 'unavailable') return 'failed';
+  return value || 'idle';
+}
+
+function renderConverterRegexBuilder(evaluation) {
+  const builder = $('#converter-regex-builder');
+  const toggle = $('#converter-regex-builder-button');
+  if (!builder || !toggle) return;
+  builder.hidden = !state.converterRegexBuilderOpen;
+  toggle.setAttribute('aria-expanded', String(state.converterRegexBuilderOpen));
+  const feedback = $('#converter-regex-feedback');
+  if (feedback) feedback.textContent = evaluation.feedback;
+}
+
+function renderConverter() {
+  const snapshot = state.converterSnapshot;
+  const sourceSummary = $('#converter-source-summary');
+  const sourcePath = $('#converter-source-path');
+  const catalog = $('#converter-adapter-catalog');
+  const catalogSummary = $('#converter-catalog-summary');
+  const queue = $('#converter-queue');
+  if (!sourceSummary || !sourcePath || !catalog || !catalogSummary || !queue) return;
+
+  const source = state.converterSource;
+  if (source) {
+    sourcePath.value = source.sourcePath || '';
+    sourceSummary.dataset.state = 'waiting';
+    sourceSummary.replaceChildren(
+      Object.assign(document.createElement('strong'), { textContent: `${source.fileName} — inspection recorded` }),
+      Object.assign(document.createElement('span'), { textContent: `${source.descriptor?.title || 'Unclassified source'} · ${formatBytes(source.bytes)}. ${source.descriptor?.detail || 'A bounded local byte inspection completed.'} ${source.detail || ''}` })
+    );
+  } else {
+    sourcePath.value = '';
+    sourceSummary.dataset.state = converterStatusState(snapshot?.state || 'idle');
+    sourceSummary.replaceChildren(
+      Object.assign(document.createElement('strong'), { textContent: snapshot?.state === 'unavailable' ? 'Local converter storage is unavailable' : 'No local source file selected' }),
+      Object.assign(document.createElement('span'), { textContent: snapshot?.detail || 'Choose a file to record an inspection-only queue item. No conversion can start until a future verified bundled adapter is available.' })
+    );
+  }
+
+  const evaluation = converterRegexEvaluation();
+  renderConverterRegexBuilder(evaluation);
+  const categories = Array.isArray(snapshot?.categories) ? snapshot.categories : [];
+  const totalAdapters = categories.reduce((count, category) => count + (Array.isArray(category.adapters) ? category.adapters.length : 0), 0);
+  let visibleAdapters = 0;
+  catalog.replaceChildren();
+  for (const category of categories) {
+    const group = document.createElement('section');
+    group.className = 'converter-category';
+    const heading = document.createElement('h5');
+    heading.textContent = category.title || 'Uncategorized adapters';
+    const list = document.createElement('div');
+    list.className = 'converter-adapter-list';
+    const adapters = (Array.isArray(category.adapters) ? category.adapters : []).filter((adapter) => evaluation.matches(adapter));
+    visibleAdapters += adapters.length;
+    if (!adapters.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted';
+      empty.textContent = evaluation.valid ? 'No adapters in this category match the current filter.' : 'The invalid pattern prevents adapter results.';
+      list.append(empty);
+    }
+    for (const adapter of adapters) {
+      const card = document.createElement('article');
+      card.className = 'converter-adapter-card';
+      card.dataset.state = adapter.enabled ? 'complete' : 'blocked';
+      const title = document.createElement('strong');
+      title.textContent = adapter.title;
+      const stateLabel = document.createElement('span');
+      stateLabel.className = 'converter-adapter-state';
+      stateLabel.textContent = adapter.enabled ? 'Bundled and available' : 'Unavailable';
+      const formats = document.createElement('span');
+      formats.textContent = `Source: ${(adapter.sourceKinds || []).join(', ') || 'none'} · Targets: ${(adapter.targets || []).join(', ') || 'none'}`;
+      const reason = document.createElement('small');
+      reason.textContent = adapter.reason || 'No adapter status was supplied.';
+      card.append(title, stateLabel, formats, reason);
+      list.append(card);
+    }
+    group.append(heading, list);
+    catalog.append(group);
+  }
+  catalogSummary.textContent = snapshot
+    ? `${visibleAdapters}/${totalAdapters} adapter record(s) shown. ${snapshot.detail || 'No converter state detail is available.'}`
+    : 'Loading the local adapter registry…';
+  if (!categories.length && snapshot) catalog.append(statusRecord('No adapter catalog is available', snapshot.detail || 'The converter did not return a catalog.', converterStatusState(snapshot.state)));
+
+  queue.replaceChildren();
+  const items = Array.isArray(snapshot?.queue) ? snapshot.queue : [];
+  if (!items.length) {
+    queue.append(statusRecord('Inspection queue is empty', 'Choose a local file to record its bounded byte inspection. The app will not begin a conversion without a future verified bundled adapter.', 'idle'));
+  } else {
+    for (const item of items) {
+      queue.append(statusRecord(
+        `${item.fileName || 'Selected file'} — awaiting adapter`,
+        `${item.descriptor?.title || 'Unclassified source'} · ${formatBytes(item.bytes)} · ${item.detail || 'No conversion was started.'}`,
+        'waiting'
+      ));
+    }
+  }
+}
+
 function resetBackupLifecycleState() {
   state.backupOverview = null;
   state.backupPlan = null;
@@ -1293,6 +1457,7 @@ function renderAll() {
   renderBackupLifecycle();
   renderApplicationUpdate();
   renderOllama();
+  renderConverter();
   setActiveTab(state.activeTab);
 }
 
@@ -1341,6 +1506,22 @@ async function refreshLocalStatus() {
     state.statusHubBridge = status.snapshot?.statusHubBridge || state.statusHubBridge;
     renderLocalStatus();
   }
+}
+
+async function refreshConverter() {
+  const snapshot = await safely(() => window.studio.converterSnapshot());
+  if (!snapshot) return;
+  state.converterSnapshot = snapshot;
+  renderConverter();
+}
+
+async function chooseConverterSource() {
+  const result = await safely(() => window.studio.pickConverterSource());
+  if (!result) return;
+  state.converterSource = result.source || null;
+  state.converterSnapshot = result.snapshot || state.converterSnapshot;
+  renderConverter();
+  toast('Local source inspection was recorded. No conversion was started.', 'success');
 }
 
 async function refreshStatusHubBridgeConfiguration() {
@@ -2234,6 +2415,10 @@ function openCommandConfirmation(payload) {
 }
 
 function logEvent(event) {
+  if (event.type === 'file-converter') {
+    refreshConverter();
+    return;
+  }
   if (event.type === 'status-hub-bridge' && event.bridge) {
     state.statusHubBridge = event.bridge;
     renderStatusHubBridge(event.bridge);
@@ -2376,6 +2561,37 @@ function bindEvents() {
   });
   $('#create-memory').addEventListener('input', () => { $('#create-memory-output').value = $('#create-memory').value; });
   $('#server-search').addEventListener('input', renderServers);
+  $('#refresh-converter-button').addEventListener('click', refreshConverter);
+  $('#browse-converter-source-button').addEventListener('click', chooseConverterSource);
+  $('#converter-adapter-search').addEventListener('input', () => {
+    if ($('#converter-regex-mode').checked) $('#converter-regex-pattern').value = $('#converter-adapter-search').value;
+    renderConverter();
+  });
+  $('#converter-regex-mode').addEventListener('change', () => {
+    if ($('#converter-regex-mode').checked && !$('#converter-regex-pattern').value) $('#converter-regex-pattern').value = $('#converter-adapter-search').value;
+    renderConverter();
+  });
+  $('#converter-regex-builder-button').addEventListener('click', () => {
+    state.converterRegexBuilderOpen = !state.converterRegexBuilderOpen;
+    renderConverter();
+  });
+  $('#converter-regex-pattern').addEventListener('input', () => {
+    $('#converter-adapter-search').value = $('#converter-regex-pattern').value;
+    renderConverter();
+  });
+  $('#converter-regex-flag-ignore-case').addEventListener('change', renderConverter);
+  $('#converter-regex-flag-multiline').addEventListener('change', renderConverter);
+  $('#converter-regex-sample').addEventListener('input', renderConverter);
+  $$('[data-converter-regex-token]').forEach((button) => button.addEventListener('click', () => {
+    const pattern = $('#converter-regex-pattern');
+    const token = String(button.dataset.converterRegexToken || '');
+    pattern.value = `${pattern.value}${token}`.slice(0, 128);
+    $('#converter-adapter-search').value = pattern.value;
+    $('#converter-regex-mode').checked = true;
+    state.converterRegexBuilderOpen = true;
+    renderConverter();
+    pattern.focus();
+  }));
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
@@ -2530,7 +2746,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter()]);
   renderCommandCenter();
 }
 

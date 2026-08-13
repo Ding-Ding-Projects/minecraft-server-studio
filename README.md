@@ -12,6 +12,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Configure gameplay, world generation, network/RCON, Java runtime, resource-pack, plugin, and server-property settings with switches, sliders, number steppers, selects, type-ahead version input, file pickers, and browse controls.
 - Start and stop a local Java process safely without a shell, read live output, and send console commands.
 - Inspect, dependency-plan, stage, and atomically promote local Paper/Spigot plugin JARs through a file picker without acquiring third-party downloads.
+- Inspect local files through a bounded byte-based file-converter queue and review an honest offline adapter catalog. The current package lists unavailable PDF, image, audio, video, archive, structured-data, text, and binary adapters without claiming a conversion engine is bundled.
 - Use the CLI for setup, foreground operation, protected loopback RCON commands, plugin installation, and configuration automation.
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
@@ -93,6 +94,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
 - [Local Ollama suite foundation](docs/features/local-ollama-suite.md)
+- [Local file-converter foundation](docs/features/file-converter.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
 - [Feature documentation index](docs/features/README.md)

@@ -69,6 +69,37 @@ handoff does not claim either.
   behavior, and server backup/Paper lifecycle work is not evidence that an
   application update installed.
 
+## Local file-converter foundation
+
+The desktop now has a separate local file-converter destination outside the
+server editor. It owns a native local source picker, a maximum 64 KiB
+byte-signature/text-shape inspection, and an app-private persistent queue
+skeleton. Its registry visibly covers Documents/PDF, Images, Audio, Video,
+Archives, Structured Data/Spreadsheets, Code/Text, and Binary Encodings.
+
+Every current adapter stays disabled because this package has no verified
+bundled offline conversion engine or output validator. The source file is
+never written, uploaded, copied, passed to a shell, discovered through PATH,
+or claimed to have converted. A queue item says it is awaiting a future
+verified bundled adapter rather than reporting a fabricated output.
+
+### Directly related documentation
+
+- `docs/features/file-converter.md`: picker, bounded inspection, catalog,
+  queue, regex-helper, failure, privacy, and verification boundaries.
+- `docs/features/local-status-and-completeness.md`: registered but incomplete
+  `file-converter` inventory row.
+
+### Remaining work
+
+- Ship individually bundled and package-proven offline adapters with explicit
+  resource limits and post-write validation before enabling any target format.
+- Add actual conversion progress, cancellation, output selection, atomic
+  destination writes, loss disclosures, result history, exports, accessibility
+  evidence, localization, tests, and built-artifact captures.
+- Do not treat signature inspection, a visible disabled adapter, or a queue
+  item as evidence that any file conversion succeeded.
+
 ### Verification state
 
 This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. The local status/completeness inventories intentionally show those evidence types as pending rather than verified. The failed package attempt against `7671f55f2cc6642df274d2352015661b534253b1` is superseded by local package evidence pinned to `4f6021fb40380487a6be919695b936ce18b014e5`: the unsigned Squirrel output contains `Setup.exe`, `RELEASES`, and the full `.nupkg`, while `Setup.exe` reports `NotSigned`. That local evidence is not a tag, GitHub Release, deployment, runtime test, or capture. No release, deployment, tag, or publish action was performed here.
