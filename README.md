@@ -7,7 +7,7 @@ The landing page describes:
 - the Paper and Spigot server choices;
 - automatic Java and Git prerequisite setup performed by the installed desktop application;
 - local server planning, configuration, lifecycle, and plugin-management capabilities;
-- browser-local controls and product destinations such as settings, optional event narration, local schedules, documentation, file conversion, authenticator and lock management, a deliberately narrow local Ollama observer, local history, notification center, and download states; and
+- browser-local controls and product destinations such as settings, optional event narration, local schedules, companion-site logo customization, documentation, file conversion, authenticator and lock management, a deliberately narrow local Ollama observer, local history with bounded safe exports, notification center, and download states; and
 - the verified public installer availability boundary.
 
 ## Truthful static boundary
@@ -16,7 +16,9 @@ This public page is static. It has no account system, backend, analytics, instal
 
 The published installer is for Windows x64 version 0.1.0 and is unsigned. Windows may show an unknown-publisher or SmartScreen warning. The page links to the asset and release status without claiming that a download or installation completed.
 
-The page does not install prerequisites, download a Paper or Spigot distribution, create server files, start a Minecraft server, send a console command, make a schedule-source request, or contact a text-to-speech service. It does not retain a selected source file, source path, raw source/output bytes, browser file handle, download location, or a secret. Its deliberately bounded browser-local exceptions are the optional personal-vocabulary JSON control, browser speech synthesis after explicit opt-in, bounded browser-local schedule records, the file converter, the Ollama observer, and the separate authenticator/toy-lock module documented below. The vocabulary control reads user-selected JSON bytes only in the browser so the strict local validator can validate the documented schema before the contract retains a bounded replacement payload in this origin's local storage until the visitor clears it. The converter can inspect up to 12 user-selected files, each no larger than 1 MiB, and perform only its explicitly enabled local text/structured-data/encoding transformations. Its browser-local history retains at most 100 sanitized metadata records; it is not a source-file store. PDF, media, archive, and native-workbook conversions remain unavailable. The observer makes three fixed loopback reads only after a visitor explicitly selects **Refresh local Ollama**. It has no editable host, port, path, token, proxy, redirect, or cloud route, and it cannot create, change, remove, copy, pull, or run a model. The authenticator/toy-lock module uses a separate bounded origin-scoped record, makes no network request, and is excluded from ordinary export, history, and status data.
+The page does not install prerequisites, download a Paper or Spigot distribution, create server files, start a Minecraft server, send a console command, make a schedule-source request, or contact a text-to-speech service. It does not retain a selected source file, source path, raw source/output bytes, browser file handle, download location, or a secret. Its deliberately bounded browser-local exceptions are the optional personal-vocabulary JSON control, browser speech synthesis after explicit opt-in, bounded browser-local schedule records, the companion-site logo customizer, the file converter, the Ollama observer, and the separate authenticator/toy-lock module documented below. The logo customizer derives a bounded display-only PNG or JPEG representation from a selected local image after byte and decode checks; it does not retain a source filename, path, `file:` URL, or original source file. The vocabulary control reads user-selected JSON bytes only in the browser so the strict local validator can validate the documented schema before the contract retains a bounded replacement payload in this origin's local storage until the visitor clears it. The converter can inspect up to 12 user-selected files, each no larger than 1 MiB, and perform only its explicitly enabled local text/structured-data/encoding transformations. Its browser-local history retains at most 100 sanitized metadata records; it is not a source-file store. PDF, media, archive, and native-workbook conversions remain unavailable. The observer makes three fixed loopback reads only after a visitor explicitly selects **Refresh local Ollama**. It has no editable host, port, path, token, proxy, redirect, or cloud route, and it cannot create, change, remove, copy, pull, or run a model. The authenticator/toy-lock module uses a separate bounded origin-scoped record, makes no network request, and is excluded from ordinary export, history, and status data.
+
+The notification center retains only bounded page-local notice and audit state. A notification cannot become evidence that a server, local file, installer, browser transfer, or desktop operation occurred. Its destructive confirmation flow may remove only notification metadata in this origin's local-storage record; it cannot create, delete, upload, download, install, or modify a server, file, transfer, desktop record, credential, or external resource.
 
 All server operation and every Ollama capability beyond that read-only browser observer belong exclusively to the installed desktop application, where local paths, prerequisite checks, process status, data handling, and outcomes can be verified.
 
@@ -40,9 +42,17 @@ The visible destinations are:
 
 ## Browser-local engine wiring
 
-`index.html` loads `contract.js` before the module `app.js` at the end of the document. The module imports `vocabulary-loader.js`, which is a browser-safe, DOM-free strict validator. The interaction engine hydrates visible settings, notifications, audit history, browser-local status, schedules, and completeness state from the contract's version-4 `minecraft-server-studio.site.contract.v2` local-storage record, then persists changes through the contract's documented public methods. It does not maintain a parallel session-storage settings model. Other than the explicit fixed-loopback Ollama observer described below, the engines do not establish a chat bridge, backend connection, desktop command channel, server connection, installer service, schedule-source adapter, or credential store. The static installer anchors remain ordinary browser links and are not transformed into an in-page transfer flow. `authenticator-locks.js` is a deliberately separate module with its own bounded origin-scoped record; it is not included in the general contract export or audit-history model.
+`index.html` loads `contract.js` before the module `app.js` at the end of the document. The module imports `vocabulary-loader.js`, which is a browser-safe, DOM-free strict validator. The interaction engine hydrates visible settings, logo metadata, notifications, audit history, browser-local status, schedules, and completeness state from the contract's version-5 `minecraft-server-studio.site.contract.v2` local-storage record, then persists changes through the contract's documented public methods. It does not maintain a parallel session-storage settings model. Other than the explicit fixed-loopback Ollama observer described below, the engines do not establish a chat bridge, backend connection, desktop command channel, server connection, installer service, schedule-source adapter, or credential store. The static installer anchors remain ordinary browser links and are not transformed into an in-page transfer flow. `authenticator-locks.js` is a deliberately separate module with its own bounded origin-scoped record; it is not included in the general contract export or audit-history model.
 
 The settings preview uses the same contract state that it renders: language mode, English and Cantonese funny levels, theme, density, and dialog emoji preference. The language mode, both tone sliders, and the emoji switch are real persisted browser-local controls on this page; they do not delegate to the desktop app. The command palette registers browser-local destinations through the contract and teleports to the associated preview panel. The personal-vocabulary control accepts only the exact version-1 schema below; malformed, duplicate-key, unsafe, oversized, unsupported, or partial JSON is rejected as a whole before it is cached or applied.
+
+## Browser-local notification center and destructive confirmation
+
+The Notification center preview renders bounded page-local notices and audit entries. Notices describe only browser-local preview activity; they do not announce a server result, installer transfer, download completion, local file change, or an external operation. The shared contract retains at most 200 notification records and 500 audit records for this origin when browser storage is available. A transient bulk selection is capped at 50 visible records. Individual dismissal marks a record dismissed and adds a local audit event. The center also provides plain-text search, a show-dismissed control, and its own adjacent anchored full regular-expression builder.
+
+Info, success, and progress toasts auto-dismiss after seven seconds while the page stays open. Warning and error toasts remain until dismissed. The center can dismiss selected records and can clear dismissed or all notification metadata. Every clear flow identifies the exact selected count, requires two independently operated acknowledgements and a full 0–100 slider, provides Emergency exit and Escape cancellation, and returns focus to the control that opened it. It calls the contract clear method only after the confirmation state is complete. The affected data is limited to this origin's notification metadata; it cannot delete browser downloads, server data, installed-application data, credentials, local files, or external data.
+
+No notification-center or confirmation action makes a network request. Browser storage is not a security boundary, and an unavailable storage implementation leaves only the current in-memory page state. Complete localization, accessible interaction evidence, action-handler coverage, built-page interaction, and capture evidence are still incomplete. See [Browser-local notification center and destructive confirmation](../docs/features/browser-local-notifications-and-confirmation.md) for the detailed boundary.
 
 ## Browser-local file converter
 
@@ -83,6 +93,32 @@ for the full behavior, failure, privacy, and verification boundary.
 ```
 
 The JSON payload is limited to 64 KiB in UTF-8, three structural levels, 250 records, nonempty 128-code-point `from` strings, and 512-code-point `to` strings. It is not uploaded or shared. The loader rejects malformed UTF-8, duplicate object keys (including escaped equivalents), unknown fields, unsafe keys, unsupported versions, invalid Unicode, and incomplete cache envelopes. The contract revalidates its browser-local cache on startup and the page revalidates the payload again before display or text replacement. Clearing the visible control clears only this browser-local payload.
+
+## Browser-local history and safe exports
+
+The local version-history destination is a browser-local view of the general
+page contract's bounded audit records. It contains only page-owned action
+metadata: an identifier, action, target, bounded non-secret detail, and creation
+time. The normalized history has a maximum of 500 records. Date, action,
+plain-text, and explicit local regular-expression filters compose over that
+same bounded record set, and visitors may select visible filtered records. It
+does not read or write a Minecraft server log, a desktop application record,
+browser history, local files, selected converter bytes, source paths, download
+locations, or authenticator/toy-lock records.
+
+The history view uses an honest empty state, plain-text filtering by default,
+and a local bounded regular-expression option. Its safe exports are limited to
+UTF-8 `json`, `jsonl`, `csv`, `tsv`, and `markdown` representations of selected
+page audit records. A browser download request does not reveal a destination or
+prove transfer completion. The page never exports personal-vocabulary values,
+credentials, secrets, TOTP codes, passwords, verifiers, pairing data, file
+content, server data, installer assets, external-status data, or
+personal-vocabulary file metadata. Removing selected records or clearing the
+page audit list uses the contract's two-key/full-slider local destructive
+confirmation and affects no desktop, server, download, browser-history, or
+authenticator data. See
+[`docs/features/browser-local-history-and-safe-exports.md`](../docs/features/browser-local-history-and-safe-exports.md)
+for the full failure, privacy, reset, and verification boundary.
 
 ## Browser-local authenticator, pairing QR, and toy locks
 
@@ -201,6 +237,38 @@ Three separate discovery routes are provided for the current strip, the browser-
 
 This is a bounded foundation, not a claim of complete appearance editing or tab management. Every-element editors, complete typography and color tooling, all menu/dropdown builders, complete bulk-close behavior, cross-window discovery, full localization, accessibility verification, built-artifact interaction, and real captures remain incomplete until separately implemented and evidenced.
 
+## Browser-local companion-site logo customization
+
+The Settings and appearance destination independently exposes three
+browser-rendered shipped marks: Studio Aqua, Server Slate, and World Spruce.
+Its local preset list starts with plain-text filtering and supplies an adjacent
+anchored regular-expression builder for that exact list. The page does not use
+the search to inspect browser history, local folders, the installed app, or a
+network service.
+
+A visitor can choose a PNG or JPEG through the browser's local file picker.
+The page checks actual bytes rather than trusting the extension or MIME label,
+limits the selected source to 512 KiB, rejects unsupported or malformed data,
+limits decoded dimensions to 4,096 pixels per side and 4,000,000 pixels total,
+then creates a display-only PNG or JPEG of no more than 512 logical pixels per
+side. Only that bounded derived data URL and safe rendering metadata can be
+kept in this page's contract record. A source filename, source path, browser
+file handle, `file:` URL, and original source file are not retained. The
+derived data URL is omitted from regular browser-local exports and generic
+history details.
+
+For a custom display image, fit, transparent or solid-color background, and
+horizontal/vertical focal point controls update the page mark only. They never
+change an application identifier, executable name, installer identity, update
+feed, release asset, local server, or desktop-app configuration. **Reset logo**
+restores Studio Aqua and removes the derived custom representation from this
+site's local storage; it never changes the original selected file. While the
+browser-local presentation mode is active, custom-logo input and rendering are
+omitted and Studio Aqua is rendered until the local unlock flow turns the mode
+off. See
+[the focused logo-customization article](../docs/features/site-logo-customization.md)
+for failure behavior and the current verification boundary.
+
 ## Per-surface completeness inventory
 
 This is a public-source inventory, not a claim that the installed application has been verified. The page seeds the same hand-written surfaces into its browser-local contract inventory and renders the incomplete count in the Status preview. “Static hook present” means the corresponding browser-local preview and source hook are in the page. Localization, automated testing, real interaction, and real-capture evidence remain unverified until separately completed.
@@ -212,12 +280,13 @@ This is a public-source inventory, not a claim that the installed application ha
 | Settings and appearance | Browser-local language, funny-level, notice-emoji, personal-vocabulary, renamed presentation-mode, theme, density, accent, safe typography, bounded appearance-editor, narrator, and schedule controls wired to contract | This README, `CONTRACT.md`, and `NARRATOR_AND_SCHEDULE.md` | Core only; page-wide localization remains incomplete | Not run in fast-delivery lane | Missing |
 | Tab navigation and appearance editor | Browser-local dock, active/order/pin/group state, overflow, current/group/master searches, anchored regex builders, and bounded target editor | This README, `CONTRACT.md`, and `docs/features/appearance-and-tabs.md` | Missing | Not run in fast-delivery lane | Missing |
 | Narrator and scheduled settings | Actual browser speech capability and bounded version-1 local schedule rules; no schedule-source network path | This README, `CONTRACT.md`, and `NARRATOR_AND_SCHEDULE.md` | English baseline only; broader localization incomplete | Not run in fast-delivery lane | Missing |
+| Browser-local companion-site logo | Shipped CSS/markup presets plus byte-validated bounded PNG/JPEG display representation, fit/background/focal controls, reset, and School-mode fallback | This README, `CONTRACT.md`, and `../docs/features/site-logo-customization.md` | English-first; incomplete | Not run in fast-delivery lane | Missing |
 | Offline documentation | Static source hook | This README | Missing | Missing | Missing |
 | File converter | Browser-local bounded text/structured-data/encoding conversion; PDF/media/archive/native-workbook routes remain unavailable | This README, `CONTRACT.md`, and `../docs/features/browser-local-file-converter.md` | Missing | Missing | Missing |
 | Authenticator and locks | Browser-local TOTP, QR pairing reveal, toy-lock, and local Support Tickets source | This README, `CONTRACT.md`, and `../docs/features/browser-local-authenticator-and-toy-locks.md` | English-first; incomplete | Not run in fast-delivery lane | Missing |
 | Browser-local Ollama observer | Explicit fixed-loopback `GET` observer with a local last-success snapshot; catalog, pull, chat, delete, copy, hardware fit, and harness remain unavailable | This README, `CONTRACT.md`, and the [feature article](../docs/features/browser-local-ollama-observer.md) | Missing | Not run in fast-delivery lane | Missing |
-| Local version history | Browser-local audit preview only | This README and `CONTRACT.md` | Missing | Missing | Missing |
-| Notification center | Browser-local notification preview | This README and `CONTRACT.md` | Missing | Missing | Missing |
+| Local version history and safe exports | Browser-local bounded audit browsing, local regex filtering, and selected-record UTF-8 export; no server/filesystem/credential history | This README, `CONTRACT.md`, and `../docs/features/browser-local-history-and-safe-exports.md` | Missing | Not run in fast-delivery lane | Missing |
+| Notification center | Bounded browser-local notices/audit entries, local plain-text/regex search, and a two-acknowledgement/full-slider flow that clears only page-local notification metadata | This README, `CONTRACT.md`, and `../docs/features/browser-local-notifications-and-confirmation.md` | English baseline; broader localization incomplete | Not run in fast-delivery lane | Missing |
 | Download and release states | Static verified installer anchor | This README | Missing | Missing | Missing |
 
 ## GitHub Pages hand-off

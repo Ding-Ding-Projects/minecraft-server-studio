@@ -6,7 +6,7 @@
   }
 
   const STORAGE_KEY = "minecraft-server-studio.site.contract.v2";
-  const SCHEMA_VERSION = 4;
+  const SCHEMA_VERSION = 5;
   const SCHEDULE_RULE_VERSION = 1;
   const LIMITS = Object.freeze({
     stateBytes: 1024 * 1024,
@@ -42,7 +42,12 @@
     vocabularyValueCharacters: 512,
     schoolModeCodeMinimum: 4,
     schoolModeCodeMaximum: 64,
-    schoolModeCredentialSaltBytes: 16
+    schoolModeCredentialSaltBytes: 16,
+    logoInputBytes: 512 * 1024,
+    logoDerivedDataUrlCharacters: 512 * 1024,
+    logoDerivedPixels: 512,
+    logoDecodedDimension: 4096,
+    logoDecodedPixels: 4 * 1024 * 1024
   });
 
   const LANGUAGE_MODES = Object.freeze(["english", "cantonese", "bilingual"]);
@@ -64,10 +69,22 @@
   const STATUS_STATES = Object.freeze(["idle", "running", "waiting", "blocked", "verified", "failed"]);
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
   const CONVERSION_STATUSES = Object.freeze(["planned", "queued", "ready", "converting", "converted", "download-requested", "unsupported", "unavailable", "cancelled", "failed", "removed"]);
+  const LOGO_PRESET_IDS = Object.freeze(["studio-aqua", "server-slate", "world-spruce"]);
+  const LOGO_SOURCE_TYPES = Object.freeze(["preset", "custom"]);
+  const LOGO_FORMATS = Object.freeze(["png", "jpeg"]);
+  const LOGO_FITS = Object.freeze(["contain", "cover", "fill"]);
+  const LOGO_BACKGROUND_MODES = Object.freeze(["transparent", "color"]);
+  const HISTORY_EXPORT_OMISSIONS = Object.freeze([
+    "Personal-vocabulary values and source-file metadata",
+    "Authenticator, TOTP, toy-lock, QR, password, verifier, URI, and current-code data",
+    "Raw converter source/output bytes, file handles, paths, and browser download destinations",
+    "Server, runtime, installer, desktop-application, and remote-service state"
+  ]);
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const SAFE_COLOR = /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/;
   const BASE64_SALT = /^[A-Za-z0-9+/]{22}==$/;
   const BASE64_SHA256 = /^[A-Za-z0-9+/]{43}=$/;
+  const LOGO_DATA_URL = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/;
 
   const FILE_ADAPTERS = Object.freeze([
     { id: "documents-pdf", category: "Documents/PDF", label: "PDF inspect and conversion", sourceFormats: ["PDF bytes"], targetFormats: ["PDF operations"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a PDF parser, renderer, or writer." },
@@ -120,6 +137,13 @@
       return fallback;
     }
     return value.slice(0, maximum);
+  }
+
+  function sanitizeAuditText(value, maximum, fallback) {
+    const text = boundedText(value, maximum, fallback).replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+    if (!text) return fallback;
+    const sensitiveValue = /(?:otpauth:\/\/|(?:password|secret|token|credential|verifier|current\s+code)\s*(?:=|:)\s*\S+|(?:^|[^A-Za-z0-9])[A-Z2-7]{24,}(?:[^A-Za-z0-9]|$)|(?:[A-Za-z]:[\\/]|\\\\[^\\\s]+\\))/i;
+    return sensitiveValue.test(text) ? "Sensitive or path-shaped local detail omitted." : text;
   }
 
   function boundedInteger(value, minimum, maximum, fallback) {
@@ -199,7 +223,7 @@
       locks: [],
       totp: [],
       schedules: [],
-      logo: { sourceType: "preset", presetId: "default", custom: null, updatedAt: null },
+      logo: { sourceType: "preset", presetId: "studio-aqua", custom: null, updatedAt: null },
       conversion: { jobs: [] },
       status: {
         currentState: "idle",
@@ -316,16 +340,28 @@
       return null;
     }
     const id = safeId(raw.id, "");
-    const action = trimString(raw.action, 120, "");
+    const action = sanitizeAuditText(raw.action, 120, "");
     if (!id || !action) {
       return null;
     }
     return {
       id,
       action,
-      target: trimString(raw.target, 160, ""),
-      detail: boundedText(raw.detail, 600, ""),
+      target: sanitizeAuditText(raw.target, 160, ""),
+      detail: sanitizeAuditText(raw.detail, 600, ""),
       createdAt: trimString(raw.createdAt, 48, now())
+    };
+  }
+
+  function safeAuditRecord(raw) {
+    const normalized = normalizeAudit(raw);
+    if (!normalized) return null;
+    return {
+      id: normalized.id,
+      action: normalized.action,
+      target: normalized.target,
+      detail: normalized.detail,
+      createdAt: normalized.createdAt
     };
   }
 
@@ -621,28 +657,52 @@
     };
   }
 
+  function boundedPercent(value, fallback) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric * 100) / 100)) : fallback;
+  }
+
+  function safeLogoDataUrl(value, expectedFormat) {
+    if (typeof value !== "string" || value.length < 32 || value.length > LIMITS.logoDerivedDataUrlCharacters) {
+      return "";
+    }
+    const match = LOGO_DATA_URL.exec(value);
+    if (!match || (expectedFormat && match[1] !== expectedFormat)) {
+      return "";
+    }
+    const payload = match[2];
+    if (payload.length % 4 !== 0 || (payload.includes("=") && !/=+$/.test(payload))) {
+      return "";
+    }
+    return value;
+  }
+
   function normalizeLogo(raw, defaults) {
     const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
     const custom = isPlainObject(value.custom) && !hasUnsafeKeys(value.custom) ? value.custom : null;
+    const presetId = enumValue(value.presetId, LOGO_PRESET_IDS, defaults.presetId);
     let normalizedCustom = null;
     if (custom) {
-      normalizedCustom = {
-        format: enumValue(custom.format, ["png", "jpeg", "webp", "svg"], "png"),
-        width: boundedInteger(custom.width, 1, 8192, 1),
-        height: boundedInteger(custom.height, 1, 8192, 1),
-        fit: enumValue(custom.fit, ["contain", "cover", "fill"], "contain"),
-        background: safeColor(custom.background, "#00000000"),
-        crop: {
-          x: Math.max(0, Math.min(1, Number(custom.crop && custom.crop.x) || 0)),
-          y: Math.max(0, Math.min(1, Number(custom.crop && custom.crop.y) || 0)),
-          width: Math.max(0.01, Math.min(1, Number(custom.crop && custom.crop.width) || 1)),
-          height: Math.max(0.01, Math.min(1, Number(custom.crop && custom.crop.height) || 1))
-        }
-      };
+      const format = enumValue(custom.format, LOGO_FORMATS, "png");
+      const dataUrl = safeLogoDataUrl(custom.dataUrl, format);
+      if (dataUrl) {
+        normalizedCustom = {
+          format,
+          dataUrl,
+          width: boundedInteger(custom.width, 1, LIMITS.logoDerivedPixels, 1),
+          height: boundedInteger(custom.height, 1, LIMITS.logoDerivedPixels, 1),
+          fit: enumValue(custom.fit, LOGO_FITS, "contain"),
+          backgroundMode: enumValue(custom.backgroundMode, LOGO_BACKGROUND_MODES, "transparent"),
+          background: safeColor(custom.background, "#101827").slice(0, 7),
+          focalX: boundedPercent(custom.focalX, 50),
+          focalY: boundedPercent(custom.focalY, 50)
+        };
+      }
     }
+    const requestedSource = enumValue(value.sourceType, LOGO_SOURCE_TYPES, defaults.sourceType);
     return {
-      sourceType: enumValue(value.sourceType, ["preset", "custom"], defaults.sourceType),
-      presetId: safeId(value.presetId, defaults.presetId),
+      sourceType: requestedSource === "custom" && normalizedCustom ? "custom" : "preset",
+      presetId: presetId || "studio-aqua",
       custom: normalizedCustom,
       updatedAt: trimString(value.updatedAt, 48, defaults.updatedAt)
     };
@@ -988,9 +1048,9 @@
   function writeAudit(action, target, detail) {
     state.audit.unshift({
       id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      action: trimString(action, 120, "Local action"),
-      target: trimString(target, 160, ""),
-      detail: boundedText(detail, 600, ""),
+      action: sanitizeAuditText(action, 120, "Local action"),
+      target: sanitizeAuditText(target, 160, ""),
+      detail: sanitizeAuditText(detail, 600, ""),
       createdAt: now()
     });
     state.audit = state.audit.slice(0, LIMITS.auditRecords);
@@ -1257,6 +1317,40 @@
     writeAudit(action, target, detail);
     persist({ type: "audit" });
     return clone(state.audit[0]);
+  }
+
+  function getAuditRecords() {
+    return state.audit.map(safeAuditRecord).filter(Boolean);
+  }
+
+  function removeAuditRecords(ids, options) {
+    const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
+    if (request.confirmed !== true) {
+      return { ok: false, error: "Removing browser-local history records requires a completed confirmation." };
+    }
+    const selected = new Set((Array.isArray(ids) ? ids : []).map((id) => safeId(id, "")).filter(Boolean).slice(0, LIMITS.auditRecords));
+    if (!selected.size) {
+      return { ok: false, error: "Select one or more browser-local history records to remove." };
+    }
+    const previous = state.audit.length;
+    state.audit = state.audit.filter((record) => !selected.has(record.id));
+    const removed = previous - state.audit.length;
+    if (!removed) {
+      return { ok: false, error: "The selected browser-local history records were not found." };
+    }
+    persist({ type: "audit-records-removed", removed });
+    return { ok: true, removed };
+  }
+
+  function clearAuditRecords(options) {
+    const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
+    if (request.confirmed !== true) {
+      return { ok: false, error: "Clearing browser-local history requires a completed confirmation." };
+    }
+    const removed = state.audit.length;
+    state.audit = [];
+    persist({ type: "audit-cleared", removed });
+    return { ok: true, removed };
   }
 
   function getStatusModel() {
@@ -1896,10 +1990,14 @@
 
   function setLogoMetadata(input) {
     const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
-    state.logo = normalizeLogo(Object.assign({}, raw, { updatedAt: now() }), createDefaultState().logo);
-    writeAudit("Logo preference updated", "logo", "Only local logo metadata was saved; no image bytes were exported or uploaded.");
+    const next = normalizeLogo(Object.assign({}, raw, { updatedAt: now() }), createDefaultState().logo);
+    if (raw.sourceType === "custom" && next.sourceType !== "custom") {
+      return { ok: false, error: "A custom logo must contain a bounded PNG or JPEG data URL and valid rendering metadata." };
+    }
+    state.logo = next;
+    writeAudit("Logo preference updated", "logo", "Only a browser-local logo choice changed. Source paths, names, and image bytes were omitted from this audit record.");
     persist({ type: "logo" });
-    return { ok: true, logo: clone(state.logo) };
+    return { ok: true, persisted: storageAvailable, logo: clone(state.logo) };
   }
 
   function containsSecretFields(value) {
@@ -2128,6 +2226,22 @@
     const exported = getState();
     exported.personalVocabulary = { status: exported.personalVocabulary.status, omitted: true };
     exported.schoolModeCredential = { configured: isConfiguredSchoolModeCredential(state.schoolModeCredential), omitted: true };
+    exported.logo = {
+      sourceType: state.logo.sourceType,
+      presetId: state.logo.presetId,
+      custom: state.logo.custom ? {
+        format: state.logo.custom.format,
+        width: state.logo.custom.width,
+        height: state.logo.custom.height,
+        fit: state.logo.custom.fit,
+        backgroundMode: state.logo.custom.backgroundMode,
+        background: state.logo.custom.background,
+        focalX: state.logo.custom.focalX,
+        focalY: state.logo.custom.focalY,
+        omitted: true
+      } : null,
+      omitted: true
+    };
     exported.locks = exported.locks.map((lock) => ({ id: lock.id, target: lock.target, label: lock.label, method: lock.method, duration: lock.duration, minutes: lock.minutes, locked: lock.locked, createdAt: lock.createdAt, updatedAt: lock.updatedAt }));
     exported.totp = exported.totp.map((entry) => ({ id: entry.id, label: entry.label, issuer: entry.issuer, account: entry.account, algorithm: entry.algorithm, digits: entry.digits, period: entry.period, enrolled: entry.enrolled, updatedAt: entry.updatedAt }));
     return exported;
@@ -2149,14 +2263,80 @@
     return lines.join("\r\n");
   }
 
+  function exportAuditRecords(records) {
+    const source = Array.isArray(records) ? records : state.audit;
+    const seen = new Set();
+    const safe = [];
+    source.some((record) => {
+      const normalized = safeAuditRecord(record);
+      if (normalized && !seen.has(normalized.id)) {
+        safe.push(normalized);
+        seen.add(normalized.id);
+      }
+      return safe.length >= LIMITS.auditRecords;
+    });
+    return safe;
+  }
+
+  function historyExportManifest(records) {
+    const safeRecords = exportAuditRecords(records);
+    return {
+      formatVersion: 1,
+      kind: "Minecraft Server Studio browser-local history export",
+      generatedAt: now(),
+      scope: "Bounded browser-local audit metadata only.",
+      omissions: HISTORY_EXPORT_OMISSIONS.slice(),
+      recordCount: safeRecords.length,
+      records: safeRecords
+    };
+  }
+
+  function historyDelimitedExport(manifest, delimiter) {
+    const rows = [["recordType", "id", "action", "target", "detail", "createdAt", "omissions"]];
+    rows.push(["boundary", "", "", "", manifest.scope, manifest.generatedAt, manifest.omissions.join("; ")]);
+    manifest.records.forEach((record) => rows.push(["audit", record.id, record.action, record.target, record.detail, record.createdAt, ""]));
+    return rows.map((row) => row.map(csvEscape).join(delimiter)).join("\r\n");
+  }
+
+  function historyMarkdownExport(manifest) {
+    const lines = [
+      "# Minecraft Server Studio browser-local history export",
+      "",
+      `- Generated: ${manifest.generatedAt}`,
+      `- Scope: ${manifest.scope}`,
+      `- Record count: ${manifest.recordCount}`,
+      "",
+      "## Omitted by design",
+      "",
+      ...manifest.omissions.map((item) => `- ${item}`),
+      "",
+      "## Audit records",
+      ""
+    ];
+    if (!manifest.records.length) {
+      lines.push("- No selected browser-local audit records.");
+    } else {
+      manifest.records.forEach((record) => {
+        lines.push(`- **${record.action}** · target: ${record.target || "not recorded"} · ${record.createdAt}`);
+        if (record.detail) lines.push(`  - ${record.detail}`);
+      });
+    }
+    return lines.join("\n") + "\n";
+  }
+
   function createExport(format, records) {
     const mode = enumValue(format, ["json", "jsonl", "csv", "tsv", "markdown"], "json");
-    const safeRecords = Array.isArray(records) ? records.slice(0, LIMITS.collectionRecords).map((record) => isPlainObject(record) ? clone(record) : { value: String(record) }) : [redactStateForExport()];
-    if (mode === "json") return { format: mode, mime: "application/json;charset=utf-8", text: JSON.stringify(safeRecords, null, 2) };
-    if (mode === "jsonl") return { format: mode, mime: "application/x-ndjson;charset=utf-8", text: safeRecords.map((record) => JSON.stringify(record)).join("\n") };
-    if (mode === "csv") return { format: mode, mime: "text/csv;charset=utf-8", text: recordsToDelimited(safeRecords, ",") };
-    if (mode === "tsv") return { format: mode, mime: "text/tab-separated-values;charset=utf-8", text: recordsToDelimited(safeRecords, "\t") };
-    return { format: mode, mime: "text/markdown;charset=utf-8", text: safeRecords.map((record) => `- ${Object.entries(record).map(([key, value]) => `**${key}:** ${String(value)}`).join(" · ")}`).join("\n") };
+    const manifest = historyExportManifest(records);
+    if (mode === "json") return { format: mode, mime: "application/json;charset=utf-8", text: JSON.stringify(manifest, null, 2), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    if (mode === "jsonl") {
+      const descriptor = Object.assign({}, manifest);
+      delete descriptor.records;
+      const lines = [JSON.stringify(Object.assign({ recordType: "manifest" }, descriptor))].concat(manifest.records.map((record) => JSON.stringify(Object.assign({ recordType: "audit" }, record))));
+      return { format: mode, mime: "application/x-ndjson;charset=utf-8", text: lines.join("\n") + "\n", recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    }
+    if (mode === "csv") return { format: mode, mime: "text/csv;charset=utf-8", text: historyDelimitedExport(manifest, ","), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    if (mode === "tsv") return { format: mode, mime: "text/tab-separated-values;charset=utf-8", text: historyDelimitedExport(manifest, "\t"), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    return { format: mode, mime: "text/markdown;charset=utf-8", text: historyMarkdownExport(manifest), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
   }
 
   global.addEventListener("storage", (event) => {
@@ -2191,6 +2371,9 @@
     dismissNotification,
     clearNotifications,
     recordAudit,
+    getAuditRecords,
+    removeAuditRecords,
+    clearAuditRecords,
     getStatusModel,
     updateStatusModel,
     upsertStatusEvidence,

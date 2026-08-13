@@ -31,7 +31,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     schedules: [],
     baseSettings: defaultSettings(),
     settings: defaultSettings(),
-    narratorCapabilities: { supported: false, voices: [] }
+    narratorCapabilities: { supported: false, voices: [] },
+    logo: defaultLogo()
   };
   var narratorRuntime = {
     queue: [],
@@ -42,6 +43,19 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     voiceUnsubscribe: null,
     scheduleTimer: null,
     scheduleSignature: ""
+  };
+  var historyUi = {
+    selectedIds: new Set(),
+    visibleIds: [],
+    message: ""
+  };
+  var notificationRuntime = {
+    selected: new Set(),
+    autoDismissTimers: Object.create(null),
+    confirmation: null,
+    escapeHandler: null,
+    status: "",
+    maxBulkSelection: 50
   };
 
   var LOCALIZED_COPY = Object.freeze({
@@ -63,7 +77,26 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     "school-name-label": { english: "Mode name", cantonese: "模式名稱" },
     "school-name-help": { english: "This exact name replaces the shipped name after you save it.", cantonese: "儲存後，呢個名稱會取代原本嘅模式名稱。" },
     "school-credential-label": { english: "Browser-local unlock code", cantonese: "瀏覽器本機解鎖碼" },
-    "school-credential-help": { english: "A one-way local verifier is stored only in this browser. The code itself is never stored or exported.", cantonese: "只會喺呢個瀏覽器儲存單向本機驗證資料；解鎖碼本身永遠唔會儲存或匯出。" }
+    "school-credential-help": { english: "A one-way local verifier is stored only in this browser. The code itself is never stored or exported.", cantonese: "只會喺呢個瀏覽器儲存單向本機驗證資料；解鎖碼本身永遠唔會儲存或匯出。" },
+    "logo-eyebrow": { english: "Browser-local logo", cantonese: "瀏覽器本機標誌" },
+    "logo-title": { english: "Choose this public page's visual mark", cantonese: "揀呢個公開頁面嘅視覺標誌" },
+    "logo-description": { english: "This changes only the mark on this public page in this browser. It never changes the installed app, package, executable, installer, update feed, release, or Minecraft server.", cantonese: "呢個只會改變而家瀏覽器入面呢個公開頁面嘅標誌；唔會改已安裝程式、封裝、執行檔、安裝程式、更新來源、發佈版本或者 Minecraft 伺服器。" },
+    "logo-search-label": { english: "Find a shipped logo preset", cantonese: "搵內建標誌預設" },
+    "logo-custom-label": { english: "Custom PNG or JPEG", cantonese: "自訂 PNG 或 JPEG" },
+    "logo-custom-help": { english: "The browser validates actual PNG or JPEG bytes locally. Source files must be 512 KiB or smaller; paths and source names are not retained.", cantonese: "瀏覽器會喺本機驗證真正嘅 PNG 或 JPEG 位元組。來源檔案必須不大於 512 KiB；路徑同來源檔名唔會保留。" },
+    "logo-rendering-title": { english: "Custom-image rendering", cantonese: "自訂圖片顯示" },
+    "logo-rendering-help": { english: "Available after a bounded custom image is accepted. These controls apply locally to the derived display image, not to the original file.", cantonese: "接受咗受限自訂圖片後先可以用。呢啲控制只會喺本機套用到衍生顯示圖片，唔會改原始檔案。" },
+    "logo-fit-label": { english: "Fit", cantonese: "適應方式" },
+    "logo-fit-contain": { english: "Contain", cantonese: "完整顯示" },
+    "logo-fit-cover": { english: "Fill and crop", cantonese: "填滿並裁剪" },
+    "logo-fit-fill": { english: "Stretch to bounds", cantonese: "拉伸至邊界" },
+    "logo-background-label": { english: "Background", cantonese: "背景" },
+    "logo-background-transparent": { english: "Transparent", cantonese: "透明" },
+    "logo-background-color": { english: "Solid color", cantonese: "純色" },
+    "logo-background-color-label": { english: "Background color", cantonese: "背景顏色" },
+    "logo-focal-x-label": { english: "Focal point horizontally", cantonese: "水平焦點位置" },
+    "logo-focal-y-label": { english: "Focal point vertically", cantonese: "垂直焦點位置" },
+    "logo-reset": { english: "Reset logo", cantonese: "重設標誌" }
   });
 
   function funnyCopy(key, language, value) {
@@ -93,10 +126,21 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     return english;
   }
 
+  function notificationLocalizedCopy(english, cantonese) {
+    var mode = state.settings && state.settings.languageMode || "english";
+    if (mode === "cantonese") return cantonese;
+    if (mode === "bilingual") return english + " · " + cantonese;
+    return english;
+  }
+
   function renderLocalizedCopy() {
     all("[data-mss-copy]").forEach(function (element) {
       var value = localizedCopy(element.getAttribute("data-mss-copy"));
       if (value) element.textContent = value;
+    });
+    all("[data-mss-placeholder]").forEach(function (element) {
+      var value = localizedCopy(element.getAttribute("data-mss-placeholder"));
+      if (value) element.placeholder = value;
     });
   }
 
@@ -122,6 +166,15 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       personalVocabularyActive: false,
       dimSumEnabled: true,
       schoolMode: { enabled: false, active: false, name: "School mode" }
+    };
+  }
+
+  function defaultLogo() {
+    return {
+      sourceType: "preset",
+      presetId: "studio-aqua",
+      custom: null,
+      updatedAt: null
     };
   }
 
@@ -157,6 +210,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     state.notifications = Array.isArray(snapshot.notifications) ? snapshot.notifications.slice() : [];
     state.history = Array.isArray(snapshot.audit) ? snapshot.audit.slice() : [];
     state.schedules = Array.isArray(snapshot.schedules) ? snapshot.schedules.slice() : [];
+    state.logo = snapshot.logo && typeof snapshot.logo === "object" ? snapshot.logo : defaultLogo();
   }
 
   function emit(name, detail) {
@@ -334,6 +388,442 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     return Math.round((Number(value) || 1) * 100) + "%";
   }
 
+  var SITE_LOGO_PRESETS = Object.freeze([
+    { id: "studio-aqua", name: "Studio Aqua", description: "The shipped blue Minecraft Server Studio mark." },
+    { id: "server-slate", name: "Server Slate", description: "A quieter slate mark for the companion site." },
+    { id: "world-spruce", name: "World Spruce", description: "A green world-management mark for the companion site." }
+  ]);
+  var SITE_LOGO_INPUT_BYTES = 512 * 1024;
+  var SITE_LOGO_DERIVED_CHARACTERS = 512 * 1024;
+  var SITE_LOGO_MAX_DIMENSION = 512;
+  var SITE_LOGO_MAX_DECODED_DIMENSION = 4096;
+  var SITE_LOGO_MAX_DECODED_PIXELS = 4 * 1000 * 1000;
+  var SITE_LOGO_DATA_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+  function boundedLogoPercent(value, fallback) {
+    var numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric * 100) / 100)) : fallback;
+  }
+
+  function logoPreset(id) {
+    return SITE_LOGO_PRESETS.filter(function (preset) { return preset.id === id; })[0] || SITE_LOGO_PRESETS[0];
+  }
+
+  function logoCustom(value) {
+    if (!value || typeof value !== "object" || !SITE_LOGO_DATA_URL.test(value.dataUrl || "")) return null;
+    var match = /^data:image\/(png|jpeg);base64,/.exec(value.dataUrl);
+    if (!match || value.dataUrl.length > SITE_LOGO_DERIVED_CHARACTERS) return null;
+    return {
+      format: match[1],
+      dataUrl: value.dataUrl,
+      width: Math.max(1, Math.min(SITE_LOGO_MAX_DIMENSION, Math.round(Number(value.width) || 1))),
+      height: Math.max(1, Math.min(SITE_LOGO_MAX_DIMENSION, Math.round(Number(value.height) || 1))),
+      fit: ["contain", "cover", "fill"].indexOf(value.fit) >= 0 ? value.fit : "contain",
+      backgroundMode: value.backgroundMode === "color" ? "color" : "transparent",
+      background: safeHexColor(value.background, "#101827"),
+      focalX: boundedLogoPercent(value.focalX, 50),
+      focalY: boundedLogoPercent(value.focalY, 50)
+    };
+  }
+
+  function effectiveLogo() {
+    var selected = state.logo && typeof state.logo === "object" ? state.logo : defaultLogo();
+    var schoolActive = Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active);
+    if (schoolActive) return defaultLogo();
+    var custom = selected.sourceType === "custom" ? logoCustom(selected.custom) : null;
+    return custom ? {
+      sourceType: "custom",
+      presetId: logoPreset(selected.presetId).id,
+      custom: custom,
+      updatedAt: selected.updatedAt || null
+    } : {
+      sourceType: "preset",
+      presetId: logoPreset(selected.presetId).id,
+      custom: null,
+      updatedAt: selected.updatedAt || null
+    };
+  }
+
+  function applyLogoMark(element, logo, preview) {
+    if (!element) return;
+    var selected = logo || effectiveLogo();
+    var preset = logoPreset(selected.presetId);
+    var custom = selected.sourceType === "custom" ? logoCustom(selected.custom) : null;
+    element.replaceChildren();
+    element.classList.toggle("site-logo-custom", Boolean(custom));
+    element.dataset.mssLogoPreset = preset.id;
+    element.dataset.mssLogoSource = custom ? "custom" : "preset";
+    if (custom) {
+      element.style.setProperty("--mss-logo-fit", custom.fit);
+      element.style.setProperty("--mss-logo-position", custom.focalX + "% " + custom.focalY + "%");
+      element.style.setProperty("--mss-logo-background", custom.backgroundMode === "color" ? custom.background : "transparent");
+      var image = document.createElement("img");
+      image.alt = "";
+      image.decoding = "async";
+      image.src = custom.dataUrl;
+      element.appendChild(image);
+      if (preview) element.setAttribute("aria-label", "Current custom public-page logo preview");
+    } else {
+      element.style.removeProperty("--mss-logo-fit");
+      element.style.removeProperty("--mss-logo-position");
+      element.style.removeProperty("--mss-logo-background");
+      element.textContent = "MS";
+      if (preview) element.setAttribute("aria-label", preset.name + " public-page logo preview");
+    }
+  }
+
+  function logoCustomizerElements() {
+    var surface = one('[data-contract-hook="app-logo-customizer"]');
+    if (!surface) return {};
+    return {
+      surface: surface,
+      preview: one('[data-mss-logo-preview]', surface),
+      previewDetail: one('[data-mss-logo-preview-detail]', surface),
+      status: one('[data-mss-logo-status]', surface),
+      storage: one('[data-mss-logo-storage]', surface),
+      search: one('[data-mss-logo-preset-search]', surface),
+      presets: one('[data-mss-logo-preset-list]', surface),
+      file: one('[data-mss-logo-file]', surface),
+      fit: one('[data-mss-logo-fit]', surface),
+      backgroundMode: one('[data-mss-logo-background-mode]', surface),
+      background: one('[data-mss-logo-background]', surface),
+      focalX: one('[data-mss-logo-focal-x]', surface),
+      focalXOutput: one('[data-mss-logo-focal-x-output]', surface),
+      focalY: one('[data-mss-logo-focal-y]', surface),
+      focalYOutput: one('[data-mss-logo-focal-y-output]', surface),
+      reset: one('[data-mss-logo-reset]', surface)
+    };
+  }
+
+  function logoStorageAvailable() {
+    return !hasContractMethod("isStorageAvailable") || safely(function () { return contract.isStorageAvailable(); }, false);
+  }
+
+  function renderLogoCustomizer() {
+    var elements = logoCustomizerElements();
+    var selected = effectiveLogo();
+    var stored = state.logo && state.logo.sourceType === "custom" ? logoCustom(state.logo.custom) : null;
+    var schoolActive = Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active);
+    all('[data-mss-logo-mark]').forEach(function (mark) { applyLogoMark(mark, selected, false); });
+    if (!elements.surface) return;
+    applyLogoMark(elements.preview, selected, true);
+    var custom = selected.sourceType === "custom" ? selected.custom : null;
+    if (elements.previewDetail) {
+      elements.previewDetail.textContent = custom
+        ? "A bounded " + custom.format.toUpperCase() + " display image is active at " + custom.width + " × " + custom.height + " logical pixels."
+        : logoPreset(selected.presetId).name + " is a browser-rendered shipped preset.";
+    }
+    if (elements.status) {
+      elements.status.textContent = schoolActive
+        ? "Studio Aqua is shown while " + schoolModeName() + " is active."
+        : custom ? "A bounded custom logo is active in this browser." : logoPreset(selected.presetId).name + " is active in this browser.";
+    }
+    if (elements.storage) {
+      if (!logoStorageAvailable()) elements.storage.textContent = "Browser storage is unavailable. The visible logo can last only for this visit and was not claimed as saved.";
+      else if (stored) elements.storage.textContent = "A bounded derived custom image is stored only in this browser. Source path, source name, and original bytes are not retained.";
+      else elements.storage.textContent = "No custom derived image is stored in this browser.";
+    }
+    if (elements.file) elements.file.disabled = schoolActive;
+    [elements.fit, elements.backgroundMode, elements.background, elements.focalX, elements.focalY].forEach(function (control) {
+      if (control) control.disabled = !custom || schoolActive;
+    });
+    if (elements.fit && custom) elements.fit.value = custom.fit;
+    if (elements.backgroundMode && custom) elements.backgroundMode.value = custom.backgroundMode;
+    if (elements.background && custom) elements.background.value = custom.background;
+    if (elements.focalX && custom) elements.focalX.value = String(custom.focalX);
+    if (elements.focalY && custom) elements.focalY.value = String(custom.focalY);
+    if (elements.focalXOutput) elements.focalXOutput.textContent = (custom ? custom.focalX : 50) + "%";
+    if (elements.focalYOutput) elements.focalYOutput.textContent = (custom ? custom.focalY : 50) + "%";
+    if (elements.reset) elements.reset.disabled = schoolActive;
+    if (elements.presets) {
+      all('[data-mss-logo-preset-card]', elements.presets).forEach(function (card) {
+        var id = card.getAttribute('data-mss-logo-preset-card');
+        var active = !custom && selected.presetId === id;
+        card.toggleAttribute('data-mss-selected', active);
+        var buttonElement = one('button', card);
+        if (buttonElement) buttonElement.setAttribute('aria-pressed', String(active));
+      });
+    }
+  }
+
+  function persistLogo(next, message) {
+    if (!hasContractMethod("setLogoMetadata")) {
+      notify("warning", "Browser-local logo preferences are unavailable because the local contract did not load.");
+      return false;
+    }
+    var result = safely(function () { return contract.setLogoMetadata(next); }, null);
+    if (!result || result.ok !== true) {
+      notify("warning", (result && result.error) || "The browser-local logo preference was not saved. The current valid mark remains active.");
+      return false;
+    }
+    hydrateContractState();
+    renderLogoCustomizer();
+    renderHistory();
+    if (result.persisted === false || !logoStorageAvailable()) {
+      notify("warning", "The logo changed for this visit, but browser storage could not retain it. It was not claimed as saved.");
+    } else if (message) {
+      notify("info", message);
+    }
+    return true;
+  }
+
+  function pngDimensions(bytes) {
+    var signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (bytes.length < 33 || signature.some(function (value, index) { return bytes[index] !== value; })) return null;
+    if (String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]) !== "IHDR") return null;
+    var width = ((bytes[16] << 24) >>> 0) + (bytes[17] << 16) + (bytes[18] << 8) + bytes[19];
+    var height = ((bytes[20] << 24) >>> 0) + (bytes[21] << 16) + (bytes[22] << 8) + bytes[23];
+    var offset = 8;
+    var foundEnd = false;
+    while (offset + 12 <= bytes.length) {
+      var length = ((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3];
+      var end = offset + 12 + length;
+      if (!Number.isSafeInteger(end) || end > bytes.length) return null;
+      var kind = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+      if (kind === "acTL") return null;
+      if (kind === "IEND") { foundEnd = true; break; }
+      offset = end;
+    }
+    return foundEnd && width && height ? { format: "png", width: width, height: height } : null;
+  }
+
+  function jpegDimensions(bytes) {
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+    var offset = 2;
+    while (offset + 3 < bytes.length) {
+      while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+      if (offset >= bytes.length) break;
+      var marker = bytes[offset++];
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (marker >= 0xd0 && marker <= 0xd7) continue;
+      if (offset + 1 >= bytes.length) return null;
+      var size = (bytes[offset] << 8) + bytes[offset + 1];
+      if (size < 2 || offset + size > bytes.length) return null;
+      var isSof = (marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf);
+      if (isSof) {
+        if (size < 8) return null;
+        var height = (bytes[offset + 3] << 8) + bytes[offset + 4];
+        var width = (bytes[offset + 5] << 8) + bytes[offset + 6];
+        return width && height ? { format: "jpeg", width: width, height: height } : null;
+      }
+      offset += size;
+    }
+    return null;
+  }
+
+  function inspectLogoBytes(bytes) {
+    return pngDimensions(bytes) || jpegDimensions(bytes);
+  }
+
+  function readLogoBytes(file) {
+    if (file && typeof file.arrayBuffer === "function") return file.arrayBuffer().then(function (buffer) { return new Uint8Array(buffer); });
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("The selected image could not be read locally.")); };
+      reader.onload = function () { resolve(new Uint8Array(reader.result)); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function decodeLogoImage(bytes, format) {
+    return new Promise(function (resolve, reject) {
+      if (!window.URL || typeof window.URL.createObjectURL !== "function") {
+        reject(new Error("This browser cannot decode a selected local image safely."));
+        return;
+      }
+      var blob = new Blob([bytes], { type: "image/" + format });
+      var objectUrl = window.URL.createObjectURL(blob);
+      var image = new Image();
+      image.decoding = "async";
+      image.onload = function () {
+        window.URL.revokeObjectURL(objectUrl);
+        resolve(image);
+      };
+      image.onerror = function () {
+        window.URL.revokeObjectURL(objectUrl);
+        reject(new Error("The selected PNG or JPEG could not be decoded locally."));
+      };
+      image.src = objectUrl;
+    });
+  }
+
+  function derivedLogoCanvas(image, backgroundMode, background) {
+    var naturalWidth = Math.max(1, Number(image.naturalWidth) || Number(image.width) || 1);
+    var naturalHeight = Math.max(1, Number(image.naturalHeight) || Number(image.height) || 1);
+    var scale = Math.min(1, SITE_LOGO_MAX_DIMENSION / Math.max(naturalWidth, naturalHeight));
+    var width = Math.max(1, Math.round(naturalWidth * scale));
+    var height = Math.max(1, Math.round(naturalHeight * scale));
+    var canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    var context = canvas.getContext("2d", { alpha: true });
+    if (!context) throw new Error("This browser cannot prepare a bounded local logo canvas.");
+    if (backgroundMode === "color") {
+      context.fillStyle = safeHexColor(background, "#101827");
+      context.fillRect(0, 0, width, height);
+    }
+    context.drawImage(image, 0, 0, width, height);
+    return { canvas: canvas, context: context, width: width, height: height };
+  }
+
+  function canvasHasTransparency(canvas, context) {
+    var pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (var index = 3; index < pixels.length; index += 4) {
+      if (pixels[index] !== 255) return true;
+    }
+    return false;
+  }
+
+  function boundedDataUrl(canvas, format) {
+    if (format === "png") {
+      var png = canvas.toDataURL("image/png");
+      if (png.length <= SITE_LOGO_DERIVED_CHARACTERS) return { format: "png", dataUrl: png };
+      throw new Error("The transparent derived image exceeded this browser-local storage limit. Choose a smaller or simpler image, or select a solid background before trying again.");
+    }
+    var jpegResult = null;
+    [0.88, 0.78, 0.68, 0.58].some(function (quality) {
+      var candidate = canvas.toDataURL("image/jpeg", quality);
+      if (candidate.length <= SITE_LOGO_DERIVED_CHARACTERS) {
+        jpegResult = { format: "jpeg", dataUrl: candidate };
+        return true;
+      }
+      return false;
+    });
+    if (jpegResult) return jpegResult;
+    throw new Error("The compact derived JPEG exceeded this browser-local storage limit. Choose a smaller or simpler image.");
+  }
+
+  function deriveLogoDisplay(image, inspected, presentation) {
+    var canvasState = derivedLogoCanvas(image, presentation.backgroundMode, presentation.background);
+    var hasAlpha = inspected.format === "png" && canvasHasTransparency(canvasState.canvas, canvasState.context);
+    var encoded = boundedDataUrl(canvasState.canvas, hasAlpha && presentation.backgroundMode === "transparent" ? "png" : "jpeg");
+    return {
+      format: encoded.format,
+      dataUrl: encoded.dataUrl,
+      width: canvasState.width,
+      height: canvasState.height,
+      fit: presentation.fit,
+      backgroundMode: presentation.backgroundMode,
+      background: presentation.background,
+      focalX: presentation.focalX,
+      focalY: presentation.focalY
+    };
+  }
+
+  function currentLogoPresentation(elements) {
+    var custom = logoCustom(state.logo && state.logo.custom) || {};
+    return {
+      fit: elements.fit && ["contain", "cover", "fill"].indexOf(elements.fit.value) >= 0 ? elements.fit.value : (custom.fit || "contain"),
+      backgroundMode: elements.backgroundMode && elements.backgroundMode.value === "color" ? "color" : (custom.backgroundMode || "transparent"),
+      background: elements.background ? safeHexColor(elements.background.value, custom.background || "#101827") : (custom.background || "#101827"),
+      focalX: boundedLogoPercent(elements.focalX && elements.focalX.value, custom.focalX === undefined ? 50 : custom.focalX),
+      focalY: boundedLogoPercent(elements.focalY && elements.focalY.value, custom.focalY === undefined ? 50 : custom.focalY)
+    };
+  }
+
+  async function loadCustomLogo(file, elements) {
+    if (!file || !elements || Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active)) return;
+    if (!Number.isFinite(file.size) || file.size < 1 || file.size > SITE_LOGO_INPUT_BYTES) {
+      if (elements.file) elements.file.value = "";
+      notify("warning", "The selected image was not applied. Choose a PNG or JPEG no larger than 512 KiB.");
+      return;
+    }
+    if (elements.file) elements.file.disabled = true;
+    if (elements.status) elements.status.textContent = "Checking selected image bytes locally…";
+    try {
+      var bytes = await readLogoBytes(file);
+      if (bytes.byteLength !== file.size || bytes.byteLength > SITE_LOGO_INPUT_BYTES) throw new Error("The selected image exceeded the browser-local input limit.");
+      var inspected = inspectLogoBytes(bytes);
+      if (!inspected) throw new Error("The selected file is not a complete supported PNG or JPEG based on its actual bytes.");
+      if (inspected.width > SITE_LOGO_MAX_DECODED_DIMENSION || inspected.height > SITE_LOGO_MAX_DECODED_DIMENSION || inspected.width * inspected.height > SITE_LOGO_MAX_DECODED_PIXELS) {
+        throw new Error("The selected image exceeds the browser-local dimension or pixel boundary.");
+      }
+      var image = await decodeLogoImage(bytes, inspected.format);
+      if (image.naturalWidth !== inspected.width || image.naturalHeight !== inspected.height) throw new Error("The decoded image dimensions did not match the validated image header.");
+      var presentation = currentLogoPresentation(elements);
+      var custom = deriveLogoDisplay(image, inspected, presentation);
+      if (!persistLogo({ sourceType: "custom", presetId: logoPreset(state.logo && state.logo.presetId).id, custom: custom }, "A bounded local logo preview is active. The original file, its name, and its path were not retained.")) {
+        return;
+      }
+    } catch (error) {
+      if (elements.file) elements.file.value = "";
+      if (elements.status) elements.status.textContent = "The selected image was not applied.";
+      notify("warning", (error && error.message) || "The selected image could not be validated locally. The current valid logo remains active.");
+    } finally {
+      renderLogoCustomizer();
+    }
+  }
+
+  function installLogoCustomization() {
+    var elements = logoCustomizerElements();
+    if (!elements.surface || elements.surface.getAttribute("data-mss-logo-ready") === "true") return;
+    elements.surface.setAttribute("data-mss-logo-ready", "true");
+    if (elements.presets) {
+      SITE_LOGO_PRESETS.forEach(function (preset) {
+        var card = made("article");
+        card.className = "site-logo-preset";
+        card.setAttribute("data-mss-logo-preset-card", preset.id);
+        card.setAttribute("role", "listitem");
+        var mark = made("span");
+        mark.className = "site-logo-preset-mark";
+        mark.setAttribute("data-mss-logo-preset", preset.id);
+        mark.setAttribute("aria-hidden", "true");
+        mark.textContent = "MS";
+        var copy = made("span");
+        var title = made("strong");
+        title.textContent = preset.name;
+        var description = made("small");
+        description.textContent = preset.description;
+        copy.append(title, description);
+        var choose = button("Use " + preset.name, function () {
+          persistLogo({ sourceType: "preset", presetId: preset.id, custom: null }, preset.name + " is now the browser-local page mark. Any derived custom image was removed from this browser.");
+          if (elements.file) elements.file.value = "";
+        });
+        choose.setAttribute("aria-pressed", "false");
+        card.append(mark, copy, choose);
+        elements.presets.appendChild(card);
+      });
+    }
+    if (elements.search) {
+      makeRegexBuilder(elements.search, {
+        label: "shipped logo presets",
+        scope: elements.surface,
+        candidates: function () { return all('[data-mss-logo-preset-card]', elements.presets); }
+      });
+    }
+    if (elements.file) elements.file.addEventListener("change", function () { loadCustomLogo(elements.file.files && elements.file.files[0], elements); });
+    [elements.fit, elements.backgroundMode, elements.background, elements.focalX, elements.focalY].forEach(function (control) {
+      if (!control) return;
+      control.addEventListener("input", function () {
+        if (control === elements.focalX && elements.focalXOutput) elements.focalXOutput.textContent = boundedLogoPercent(control.value, 50) + "%";
+        if (control === elements.focalY && elements.focalYOutput) elements.focalYOutput.textContent = boundedLogoPercent(control.value, 50) + "%";
+      });
+      control.addEventListener("change", function () {
+        var current = logoCustom(state.logo && state.logo.custom);
+        if (!current) return;
+        var presentation = currentLogoPresentation(elements);
+        persistLogo({ sourceType: "custom", presetId: logoPreset(state.logo && state.logo.presetId).id, custom: Object.assign({}, current, presentation) }, "Custom-logo rendering was updated in this browser.");
+      });
+    });
+    if (elements.reset) elements.reset.addEventListener("click", function () {
+      persistLogo({ sourceType: "preset", presetId: "studio-aqua", custom: null }, "Studio Aqua is active again. The bounded custom display image was removed from this browser.");
+      if (elements.file) elements.file.value = "";
+    });
+    if (hasContractMethod("registerCommand")) {
+      safely(function () {
+        contract.registerCommand({
+          id: "destination-site-logo-customizer",
+          title: "Public-page logo",
+          description: "Choose a browser-local logo preset or bounded custom image.",
+          group: "Browser-local settings",
+          elementId: "site-logo-customizer",
+          keywords: ["logo", "preset", "image", "appearance", "browser-local"]
+        });
+      });
+    }
+    renderLogoCustomizer();
+  }
+
   function syncSettingsControls(surface) {
     var scope = surface || one('[data-contract-surface="settings"]');
     if (!scope) return;
@@ -386,6 +876,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     root.lang = settings.languageMode === "cantonese" ? "zh-Hant" : "en";
     renderLocalizedCopy();
     renderSchoolModeControls();
+    renderLogoCustomizer();
     var output = one("[data-mss-settings-status]");
     if (output) {
       var active = settings.scheduledOverrides && Object.keys(settings.scheduledOverrides).length;
@@ -525,14 +1016,6 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     }
     emojiToggle.addEventListener("change", function () {
       updateSettings({ showDialogEmoji: emojiToggle.checked }, "dialog-emoji", "Emoji decoration updated. The factual status stays the same.");
-    });
-
-    var logo = one('[data-contract-hook="app-logo-upload"] input[type="file"]', surface);
-    if (logo) logo.addEventListener("change", function () {
-      if (logo.files && logo.files[0]) {
-        addHistory("Preview input selected", "A local logo input was selected without upload.");
-        notify("info", "A logo was selected for a browser-local preview only. It was not uploaded, stored, or used as application identity.");
-      }
     });
 
     var vocabularyInput = one('[data-contract-hook="personal-vocabulary-upload"] input[type="file"]', surface);
@@ -1816,14 +2299,18 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       if (compiled && compiled.error) {
         status.textContent = compiled.error;
         if (!globalResults) items.forEach(function (item) { item.hidden = false; });
+        if (typeof options.onRefresh === "function") {
+          safely(function () { options.onRefresh({ active: true, error: compiled.error, total: items.length, matches: [] }); });
+        }
         return;
       }
+      var active = mode.checked ? Boolean(pattern.value) : Boolean(input.value.trim());
+      var matches = active ? items.filter(function (item) { return hasMatch(textOf(item)); }) : items.slice();
       if (globalResults) {
         globalResults.replaceChildren();
-        if (!input.value.trim() && !mode.checked) {
+        if (!active) {
           status.textContent = "Enter a term, or choose regular expression mode.";
         } else {
-          var matches = items.filter(function (item) { return hasMatch(textOf(item)); });
           status.textContent = matches.length + " matching feature preview" + (matches.length === 1 ? "." : "s.");
           if (!matches.length) globalResults.textContent = "No matching feature preview was found.";
           matches.slice(0, 12).forEach(function (item) {
@@ -1837,9 +2324,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
           });
         }
       } else {
-        var active = mode.checked ? Boolean(pattern.value) : Boolean(input.value.trim());
         items.forEach(function (item) { item.hidden = active && !hasMatch(textOf(item)); });
-        var count = items.filter(function (item) { return !item.hidden; }).length;
+        var count = matches.length;
         status.textContent = active ? count + " local match" + (count === 1 ? "." : "es.") : "Plain-text search is ready.";
       }
       if (mode.checked && pattern.value) {
@@ -1853,7 +2339,21 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       if (hasContractMethod("evaluateRegex") && mode.checked && pattern.value) {
         safely(function () { contract.evaluateRegex({ pattern: pattern.value, flags: selectedFlags(), sample: sample.value }); });
       }
+      if (typeof options.onRefresh === "function") {
+        safely(function () { options.onRefresh({ active: active, error: "", total: items.length, matches: matches.slice() }); });
+      }
     }
+
+    input.__mssRegexController = {
+      matches: hasMatch,
+      isActive: function () { return mode.checked ? Boolean(pattern.value) : Boolean(input.value.trim()); },
+      getError: function () {
+        if (!mode.checked || !pattern.value) return "";
+        var compiled = expression(pattern.value, selectedFlags());
+        return compiled.error || "";
+      },
+      refresh: refresh
+    };
 
     opener.addEventListener("click", function () {
       builder.hidden = !builder.hidden;
@@ -3673,92 +4173,452 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     });
   }
 
-  function installDestructiveDemo() {
+  function notificationElements() {
     var surface = one('[data-contract-surface="notification-center"]');
-    if (!surface || one("[data-mss-confirmation-demo]", surface)) return;
-    var area = made("section");
-    area.setAttribute("data-mss-confirmation-demo", "true");
-    var heading = made("h3");
-    heading.textContent = "Safe confirmation interaction demo";
-    var copy = made("p");
-    copy.textContent = "This educational flow cannot delete, change, upload, download, or otherwise affect anything. It only demonstrates deliberate confirmation controls.";
-    area.append(heading, copy);
-    area.appendChild(button("Open non-destructive confirmation demo", function () {
-      showDialog("Non-destructive confirmation demo", function (content) {
-        var description = made("p");
-        description.textContent = "Complete both acknowledgements and move the slider. The final control only reports that nothing changed.";
-        var firstLabel = made("label");
-        var first = made("input");
-        first.type = "checkbox";
-        firstLabel.append(first, document.createTextNode(" I understand this is only a demonstration."));
-        var secondLabel = made("label");
-        var second = made("input");
-        second.type = "checkbox";
-        secondLabel.append(second, document.createTextNode(" I understand no data can be changed here."));
-        var rangeLabel = made("label");
-        rangeLabel.textContent = "Confirmation slider";
-        var range = made("input");
-        range.type = "range";
-        range.min = "0";
-        range.max = "100";
-        range.value = "0";
-        range.disabled = true;
-        rangeLabel.appendChild(range);
-        var output = made("output");
-        output.setAttribute("aria-live", "polite");
-        var finish = button("Finish safe demo", function () {
-          output.textContent = "Demo complete. Nothing was changed.";
-          addHistory("Confirmation demo completed", "No operation was available or performed.");
-          notify("demo", "The confirmation demonstration completed. Nothing was changed.");
-        });
-        finish.disabled = true;
-        function update() {
-          range.disabled = !(first.checked && second.checked);
-          finish.disabled = range.disabled || range.value !== "100";
-          output.textContent = range.disabled ? "Acknowledge both statements to enable the slider." : range.value === "100" ? "Ready to complete the safe demonstration." : "Move the slider to 100 to finish the demonstration.";
-        }
-        first.addEventListener("change", update);
-        second.addEventListener("change", update);
-        range.addEventListener("input", update);
-        content.append(description, firstLabel, secondLabel, rangeLabel, output, finish);
-        update();
+    if (!surface) return {};
+    var host = one('[data-mss-notification-center]', surface);
+    return {
+      surface: surface,
+      host: host,
+      list: host && one('[data-mss-notification-list]', host),
+      search: host && one('[data-contract-hook="notification-search-regex"] input[type="search"]', host),
+      showDismissed: host && one('[data-mss-notification-show-dismissed]', host),
+      add: host && one('[data-mss-notification-add]', host),
+      selectVisible: host && one('[data-mss-notification-select-visible]', host),
+      clearSelection: host && one('[data-mss-notification-clear-selection]', host),
+      dismissSelected: host && one('[data-mss-notification-dismiss-selected]', host),
+      clearDismissed: host && one('[data-mss-notification-clear-dismissed]', host),
+      clearAll: host && one('[data-mss-notification-clear-all]', host),
+      summary: surface && one('[data-mss-notification-summary]', surface),
+      status: host && one('[data-mss-notification-status]', host),
+      confirmationHost: host && one('[data-mss-notification-confirmation]', host)
+    };
+  }
+
+  function notificationRecordTime(notice) {
+    return notice && (notice.createdAt || notice.when) || new Date().toISOString();
+  }
+
+  function activeNotificationRecords() {
+    return state.notifications.filter(function (notice) { return !notice.dismissed; });
+  }
+
+  function dismissedNotificationRecords() {
+    return state.notifications.filter(function (notice) { return Boolean(notice.dismissed); });
+  }
+
+  function setNotificationStatus(message) {
+    notificationRuntime.status = String(message || "").slice(0, 500);
+    var elements = notificationElements();
+    if (elements.status) elements.status.textContent = notificationRuntime.status;
+  }
+
+  function cleanNotificationSelection() {
+    var activeIds = new Set(activeNotificationRecords().map(function (notice) { return notice.id; }));
+    Array.from(notificationRuntime.selected).forEach(function (id) {
+      if (!activeIds.has(id)) notificationRuntime.selected.delete(id);
+    });
+  }
+
+  function clearNotificationTimer(id) {
+    if (!notificationRuntime.autoDismissTimers[id]) return;
+    window.clearTimeout(notificationRuntime.autoDismissTimers[id]);
+    delete notificationRuntime.autoDismissTimers[id];
+  }
+
+  function notificationDismissesAutomatically(notice) {
+    return ["info", "success", "progress"].indexOf(notificationLevel(notice)) >= 0;
+  }
+
+  function dismissNotificationRecord(id, announcement) {
+    var result = hasContractMethod("dismissNotification") ? safely(function () { return contract.dismissNotification(id); }, null) : null;
+    if (result && result.ok === true) {
+      hydrateContractState();
+    } else if (!hasContractMethod("dismissNotification")) {
+      state.notifications.forEach(function (notice) { if (notice.id === id) notice.dismissed = true; });
+      state.history.unshift({ id: "history-dismiss-" + Date.now(), action: "Notification dismissed", target: id, detail: "A browser-local notification was dismissed.", createdAt: new Date().toISOString() });
+    } else {
+      setNotificationStatus((result && result.error) || "This browser-local notification could not be dismissed.");
+      return false;
+    }
+    clearNotificationTimer(id);
+    cleanNotificationSelection();
+    renderNotifications();
+    if (announcement) live(announcement);
+    return true;
+  }
+
+  function scheduleNotificationAutoDismissals() {
+    var activeIds = new Set();
+    activeNotificationRecords().forEach(function (notice) {
+      activeIds.add(notice.id);
+      if (!notificationDismissesAutomatically(notice) || notificationRuntime.autoDismissTimers[notice.id]) return;
+      notificationRuntime.autoDismissTimers[notice.id] = window.setTimeout(function () {
+        delete notificationRuntime.autoDismissTimers[notice.id];
+        dismissNotificationRecord(notice.id, "A non-blocking browser-local notification closed automatically. Its local history record remains available when dismissed notices are shown.");
+      }, 7000);
+    });
+    Object.keys(notificationRuntime.autoDismissTimers).forEach(function (id) {
+      if (!activeIds.has(id)) clearNotificationTimer(id);
+    });
+  }
+
+  function renderNotificationToasts() {
+    var stack = one('[data-mss-notification-toast-stack]');
+    if (!stack) {
+      stack = made("section");
+      stack.setAttribute("data-mss-notification-toast-stack", "true");
+      stack.setAttribute("aria-label", "Browser-local notifications");
+      stack.setAttribute("aria-live", "polite");
+      (body || document.documentElement).appendChild(stack);
+    }
+    stack.replaceChildren();
+    activeNotificationRecords().slice(0, 4).reverse().forEach(function (notice) {
+      var level = notificationLevel(notice);
+      var toast = made("article");
+      toast.className = "notification-toast notification-toast--" + level;
+      toast.setAttribute("data-mss-notification-toast", notice.id);
+      toast.setAttribute("role", level === "warning" || level === "error" ? "alert" : "status");
+      var content = made("div");
+      var title = made("strong");
+      title.textContent = emoji(level) + (notice.title || "Browser-local notification");
+      var message = made("span");
+      message.textContent = notificationMessage(notice);
+      var behavior = made("small");
+      behavior.textContent = notificationDismissesAutomatically(notice) ? "Closes automatically while this page remains open; the dismissed record remains local." : "Stays visible until you dismiss it; the record remains local.";
+      content.append(title, message, behavior);
+      var dismiss = button("Dismiss", function () {
+        dismissNotificationRecord(notice.id, "Browser-local notification dismissed. Its metadata remains in this page's dismissed-notice history until you explicitly clear it.");
+      }, "Dismiss browser-local notification: " + (notice.title || "notification"));
+      toast.append(content, dismiss);
+      stack.appendChild(toast);
+    });
+    scheduleNotificationAutoDismissals();
+  }
+
+  function updateNotificationControls(elements) {
+    var active = activeNotificationRecords().length;
+    var dismissed = dismissedNotificationRecords().length;
+    var selected = notificationRuntime.selected.size;
+    if (elements.summary) elements.summary.textContent = active + " active and " + dismissed + " dismissed browser-local notice" + (active + dismissed === 1 ? "." : "s.");
+    if (elements.dismissSelected) elements.dismissSelected.disabled = selected === 0;
+    if (elements.clearSelection) elements.clearSelection.disabled = selected === 0;
+    if (elements.clearDismissed) elements.clearDismissed.disabled = dismissed === 0;
+    if (elements.clearAll) elements.clearAll.disabled = active + dismissed === 0;
+    if (!notificationRuntime.status) {
+      setNotificationStatus(active + " active and " + dismissed + " dismissed browser-local notices. Bulk selection is limited to " + notificationRuntime.maxBulkSelection + " active notices.");
+    }
+  }
+
+  function refreshNotificationSearch(elements) {
+    if (!elements.search || elements.search.getAttribute("data-mss-regex-ready") !== "true") return;
+    safely(function () { elements.search.dispatchEvent(new Event("input", { bubbles: true })); });
+  }
+
+  function notificationSelectionToggle(id, selected) {
+    if (!selected) {
+      notificationRuntime.selected.delete(id);
+      setNotificationStatus(notificationRuntime.selected.size + " active browser-local notice" + (notificationRuntime.selected.size === 1 ? " is" : "s are") + " selected.");
+      renderNotifications();
+      return;
+    }
+    if (notificationRuntime.selected.size >= notificationRuntime.maxBulkSelection) {
+      setNotificationStatus("Bulk selection is limited to " + notificationRuntime.maxBulkSelection + " active browser-local notices. Clear a selection before adding another.");
+      renderNotifications();
+      return;
+    }
+    notificationRuntime.selected.add(id);
+    setNotificationStatus(notificationRuntime.selected.size + " active browser-local notice" + (notificationRuntime.selected.size === 1 ? " is" : "s are") + " selected.");
+    renderNotifications();
+  }
+
+  function removeNotificationEscapeHandler() {
+    if (notificationRuntime.escapeHandler) document.removeEventListener("keydown", notificationRuntime.escapeHandler);
+    notificationRuntime.escapeHandler = null;
+  }
+
+  function closeNotificationConfirmation(message) {
+    var confirmation = notificationRuntime.confirmation;
+    if (!confirmation) return;
+    if (confirmation.session && hasContractMethod("advanceDestructiveAction")) {
+      safely(function () { contract.advanceDestructiveAction(confirmation.session, { cancel: true }); });
+    }
+    notificationRuntime.confirmation = null;
+    removeNotificationEscapeHandler();
+    if (message) setNotificationStatus(message);
+    renderNotifications();
+    if (confirmation.origin) focus(confirmation.origin);
+  }
+
+  function beginNotificationClearConfirmation(mode, origin) {
+    var affected = mode === "dismissed" ? dismissedNotificationRecords().length : state.notifications.length;
+    if (!affected) {
+      setNotificationStatus(mode === "dismissed" ? "There are no dismissed browser-local notification records to clear." : "There are no browser-local notification records to clear.");
+      return;
+    }
+    if (!hasContractMethod("beginDestructiveAction") || !hasContractMethod("advanceDestructiveAction") || !hasContractMethod("clearNotifications")) {
+      setNotificationStatus("This browser-local confirmation cannot start because the page-local contract is unavailable. No records were changed.");
+      return;
+    }
+    var title = mode === "dismissed" ? "Clear dismissed browser-local notification metadata" : "Clear all browser-local notification metadata";
+    var session = safely(function () {
+      return contract.beginDestructiveAction({ id: "notification-clear-" + mode + "-" + Date.now(), title: title, affected: affected });
+    }, null);
+    if (!session || !session.id) {
+      setNotificationStatus("This browser-local confirmation could not start. No records were changed.");
+      return;
+    }
+    notificationRuntime.confirmation = { mode: mode, affected: affected, title: title, session: session, origin: origin || null };
+    removeNotificationEscapeHandler();
+    notificationRuntime.escapeHandler = function (event) {
+      if (event.key !== "Escape" || !notificationRuntime.confirmation) return;
+      event.preventDefault();
+      closeNotificationConfirmation("Browser-local clear cancelled with Emergency exit. No notification records were changed.");
+    };
+    document.addEventListener("keydown", notificationRuntime.escapeHandler);
+    setNotificationStatus("Confirmation is open for " + affected + " browser-local notification record" + (affected === 1 ? "." : "s.") + " No records have been changed.");
+    renderNotifications();
+  }
+
+  function confirmationSessionForInputs(confirmation, first, second, range) {
+    var source = safely(function () {
+      return contract.beginDestructiveAction({ id: confirmation.session.id, title: confirmation.title, affected: confirmation.affected });
+    }, null);
+    if (!source) return null;
+    var current = source;
+    function advance(request) {
+      var result = safely(function () { return contract.advanceDestructiveAction(current, request); }, null);
+      if (result && result.ok === true && result.session) current = result.session;
+    }
+    if (first.checked) advance({ key: "first" });
+    if (second.checked) advance({ key: "second" });
+    advance({ slider: Number(range.value) });
+    return current;
+  }
+
+  function renderNotificationConfirmation(elements) {
+    var host = elements.confirmationHost;
+    if (!host) return;
+    var confirmation = notificationRuntime.confirmation;
+    host.replaceChildren();
+    if (!confirmation) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    var heading = made("h4");
+    heading.textContent = confirmation.title;
+    var description = made("p");
+    description.textContent = "This will remove exactly " + confirmation.affected + " browser-local notification metadata record" + (confirmation.affected === 1 ? "." : "s.") + " It cannot delete browser downloads, server data, installed-app data, credentials, files, or external data.";
+    var firstLabel = made("label");
+    firstLabel.className = "notification-confirmation-check";
+    var first = made("input");
+    first.type = "checkbox";
+    first.setAttribute("data-mss-notification-confirm-first", "true");
+    firstLabel.append(first, document.createTextNode(" I understand that only page-local notification metadata will be removed."));
+    var secondLabel = made("label");
+    secondLabel.className = "notification-confirmation-check";
+    var second = made("input");
+    second.type = "checkbox";
+    second.setAttribute("data-mss-notification-confirm-second", "true");
+    secondLabel.append(second, document.createTextNode(" I understand dismissed or cleared notices cannot be restored by this page."));
+    var rangeLabel = made("label");
+    rangeLabel.className = "notification-confirmation-range";
+    var rangeCaption = made("span");
+    rangeCaption.textContent = "Slide to 100 to enable clearing";
+    var range = made("input");
+    range.type = "range";
+    range.min = "0";
+    range.max = "100";
+    range.value = "0";
+    range.disabled = true;
+    range.setAttribute("aria-label", "Confirmation slider from 0 to 100");
+    var progress = made("progress");
+    progress.max = 100;
+    progress.value = 0;
+    var sliderStatus = made("output");
+    sliderStatus.setAttribute("aria-live", "polite");
+    rangeLabel.append(rangeCaption, range, progress, sliderStatus);
+    var controls = made("div");
+    controls.className = "notification-confirmation-actions";
+    var exit = button("Emergency exit", function () {
+      closeNotificationConfirmation("Browser-local clear cancelled with Emergency exit. No notification records were changed.");
+    });
+    var confirm = button(confirmation.mode === "dismissed" ? "Clear dismissed metadata" : "Clear all local notices", function () {
+      var final = safely(function () { return contract.advanceDestructiveAction(confirmation.session, { confirm: true }); }, null);
+      if (!final || final.ok !== true || !final.session || final.session.state !== "confirmed") {
+        setNotificationStatus((final && final.error) || "Both acknowledgements and the full 0–100 confirmation slider are required. No records were changed.");
+        renderNotificationConfirmation(notificationElements());
+        return;
+      }
+      var result = safely(function () { return contract.clearNotifications({ onlyDismissed: confirmation.mode === "dismissed" }); }, null);
+      if (!result || result.ok !== true) {
+        setNotificationStatus((result && result.error) || "Browser-local notification metadata could not be cleared. No records were changed.");
+        return;
+      }
+      notificationRuntime.selected.clear();
+      notificationRuntime.confirmation = null;
+      removeNotificationEscapeHandler();
+      Object.keys(notificationRuntime.autoDismissTimers).forEach(clearNotificationTimer);
+      hydrateContractState();
+      setNotificationStatus(result.removed + " browser-local notification metadata record" + (result.removed === 1 ? " was" : "s were") + " cleared. No browser download, server, installed-app, credential, file, or external data changed.");
+      live(notificationRuntime.status);
+      renderNotifications();
+      if (confirmation.origin) focus(confirmation.origin);
+    }, "Confirm clearing browser-local notification metadata");
+    confirm.disabled = true;
+    controls.append(exit, confirm);
+    host.append(heading, description, firstLabel, secondLabel, rangeLabel, controls);
+
+    function update() {
+      var both = first.checked && second.checked;
+      if (!both) range.value = "0";
+      range.disabled = !both;
+      var nextSession = confirmationSessionForInputs(confirmation, first, second, range);
+      if (nextSession) confirmation.session = nextSession;
+      progress.value = Number(range.value);
+      confirm.disabled = !(confirmation.session && confirmation.session.canConfirm === true);
+      sliderStatus.textContent = !both ? "Complete both independent acknowledgements before the slider becomes available." : range.value === "100" ? "All confirmation controls are complete. The clear action is enabled." : "Confirmation slider: " + range.value + " of 100.";
+    }
+    first.addEventListener("change", update);
+    second.addEventListener("change", update);
+    range.addEventListener("input", update);
+    update();
+    window.setTimeout(function () { if (notificationRuntime.confirmation === confirmation) first.focus(); }, 0);
+  }
+
+  function installNotificationCenter() {
+    var elements = notificationElements();
+    if (!elements.surface || !elements.host || elements.surface.getAttribute("data-mss-notification-center-ready") === "true") return;
+    elements.surface.setAttribute("data-mss-notification-center-ready", "true");
+    if (elements.search) {
+      makeRegexBuilder(elements.search, {
+        label: "browser-local notices",
+        scope: elements.surface,
+        candidates: function () { return all("[data-mss-notification-record]", elements.list); }
       });
-    }));
-    surface.appendChild(area);
+    }
+    if (elements.showDismissed) elements.showDismissed.addEventListener("change", function () {
+      setNotificationStatus(elements.showDismissed.checked ? "Dismissed browser-local notification history is visible." : "Dismissed browser-local notification history is hidden. Records remain local until explicitly cleared.");
+      renderNotifications();
+    });
+    if (elements.add) elements.add.addEventListener("click", function () {
+      notify("info", "A browser-local information notice was added. No server, installer, download, desktop-app, account, or external-data action occurred.");
+      setNotificationStatus("A browser-local information notice was added to this page's local record.");
+      renderNotifications();
+    });
+    if (elements.selectVisible) elements.selectVisible.addEventListener("click", function () {
+      var visible = all('[data-mss-notification-record]:not([hidden])', elements.list).filter(function (item) { return item.getAttribute("data-mss-notification-dismissed") !== "true"; });
+      notificationRuntime.selected.clear();
+      visible.slice(0, notificationRuntime.maxBulkSelection).forEach(function (item) { notificationRuntime.selected.add(item.getAttribute("data-mss-notification-record")); });
+      setNotificationStatus(notificationRuntime.selected.size + " visible active browser-local notice" + (notificationRuntime.selected.size === 1 ? " is" : "s are") + " selected" + (visible.length > notificationRuntime.maxBulkSelection ? "; selection is bounded to " + notificationRuntime.maxBulkSelection + "." : "."));
+      renderNotifications();
+    });
+    if (elements.clearSelection) elements.clearSelection.addEventListener("click", function () {
+      notificationRuntime.selected.clear();
+      setNotificationStatus("The browser-local notice selection was cleared. No notification record changed.");
+      renderNotifications();
+    });
+    if (elements.dismissSelected) elements.dismissSelected.addEventListener("click", function () {
+      var ids = Array.from(notificationRuntime.selected).slice(0, notificationRuntime.maxBulkSelection);
+      var dismissed = ids.filter(function (id) { return dismissNotificationRecord(id); }).length;
+      notificationRuntime.selected.clear();
+      setNotificationStatus(dismissed + " browser-local notice" + (dismissed === 1 ? " was" : "s were") + " dismissed. Their local metadata remains available when dismissed history is shown.");
+      live(notificationRuntime.status);
+      renderNotifications();
+    });
+    if (elements.clearDismissed) elements.clearDismissed.addEventListener("click", function () { beginNotificationClearConfirmation("dismissed", elements.clearDismissed); });
+    if (elements.clearAll) elements.clearAll.addEventListener("click", function () { beginNotificationClearConfirmation("all", elements.clearAll); });
+    window.addEventListener("pagehide", function () {
+      Object.keys(notificationRuntime.autoDismissTimers).forEach(clearNotificationTimer);
+      removeNotificationEscapeHandler();
+    }, { once: true });
+    if (hasContractMethod("registerCommand")) safely(function () {
+      contract.registerCommand({ id: "browser-local-notification-center", title: "Browser-local notification center", description: "Review, dismiss, search, and safely clear only this page's browser-local notification metadata.", group: "Browser-local controls", elementId: "notifications-preview", keywords: ["notifications", "toast", "clear", "confirmation"] });
+    });
   }
 
   function renderNotifications() {
-    var surface = one('[data-contract-surface="notification-center"]');
-    if (!surface) return;
-    var area = one("[data-mss-local-notifications]", surface);
-    if (!area) {
-      area = made("section");
-      area.setAttribute("data-mss-local-notifications", "true");
-      var heading = made("h3");
-      heading.textContent = "Browser-local demonstration notices";
-      var list = made("ul");
-      list.setAttribute("data-mss-notification-list", "true");
-      area.append(heading, button("Add demo notice", function () {
-        addHistory("Demo notice added", "A browser-local notice was added.");
-        notify("demo", "A browser-local demonstration notice was added. No server or installer action occurred.");
-      }), list);
-      surface.appendChild(area);
-    }
-    var listHost = one("[data-mss-notification-list]", area);
-    listHost.replaceChildren();
-    if (!state.notifications.length) {
+    var elements = notificationElements();
+    if (!elements.surface || !elements.list) return;
+    cleanNotificationSelection();
+    var showDismissed = Boolean(elements.showDismissed && elements.showDismissed.checked);
+    var records = state.notifications.filter(function (notice) { return showDismissed || !notice.dismissed; });
+    elements.list.replaceChildren();
+    if (!records.length) {
       var empty = made("li");
-      empty.textContent = "No browser-local notices yet.";
-      listHost.appendChild(empty);
-      return;
+      empty.className = "empty-state";
+      empty.textContent = showDismissed ? notificationLocalizedCopy("No browser-local notification history matches this view.", "而家呢個檢視冇符合嘅瀏覽器本機通知記錄。") : notificationLocalizedCopy("No active browser-local notices remain. Show dismissed notice history to review retained local metadata.", "而家冇未處理嘅瀏覽器本機通知。顯示已關閉通知記錄可以查看仍然保留嘅本機資料。");
+      elements.list.appendChild(empty);
+    } else {
+      records.forEach(function (notice) {
+        var level = notificationLevel(notice);
+        var item = made("li");
+        item.setAttribute("data-mss-notification-record", notice.id);
+        item.setAttribute("data-mss-notification-dismissed", String(Boolean(notice.dismissed)));
+        item.dataset.level = level;
+        var selectLabel = made("label");
+        selectLabel.className = "notification-selection";
+        var selection = made("input");
+        selection.type = "checkbox";
+        selection.checked = notificationRuntime.selected.has(notice.id);
+        selection.disabled = Boolean(notice.dismissed);
+        selection.setAttribute("aria-label", "Select browser-local notification: " + (notice.title || "notification"));
+        selection.addEventListener("change", function () { notificationSelectionToggle(notice.id, selection.checked); });
+        selectLabel.append(selection, document.createTextNode(" Select"));
+        var dot = made("span");
+        dot.className = "notification-dot notification-dot--" + level;
+        dot.setAttribute("aria-hidden", "true");
+        var content = made("div");
+        var title = made("strong");
+        title.textContent = emoji(level) + (notice.title || "Browser-local notification");
+        var message = made("small");
+        message.textContent = notificationMessage(notice);
+        var metadata = made("small");
+        metadata.textContent = (notice.dismissed ? "Dismissed" : "Active") + " · recorded locally at " + notificationRecordTime(notice) + ".";
+        content.append(title, message, metadata);
+        var actions = made("div");
+        actions.className = "notification-item-actions";
+        if (!notice.dismissed) actions.appendChild(button("Dismiss", function () {
+          dismissNotificationRecord(notice.id, "Browser-local notification dismissed. Its metadata remains local until explicitly cleared.");
+        }, "Dismiss browser-local notification: " + (notice.title || "notification")));
+        else {
+          var dismissed = made("span");
+          dismissed.textContent = "Dismissed";
+          actions.appendChild(dismissed);
+        }
+        item.append(selectLabel, dot, content, actions);
+        elements.list.appendChild(item);
+      });
     }
-    state.notifications.forEach(function (notice) {
-      var item = made("li");
-      var level = notificationLevel(notice);
-      item.dataset.level = level;
-      item.textContent = emoji(level) + notificationMessage(notice) + " Recorded locally at " + (notice.createdAt || notice.when || new Date().toISOString()) + ".";
-      listHost.appendChild(item);
-    });
+    updateNotificationControls(elements);
+    renderNotificationConfirmation(elements);
+    renderNotificationToasts();
+    refreshNotificationSearch(elements);
+  }
+
+  function syncHistoryActionOptions(select) {
+    if (!select) return;
+    var current = select.value || "All actions";
+    var actions = state.history.map(function (entry) { return entry.action; }).filter(Boolean).filter(function (value, index, list) {
+      return list.indexOf(value) === index;
+    }).sort(function (left, right) { return left.localeCompare(right); });
+    var signature = actions.join("\u0001");
+    if (select.getAttribute("data-mss-history-action-signature") !== signature) {
+      select.replaceChildren();
+      var allActions = document.createElement("option");
+      allActions.value = "All actions";
+      allActions.textContent = "All actions";
+      select.appendChild(allActions);
+      actions.forEach(function (action) {
+        var option = document.createElement("option");
+        option.value = action;
+        option.textContent = action;
+        select.appendChild(option);
+      });
+      select.setAttribute("data-mss-history-action-signature", signature);
+    }
+    select.value = actions.indexOf(current) >= 0 ? current : "All actions";
   }
 
   function renderHistory() {
@@ -3769,35 +4629,128 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       area = made("section");
       area.setAttribute("data-mss-local-history", "true");
       var heading = made("h3");
-      heading.textContent = "Browser-local demonstration history";
+      heading.textContent = "Browser-local action history";
+      var boundary = made("p");
+      boundary.className = "history-boundary";
+      boundary.textContent = "This browser stores bounded non-secret action metadata only. It is not desktop Git history, a server log, a file store, or browser history. Exports omit vocabulary values and metadata, authenticator/TOTP/toy-lock/QR/password/verifier/current-code data, raw file data and paths, download destinations, and server or installer state.";
+      var selection = made("p");
+      selection.setAttribute("data-mss-history-selection", "true");
+      selection.setAttribute("role", "status");
+      selection.setAttribute("aria-live", "polite");
+      var actions = made("div");
+      actions.className = "history-actions";
+      var selectVisible = button("Select visible records", function () {
+        historyUi.visibleIds.forEach(function (id) { historyUi.selectedIds.add(id); });
+        historyUi.message = "Visible browser-local history records selected.";
+        renderHistory();
+      });
+      selectVisible.setAttribute("data-mss-history-select-visible", "true");
+      var clearSelection = button("Clear selection", function () {
+        historyUi.selectedIds.clear();
+        historyUi.message = "History selection cleared.";
+        renderHistory();
+      });
+      clearSelection.setAttribute("data-mss-history-clear-selection", "true");
+      var exportLabel = made("label");
+      exportLabel.textContent = "Selected-record export format";
+      var format = made("select");
+      format.setAttribute("data-mss-history-export-format", "true");
+      [["json", "JSON"], ["jsonl", "JSON Lines"], ["csv", "CSV"], ["tsv", "TSV"], ["markdown", "Markdown"]].forEach(function (pair) {
+        var option = document.createElement("option");
+        option.value = pair[0];
+        option.textContent = pair[1];
+        format.appendChild(option);
+      });
+      exportLabel.appendChild(format);
+      var exportButton = button("Export selected records", function () {
+        prepareHistoryExport(surface);
+      });
+      exportButton.setAttribute("data-mss-history-export", "true");
+      var removeSelected = button("Remove selected records", function () {
+        openHistoryDestructiveConfirmation(surface, "Remove selected browser-local history records", Array.from(historyUi.selectedIds), false);
+      });
+      removeSelected.setAttribute("data-mss-history-remove-selected", "true");
+      var clearAll = button("Clear all browser-local history", function () {
+        openHistoryDestructiveConfirmation(surface, "Clear all browser-local history records", [], true);
+      });
+      clearAll.setAttribute("data-mss-history-clear-all", "true");
       var list = made("ul");
       list.setAttribute("data-mss-history-list", "true");
-      area.append(heading, list);
+      list.className = "history-record-list";
+      area.append(heading, boundary, selection, actions, list);
+      actions.append(selectVisible, clearSelection, exportLabel, exportButton, removeSelected, clearAll);
       surface.appendChild(area);
     }
     var filters = one('[data-contract-hook="history-filters"]', surface);
     var date = filters && one('input[type="date"]', filters);
     var action = filters && one("select", filters);
     var query = filters && one('input[type="search"]', filters);
+    syncHistoryActionOptions(action);
     var dateValue = date && date.value;
     var actionValue = action && action.value && action.value !== "All actions" ? action.value.toLocaleLowerCase() : "";
     var queryValue = query && query.value ? query.value.toLocaleLowerCase() : "";
+    var regexController = query && query.__mssRegexController;
+    var regexProblem = regexController && regexController.getError ? regexController.getError() : "";
     var entries = state.history.filter(function (entry) {
       if (dateValue && historyTime(entry).slice(0, 10) !== dateValue) return false;
-      if (actionValue && entry.action.toLocaleLowerCase().indexOf(actionValue) === -1) return false;
-      return !queryValue || (entry.action + " " + entry.detail).toLocaleLowerCase().indexOf(queryValue) !== -1;
+      if (actionValue && entry.action.toLocaleLowerCase() !== actionValue) return false;
+      var text = [entry.action, entry.target, entry.detail, historyTime(entry)].join(" ");
+      if (!regexController) return !queryValue || text.toLocaleLowerCase().indexOf(queryValue) !== -1;
+      return !regexController.isActive() || (!regexProblem && regexController.matches(text));
+    });
+    historyUi.visibleIds = entries.map(function (entry) { return entry.id; });
+    Array.from(historyUi.selectedIds).forEach(function (id) {
+      if (!state.history.some(function (entry) { return entry.id === id; })) historyUi.selectedIds.delete(id);
     });
     var listHost = one("[data-mss-history-list]", area);
     listHost.replaceChildren();
+    var selectionStatus = one("[data-mss-history-selection]", area);
+    var selectedCount = historyUi.selectedIds.size;
+    if (selectionStatus) {
+      var baseStatus = selectedCount + " of " + state.history.length + " browser-local history record" + (state.history.length === 1 ? " is" : "s are") + " selected.";
+      selectionStatus.textContent = historyUi.message ? baseStatus + " " + historyUi.message : baseStatus;
+    }
+    ["[data-mss-history-export]", "[data-mss-history-remove-selected]"] .forEach(function (selector) {
+      var control = one(selector, area);
+      if (control) control.disabled = selectedCount === 0;
+    });
+    var clearAll = one("[data-mss-history-clear-all]", area);
+    if (clearAll) clearAll.disabled = state.history.length === 0;
     if (!entries.length) {
       var empty = made("li");
-      empty.textContent = state.history.length ? "No browser-local history matches the active filters." : "No browser-local history exists yet.";
+      empty.className = "history-empty";
+      empty.textContent = regexProblem ? "The regular expression is invalid: " + regexProblem : state.history.length ? "No browser-local history matches the active filters." : "No browser-local history exists yet.";
       listHost.appendChild(empty);
       return;
     }
     entries.forEach(function (entry) {
       var item = made("li");
-      item.textContent = entry.action + ": " + entry.detail + " Recorded locally at " + historyTime(entry) + ".";
+      item.className = "history-record";
+      var selectLabel = made("label");
+      selectLabel.className = "history-record-selection";
+      var checkbox = made("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = historyUi.selectedIds.has(entry.id);
+      checkbox.setAttribute("aria-label", "Select browser-local history record: " + entry.action);
+      checkbox.addEventListener("change", function () {
+        if (checkbox.checked) historyUi.selectedIds.add(entry.id);
+        else historyUi.selectedIds.delete(entry.id);
+        historyUi.message = "";
+        renderHistory();
+      });
+      selectLabel.append(checkbox, document.createTextNode(" Select"));
+      var record = made("div");
+      var title = made("strong");
+      title.textContent = entry.action;
+      var target = made("span");
+      target.textContent = entry.target ? "Target: " + entry.target + "." : "Target: not recorded.";
+      var detail = made("span");
+      detail.textContent = entry.detail || "No additional non-secret detail was recorded.";
+      var when = made("time");
+      when.dateTime = historyTime(entry);
+      when.textContent = "Recorded locally at " + historyTime(entry) + ".";
+      record.append(title, target, detail, when);
+      item.append(selectLabel, record);
       listHost.appendChild(item);
     });
   }
@@ -3808,6 +4761,147 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     all("input, select", filters).forEach(function (input) {
       input.addEventListener("input", renderHistory);
       input.addEventListener("change", renderHistory);
+    });
+    var search = one('input[type="search"]', filters);
+    if (search && search.getAttribute("data-mss-history-filter-listener") !== "true") {
+      search.setAttribute("data-mss-history-filter-listener", "true");
+      search.addEventListener("input", function () { window.setTimeout(renderHistory, 0); });
+    }
+  }
+
+  function installHistorySearchBuilder() {
+    var surface = one('[data-contract-surface="local-history"]');
+    var filters = surface && one('[data-contract-hook="history-filters"]', surface);
+    var search = filters && one('input[type="search"]', filters);
+    if (!search) return;
+    makeRegexBuilder(search, {
+      label: "browser-local history",
+      scope: surface,
+      candidates: function () {
+        return state.history.map(function (entry) {
+          var candidate = made("span");
+          candidate.textContent = [entry.action, entry.target, entry.detail, historyTime(entry)].join(" ");
+          candidate.setAttribute("data-mss-history-candidate", entry.id);
+          return candidate;
+        });
+      },
+      onRefresh: function () {
+        window.setTimeout(renderHistory, 0);
+      }
+    });
+  }
+
+  function selectedHistoryRecords() {
+    return state.history.filter(function (entry) { return historyUi.selectedIds.has(entry.id); }).map(function (entry) {
+      return { id: entry.id, action: entry.action, target: entry.target || "", detail: entry.detail || "", createdAt: historyTime(entry) };
+    });
+  }
+
+  function downloadLocalText(text, mime, name) {
+    var blob = new Blob([text], { type: /(?:^|;)\s*charset=/i.test(mime) ? mime : mime + ";charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.hidden = true;
+    (body || document.documentElement).appendChild(link);
+    link.click();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+      link.remove();
+    }, 1000);
+  }
+
+  function prepareHistoryExport(surface) {
+    var area = one("[data-mss-local-history]", surface);
+    var format = area && one("[data-mss-history-export-format]", area);
+    var records = selectedHistoryRecords();
+    if (!records.length || !format) return;
+    var output = hasContractMethod("createExport") ? safely(function () { return contract.createExport(format.value, records); }, null) : null;
+    if (!output || !output.text) {
+      historyUi.message = "The selected-record export could not be prepared in this browser.";
+      renderHistory();
+      return;
+    }
+    var extension = output.format === "markdown" ? "md" : output.format;
+    downloadLocalText(output.text, output.mime || "text/plain", "minecraft-server-studio-browser-history." + extension);
+    historyUi.message = records.length + " selected browser-local history record" + (records.length === 1 ? " was" : "s were") + " exported as " + String(output.format || format.value).toUpperCase() + ". The file states its omissions.";
+    addHistory("Browser-local history export prepared", records.length + " selected non-secret history record(s) prepared without raw file, credential, vocabulary, server, installer, or path data.");
+    notify("success", "Selected browser-local history records were prepared for export. The browser chooses any download destination, which this page does not know or track.");
+    renderHistory();
+  }
+
+  function openHistoryDestructiveConfirmation(surface, title, ids, clearAll) {
+    var activeIds = clearAll ? state.history.map(function (entry) { return entry.id; }) : ids.filter(function (id) { return historyUi.selectedIds.has(id); });
+    if (!activeIds.length) return;
+    showDialog(title, function (content) {
+      var description = made("p");
+      description.textContent = "This removes only " + activeIds.length + " browser-local history metadata record" + (activeIds.length === 1 ? "." : "s.") + " It does not change a desktop app, server, source file, browser download, or authenticator record.";
+      var firstLabel = made("label");
+      var first = made("input");
+      first.type = "checkbox";
+      firstLabel.append(first, document.createTextNode(" I understand these browser-local metadata records will be removed."));
+      var secondLabel = made("label");
+      var second = made("input");
+      second.type = "checkbox";
+      secondLabel.append(second, document.createTextNode(" I understand this action cannot restore the selected metadata records."));
+      var rangeLabel = made("label");
+      rangeLabel.textContent = "Full-range confirmation slider";
+      var range = made("input");
+      range.type = "range";
+      range.min = "0";
+      range.max = "100";
+      range.value = "0";
+      range.disabled = true;
+      rangeLabel.appendChild(range);
+      var status = made("output");
+      status.setAttribute("aria-live", "polite");
+      var emergency = button("Emergency exit", function () {
+        closeDialog(dialog);
+        focus(one(clearAll ? "[data-mss-history-clear-all]" : "[data-mss-history-remove-selected]", one("[data-mss-local-history]", surface)));
+      });
+      var confirm = button("Confirm metadata removal", function () {
+        var confirmation = null;
+        if (hasContractMethod("beginDestructiveAction") && hasContractMethod("advanceDestructiveAction")) {
+          confirmation = safely(function () {
+            var session = contract.beginDestructiveAction({
+              id: "browser-history-" + Date.now(),
+              title: title,
+              affected: activeIds.length
+            });
+            if (first.checked) session = contract.advanceDestructiveAction(session, { key: "first" }).session;
+            if (second.checked) session = contract.advanceDestructiveAction(session, { key: "second" }).session;
+            session = contract.advanceDestructiveAction(session, { slider: Number(range.value), confirm: true }).session;
+            return session;
+          }, null);
+        }
+        if (!confirmation || confirmation.state !== "confirmed") {
+          status.textContent = "Both acknowledgement controls and the full confirmation slider are required.";
+          return;
+        }
+        var result = clearAll && hasContractMethod("clearAuditRecords") ? safely(function () { return contract.clearAuditRecords({ confirmed: true }); }, null) : hasContractMethod("removeAuditRecords") ? safely(function () { return contract.removeAuditRecords(activeIds, { confirmed: true }); }, null) : null;
+        if (!result || result.ok !== true) {
+          status.textContent = result && result.error ? result.error : "The local history operation could not be completed.";
+          return;
+        }
+        activeIds.forEach(function (id) { historyUi.selectedIds.delete(id); });
+        historyUi.message = (result.removed || activeIds.length) + " browser-local history metadata record" + ((result.removed || activeIds.length) === 1 ? " was" : "s were") + " removed after confirmation.";
+        closeDialog(dialog);
+        hydrateContractState();
+        renderHistory();
+        live("Browser-local history metadata was removed. No source file, download, credential, server, or installed-app data changed.");
+      });
+      confirm.disabled = true;
+      function update() {
+        range.disabled = !(first.checked && second.checked);
+        confirm.disabled = range.disabled || range.value !== "100";
+        status.textContent = range.disabled ? "Select both acknowledgement controls to enable the slider." : range.value === "100" ? "The metadata-removal confirmation is ready." : "Move the slider to 100 to enable metadata removal.";
+      }
+      first.addEventListener("change", update);
+      second.addEventListener("change", update);
+      range.addEventListener("input", update);
+      content.append(description, firstLabel, secondLabel, rangeLabel, status, confirm, emergency);
+      update();
     });
   }
 
@@ -3823,8 +4917,13 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     return {
       kind: "Minecraft Server Studio browser-local marketing preview",
       generatedAt: new Date().toISOString(),
-      boundary: "No server, installer, credential, file content, or runtime data is included.",
+      boundary: "No server, installer, credential, file content, custom-logo image representation, or runtime data is included.",
       settings: Object.assign({}, state.settings),
+      logo: {
+        sourceType: state.logo && state.logo.sourceType === "custom" ? "custom" : "preset",
+        presetId: logoPreset(state.logo && state.logo.presetId).id,
+        customImageOmitted: true
+      },
       notificationCount: state.notifications.length,
       history: state.history.map(function (entry) {
         return { action: entry.action, detail: entry.detail, when: historyTime(entry) };
@@ -3857,54 +4956,9 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
   }
 
   function installExports() {
-    if (!main || one("[data-mss-export-controls]", main)) return;
-    var panel = made("section");
-    panel.setAttribute("data-mss-export-controls", "true");
-    var heading = made("h2");
-    heading.textContent = "Export browser-local demonstration data";
-    var copy = made("p");
-    copy.textContent = "Choose a format to save this page's local preview settings and demonstration history. The export excludes server data, installer assets, file contents, credentials, and personal vocabulary values.";
-    var label = made("label");
-    label.textContent = "Format";
-    var format = made("select");
-    [["json", "JSON"], ["jsonl", "JSON Lines"], ["csv", "CSV"], ["tsv", "TSV"], ["markdown", "Markdown"]].forEach(function (pair) {
-      var option = document.createElement("option");
-      option.value = pair[0];
-      option.textContent = pair[1];
-      format.appendChild(option);
-    });
-    label.appendChild(format);
-    var output = made("output");
-    output.setAttribute("aria-live", "polite");
-    var prepare = button("Prepare browser-local export", function () {
-      var record = exportRecord();
-      var contractExport = hasContractMethod("createExport") ? safely(function () { return contract.createExport(format.value, [record]); }, null) : null;
-      var data = contractExport && contractExport.text ? {
-        text: contractExport.text,
-        type: contractExport.mime || "text/plain",
-        extension: contractExport.format === "markdown" ? "md" : contractExport.format
-      } : serialize(format.value, record);
-      var mime = data.type || "text/plain";
-      var blob = new Blob([data.text], { type: /(?:^|;)\s*charset=/i.test(mime) ? mime : mime + ";charset=utf-8" });
-      var url = URL.createObjectURL(blob);
-      var link = document.createElement("a");
-      link.href = url;
-      link.download = "minecraft-server-studio-browser-preview." + data.extension;
-      link.hidden = true;
-      (body || document.documentElement).appendChild(link);
-      link.click();
-      window.setTimeout(function () {
-        URL.revokeObjectURL(url);
-        link.remove();
-      }, 1000);
-      output.textContent = "A browser-local " + format.value.toUpperCase() + " export was prepared. It contains only this page's demo data.";
-      addHistory("Browser-local export prepared", format.value.toUpperCase() + " demo export prepared without server or credential data.");
-      notify("success", "Browser-local demo export prepared. It contains no server, installer, credential, file, or runtime data.");
-    });
-    panel.append(heading, copy, label, prepare, output);
-    var install = one("#install");
-    if (install && install.parentNode) install.parentNode.insertBefore(panel, install);
-    else main.appendChild(panel);
+    // Safe exports belong to the browser-local History destination so the user
+    // can review the exact selected audit records before the browser receives
+    // a download request. No page-wide state export is offered here.
   }
 
   function installVerifiedDownloadCtas() {
@@ -3979,6 +5033,24 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       interaction: "missing",
       capture: "missing"
     };
+    var browserNotificationCenter = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, site/styles.css, and site/contract.js",
+      implementationDetail: "The page renders bounded local notification records, non-blocking toasts, dismissal controls, a plain-text-first regex search, and two-key/full-slider confirmation before clearing only local notification metadata.",
+      documentation: "in-progress",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/browser-local-notifications-and-confirmation.md",
+      localization: "in-progress",
+      localizationDetail: "The existing page-wide language controls remain available, while this operational surface is still English-first in the current delivery lane.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2",
+      persistenceDetail: "At most 200 notification records and 500 contract audit records persist only for this page origin in this browser; transient bulk selection and confirmation sessions are not stored.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-site interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-site capture is recorded."
+    };
     var universalControlsCore = {
       implementation: "in-progress",
       implementationReference: "site/index.html, site/app.js, site/contract.js, and site/vocabulary-loader.js",
@@ -4031,7 +5103,6 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       capture: "missing",
       captureDetail: "No real built-site capture is recorded."
     };
-
     var narratorAndSchedules = {
       implementation: "in-progress",
       implementationReference: "site/index.html, site/app.js, and site/contract.js",
@@ -4041,7 +5112,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       localization: "in-progress",
       localizationDetail: "The controls expose English baseline copy; page-wide localization remains incomplete.",
       persistence: "in-progress",
-      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2, schema version 4, schedule rule version 1",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2, schema version 5, schedule rule version 1",
       persistenceDetail: "Voice identities and schedule rules persist only in this browser and only after bounded validation.",
       test: "missing",
       testDetail: "The fast-delivery lane intentionally did not run tests.",
@@ -4049,6 +5120,25 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       interactionDetail: "No built-artifact interaction is recorded.",
       capture: "missing",
       captureDetail: "No real built-artifact capture is recorded."
+    };
+    var browserLocalLogo = {
+    var browserLocalLogo = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, and site/contract.js",
+      implementationDetail: "Shipped CSS/markup presets and a bounded custom PNG/JPEG display path operate only in this browser-local page.",
+      documentation: "verified",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/site-logo-customization.md",
+      localization: "in-progress",
+      localizationDetail: "The foundation is English-first while the settings core supplies the page language modes.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2 logo record",
+      persistenceDetail: "Only a bounded derived data URL and presentation metadata can persist for this site origin; no source path, name, or original image is retained.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-site interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-site capture is recorded."
     };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
@@ -4060,6 +5150,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
         inventoryFeature("appearance-tab-foundation", "Browser-local appearance and feature-tab foundation", "in-progress", "Theme, density, accent, safe generic typography, docked feature tabs, groups, pins, order, searches, and bounded appearance targets are wired locally. The full per-element and proof contract remains incomplete.", universalControlsCore),
         inventoryFeature("event-narrator", "Optional browser-local event narrator", "in-progress", "Uses actual browser speechSynthesis voices only after opt-in; browser screen-reader activity cannot be reliably detected.", narratorAndSchedules),
         inventoryFeature("scheduled-settings", "Browser-local language and appearance schedules", "in-progress", "Local date, time, weekday, priority, and tie-break rules are wired; HTTPS and Home Assistant options remain explicitly unavailable.", narratorAndSchedules),
+        inventoryFeature("site-logo-customization", "Browser-local public-page logo customization", "in-progress", "Shipped CSS/markup presets and a byte-validated bounded custom PNG/JPEG display representation are local to this browser and never alter product identity.", browserLocalLogo),
         inventoryFeature("personal-vocabulary", "Personal vocabulary JSON loader", "in-progress", "Strict version-1 parser and revalidation protect the local cache; no file name, path, upload, or telemetry.", universalControlsCore),
         inventoryFeature("renamed-presentation-mode", "Renamed browser-local presentation mode", "in-progress", "The local one-way verifier controls English-only presentation and suppression; it is a user-experience lock, not security protection.", universalControlsCore)
       ] },
@@ -4071,7 +5162,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
         inventoryFeature("ollama-privileged-boundary", "Unavailable browser-only Ollama actions", "in-progress", "Model Store, pull, chat, delete, copy, hardware-fit, and harness actions remain visibly unavailable because this static browser surface cannot safely implement them.", ollamaBrowserObserver)
       ] },
       { id: "history", label: "Local history preview", route: "#history-preview", features: [inventoryFeature("history-preview", "Browser-local audit preview", "in-progress", "The browser-local contract audit is not Git-backed desktop history.", localContract)] },
-      { id: "notifications", label: "Notification center preview", route: "#notifications-preview", features: [inventoryFeature("notification-preview", "Browser-local notification preview", "in-progress", "Notifications are browser-local and do not represent a server or installer outcome.", localContract)] },
+      { id: "notifications", label: "Browser-local notification center", route: "#notifications-preview", features: [inventoryFeature("browser-local-notification-center", "Bounded browser-local notification center and page-local confirmation", "in-progress", "Notifications and their audit metadata remain local. Clearing records confirms only the exact page-local notification count and cannot affect a browser download, server, installed application, credential, file, or external system.", browserNotificationCenter)] },
       { id: "downloads", label: "Download and release states", route: "#downloads-preview", features: [inventoryFeature("download-boundary", "Static verified installer anchor", "in-progress", "The browser owns transfer behavior; this page does not start, track, pause, resume, or confirm a transfer.", staticHook)] }
     ];
     return { surfaces: surfaces };
@@ -4224,15 +5315,17 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     installNarrator();
     installSchedules();
     installSchoolMode();
+    installLogoCustomization();
     installTabsAndArticles();
     installAppearanceEditor();
     installCollapsibleLists();
     installConverterPlanner();
     installOllamaPreview();
     installAuthenticatorEducation();
+    installNotificationCenter();
     renderNotifications();
-    installDestructiveDemo();
     installHistoryFilters();
+    installHistorySearchBuilder();
     installExports();
     installVerifiedDownloadCtas();
     installSearches();
@@ -4245,6 +5338,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
           applySettingsPresentation();
           syncNarratorControls();
           renderScheduleList();
+          renderLogoCustomizer();
           renderVocabularyStatus();
           renderNotifications();
           renderHistory();
