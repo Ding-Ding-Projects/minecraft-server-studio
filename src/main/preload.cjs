@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('studio', {
   openFolder: (folder) => ipcRenderer.invoke('studio:open-folder', folder),
   dataDirectory: () => ipcRenderer.invoke('studio:data-directory'),
   localStatus: () => ipcRenderer.invoke('studio:local-status'),
+  ollamaStatus: () => ipcRenderer.invoke('studio:ollama-status'),
+  refreshOllama: () => ipcRenderer.invoke('studio:refresh-ollama'),
   statusHubBridge: () => ipcRenderer.invoke('studio:status-hub-bridge'),
   configureStatusHubBridge: (configuration) => ipcRenderer.invoke('studio:configure-status-hub-bridge', configuration),
   syncStatusHubBridge: () => ipcRenderer.invoke('studio:sync-status-hub-bridge'),

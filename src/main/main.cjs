@@ -7,6 +7,7 @@ const { StudioSettingsService } = require('./studio-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { UpdateController } = require('./update-controller.cjs');
+const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
 try {
@@ -33,6 +34,7 @@ const MAX_RCON_PACKET_BYTES = 256 * 1024;
 const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 let statusHubBridge;
 let updateController;
+let ollamaSuite;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -345,8 +347,12 @@ app.whenReady().then(async () => {
     dataDir: path.join(app.getPath('userData'), 'updates'),
     onStateChange: (update) => sendToRenderer({ type: 'application-update', update })
   });
+  ollamaSuite = new LocalOllamaSuiteManager({
+    onStateChange: (ollama) => sendToRenderer({ type: 'ollama-suite', ollama })
+  });
   await updateController.initialize();
   createWindow();
+  ollamaSuite.refresh().catch(() => {});
   serverManager.revalidateManagedJavaInventory().catch((error) => {
     serverManager.emit({ type: 'dependency-output', dependency: 'java', message: 'The app-managed Java inventory could not be revalidated at startup: ' + String(error?.message || 'unknown error').slice(0, 512) });
   });
@@ -372,6 +378,11 @@ function requireManager() {
 function requireUpdater() {
   if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
   return updateController;
+}
+
+function requireOllamaSuite() {
+  if (!ollamaSuite) throw new Error('The local Ollama suite is still starting.');
+  return ollamaSuite;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -483,6 +494,8 @@ ipcMain.handle('studio:open-folder', async (_event, folder) => {
 });
 ipcMain.handle('studio:data-directory', () => path.join(app.getPath('userData'), 'servers'));
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
+ipcMain.handle('studio:ollama-status', () => requireOllamaSuite().status());
+ipcMain.handle('studio:refresh-ollama', () => requireOllamaSuite().refresh());
 ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
   status: statusHubBridge.getStatus(),
   configuration: statusHubBridge.getConfigurationForRenderer()
