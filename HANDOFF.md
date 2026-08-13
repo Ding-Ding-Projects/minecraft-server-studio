@@ -4,6 +4,24 @@
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
+## Public companion-site appearance and tab-navigation documentation candidate
+
+The public companion site now has documentation and a per-surface inventory entry for a browser-local appearance and tab-navigation foundation. Its independent local state covers system/light/dark theme, density, accent, safe typography, bounded appearance-target controls, left/right/top/bottom tab docking, active/order/pin/group state, overflow, and separate current-strip, group, and master tab searches with anchored regular-expression builders. It remains a page-local feature only: it does not alter the installed application, operate a Minecraft server, manage an installer transfer, send an account request, or contact a backend.
+
+### Directly related paths
+
+- `site/README.md`
+- `site/CONTRACT.md`
+- `docs/features/appearance-and-tabs.md`
+- `docs/features/README.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, runtime interaction, deployment verification, or screenshots were run or claimed for this documentation candidate under the active fast-delivery workflow. The documentation intentionally does not state universal completion. Localization, interaction, test, and capture evidence remain incomplete until real implementation and proof are recorded independently.
+
 ## Appearance and browser-style server-tab foundation
 
 The desktop source now keeps a separate strict local appearance/navigation record
