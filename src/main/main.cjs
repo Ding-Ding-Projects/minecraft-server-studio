@@ -1007,8 +1007,6 @@ ipcMain.handle('studio:sync-status-hub-bridge', async () => {
   return localStatusWithBridge();
 });
 ipcMain.handle('studio:refresh-spigot-versions', () => requireManager().refreshSpigotVersionMetadata());
-ipcMain.handle('studio:buildtools-preflight', (_event, id, input) => requireManager().buildToolsPreflight(id, input));
-ipcMain.handle('studio:execute-buildtools-plan', (_event, id, confirmation) => requireManager().executeBuildToolsPlan(id, confirmation));
 ipcMain.handle('studio:paper-cli-preflight', (_event, id, profile) => requireManager().paperCliPreflight(id, profile));
 ipcMain.handle('studio:paper-cli-probe', (_event, id) => requireManager().collectPaperCliJarEvidence(id));
 ipcMain.handle('studio:pick-paper-cli-path', async (_event, kind) => {
