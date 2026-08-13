@@ -129,6 +129,32 @@ The local version-history destination may read and filter only this bounded page
 
 Removing selected audit records, clearing the audit list, or clearing dismissed/all notification metadata is limited to this page's browser-local state. The host must use the existing two-key/full-slider destructive-action state machine, expose an Emergency exit and Escape cancellation path, return focus to the originating control, and leave records unchanged after cancellation or an incomplete slider. It must never treat a page-local deletion as a server, desktop, file, download, or authenticator mutation.
 
+## Browser-local changelog preview
+
+The `changelog-preview` host surface is registered as
+`browser-local-changelog-viewer`. It renders only a bounded, committed static
+catalog supplied with the companion-site source. This general contract does
+not fetch, refresh, synchronize, or persist that catalog. The surface's
+plain-text/default search, explicit regex mode, date filter, selected rows,
+copy action, and Markdown/plain-text download projection operate only on the
+current in-memory catalog.
+
+The catalog viewer does not create audit records or add catalog entries,
+filters, selection state, copied text, or download metadata to `getState()`,
+`redactStateForExport()`, `createExport()`, notifications, personal-vocabulary
+state, the authenticator/toy-lock module, or the browser-local status model.
+It makes no runtime request to a release API, source-control host, server,
+installed application, local filesystem, or loopback service. A browser
+download request is not evidence that a destination was selected, a file was
+saved, or a listed release remains current or available.
+
+The host keeps invalid filter input visible and returns an honest local
+validation or no-selection state. It must not infer missing catalog fields,
+fetch a replacement record, or silently broaden a date/regex query. The
+existing bounded `evaluateRegex` helper may evaluate the explicit regex route;
+it does not authorize the viewer to inspect other page data or another
+application.
+
 ## Regex evaluation and palette search
 
 `evaluateRegex({ pattern, flags, sample })` evaluates in the browser only. It limits patterns to 512 characters, sample text to 16 KiB, and returned matches to 200. It rejects duplicate or unsupported flags, backreferences, named backreferences, and simple nested-quantifier shapes that can cause excessive evaluation time. It returns an ordinary error message instead of throwing malformed input into the host UI.
@@ -275,7 +301,7 @@ The completeness inventory is a browser-local, fail-closed record for every visi
 
 Every evidence field has a `status` of `missing`, `planned`, `in-progress`, `verified`, or `not-applicable`, plus bounded reference and detail fields. A `not-applicable` entry is counted as such only when it includes a reason. `getCompletenessSummary()` treats any non-verified evidence item as incomplete and returns per-category verified, incomplete, and reasoned-not-applicable counts.
 
-Use `setCompletenessInventory(input)` for a complete authoritative replacement or `upsertCompletenessSurface(input)` for one surface. The local bounds are 80 surfaces and 320 features per surface. The companion page seeds a hand-written inventory for its landing shell, settings, documentation, converter, authenticator, Ollama, history, notifications, and download surfaces, then renders its incomplete count in the browser-local status panel. Hosts should use stable ids and hand-written feature entries; automatically discovering only current UI elements cannot prove that a required feature was not omitted. This local view does not replace repository-level documentation, tests, real built-artifact interaction, or captures.
+Use `setCompletenessInventory(input)` for a complete authoritative replacement or `upsertCompletenessSurface(input)` for one surface. The local bounds are 80 surfaces and 320 features per surface. The companion page seeds a hand-written inventory for its landing shell, settings, documentation, converter, authenticator, Ollama, history, changelog, notifications, and download surfaces, then renders its incomplete count in the browser-local status panel. Hosts should use stable ids and hand-written feature entries; automatically discovering only current UI elements cannot prove that a required feature was not omitted. This local view does not replace repository-level documentation, tests, real built-artifact interaction, or captures.
 
 ## Limits and unavailable capability boundary
 

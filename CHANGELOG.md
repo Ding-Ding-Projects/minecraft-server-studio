@@ -53,6 +53,7 @@
 - Local external-editor handoff foundation that shares the local Visual Studio Code selection with the safe-export route, opens only a validated selected server root or a new path-redacted app-private record, uses direct non-shell launch arguments, and exposes explicit unavailable or failed-launch states.
 - Public landing-page authenticator and toy-lock foundation: a separate bounded browser-local TOTP implementation with manual/URI entry, local current/next/countdown display, local QR pairing reveal, per-target password/TOTP toy locks, and a local-only Support Tickets recovery desk. It has no network, secret export, QR import/decoder, cross-device sync, every-element lock coverage, automated test result, built-site interaction, or capture evidence.
 - Browser-local public-page notification center and destructive confirmation: bounded origin-local notices/audit entries, seven-second auto-dismiss for info/success/progress toasts, persistent warning/error notices, local plain-text/regex search and bulk selection, and a two-acknowledgement/full-slider flow that can clear only page-local notification metadata.
+- Browser-local companion-site changelog viewer with every release-tag record committed in this source revision, local date/plain-text/regex filtering, current-page selection, commit and release-page links, plus local plain-text copy or Markdown/plain-text browser download requests. It does not fetch releases, tags, source-control data, desktop state, or a browser download outcome at runtime.
 
 ### Fixed
 

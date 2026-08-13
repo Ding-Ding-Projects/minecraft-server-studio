@@ -125,6 +125,7 @@
             <a class="feature-tab" data-mss-tab-id="feature-authenticator" href="#authenticator-preview">Authenticator</a>
             <a class="feature-tab" data-mss-tab-id="feature-ollama" href="#ollama-preview">Ollama</a>
             <a class="feature-tab" data-mss-tab-id="feature-history" href="#history-preview">History</a>
+            <a class="feature-tab" data-mss-tab-id="feature-changelog" href="#changelog-preview">Changelog</a>
             <a class="feature-tab" data-mss-tab-id="feature-notifications" href="#notifications-preview">Notifications</a>
             <a class="feature-tab" data-mss-tab-id="feature-downloads" href="#downloads-preview">Downloads</a>
           </nav>
@@ -284,6 +285,26 @@
             <p>This destination independently records bounded non-secret actions performed by this page. It is not desktop Git history, a server log, browser history, a file store, or a record of an installer or download outcome.</p>
             <div class="history-controls" data-contract-hook="history-filters"><label><span>Date</span><input type="date" aria-describedby="history-filter-help" /></label><label><span>Action</span><select aria-describedby="history-filter-help"><option>All actions</option></select></label><label><span>Search browser-local history</span><input type="search" placeholder="Search action, target, or detail" aria-describedby="history-filter-help" /></label><button type="button" disabled aria-label="Open regular expression builder for browser-local history">.*</button></div>
             <p id="history-filter-help" class="history-filter-help">Plain text is the default. The adjacent regular-expression builder filters only this page’s bounded action metadata and evaluates locally.</p>
+          </article>
+
+          <article class="preview-panel changelog-preview" id="changelog-preview" data-contract-surface="browser-local-changelog-viewer" tabindex="-1" aria-labelledby="changelog-preview-heading">
+            <div class="panel-heading"><div><p class="eyebrow">Browser-local changelog viewer</p><h2 id="changelog-preview-heading">Read the committed release catalog</h2></div><output class="preview-status" data-mss-changelog-catalog-count aria-live="polite">Preparing committed catalog</output></div>
+            <p>This page renders the release-tag catalog committed with this source revision. It does not ask a release service, repository, installed app, local Git checkout, or server whether a record is newer or still available.</p>
+            <div class="changelog-toolbar" data-contract-hook="changelog-filters">
+              <label><span>Release date</span><input type="date" data-mss-changelog-date aria-describedby="changelog-filter-help" /></label>
+              <div class="preview-search" data-contract-hook="changelog-search-regex"><label><span>Search committed release records</span><input type="search" data-mss-changelog-search placeholder="Search version, category, or recorded change" autocomplete="off" aria-describedby="changelog-filter-help" /></label><button type="button" disabled aria-label="Open regular expression builder for committed changelog records">.*</button></div>
+            </div>
+            <p id="changelog-filter-help" class="changelog-filter-help">Plain-text search is the default. The adjacent regular-expression builder evaluates only the committed in-memory catalog in this page.</p>
+            <div class="changelog-actions" data-contract-hook="changelog-selection-actions" aria-label="Changelog selection actions">
+              <button type="button" data-mss-changelog-select-visible>Select visible releases</button>
+              <button type="button" data-mss-changelog-clear-selection>Clear selection</button>
+              <button type="button" data-mss-changelog-copy disabled>Copy current selection</button>
+              <label><span>Download format</span><select data-mss-changelog-export-format><option value="markdown">Markdown</option><option value="text">Plain text</option></select></label>
+              <button type="button" data-mss-changelog-export disabled>Download selection</button>
+            </div>
+            <output class="changelog-status" data-mss-changelog-status role="status" aria-live="polite">No committed changelog records have been selected.</output>
+            <p class="changelog-boundary">Copy and download actions format only selected committed records locally. The browser may choose a destination, but this page does not learn whether a file was saved or whether a linked release remains available.</p>
+            <ol class="changelog-record-list" data-mss-changelog-list aria-live="polite"></ol>
           </article>
 
           <article class="preview-panel" id="notifications-preview" data-contract-surface="notification-center" tabindex="-1">
