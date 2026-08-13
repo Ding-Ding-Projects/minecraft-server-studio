@@ -596,3 +596,37 @@ body[data-density="spacious"] .experience-card { gap: 22px; padding: 24px; }
   .appearance-settings-grid, .appearance-target-grid, .appearance-regex-builder .settings-grid { grid-template-columns: 1fr; }
   .appearance-actions > button { width: 100%; }
 }
+
+/* Local app-logo customization is renderer-only and never changes installed identity. */
+.logo-customization-grid { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr); gap: 16px; align-items: start; }
+.logo-preview-block, .logo-source-controls, .logo-presentation-controls { display: grid; gap: 12px; padding: 15px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container); }
+.logo-preview-stage { position: relative; display: grid; place-items: center; min-height: 168px; overflow: hidden; border: 1px solid var(--outline); border-radius: 20px; background-color: var(--surface-container-highest); background-image: linear-gradient(45deg, #ffffff0d 25%, transparent 25%), linear-gradient(-45deg, #ffffff0d 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ffffff0d 75%), linear-gradient(-45deg, transparent 75%, #ffffff0d 75%); background-position: 0 0, 0 10px, 10px -10px, -10px 0; background-size: 20px 20px; }
+.logo-preview-stage[data-background="color"] { background-image: none; }
+.brand-mark.logo-mark, .logo-preview-mark { position: relative; display: grid; place-items: center; overflow: hidden; isolation: isolate; }
+.logo-preview-mark { width: min(136px, 68vw); height: min(136px, 68vw); border-radius: 30px; border: 1px solid #ffffff2b; color: #002b45; font-size: 2.1rem; font-weight: 800; letter-spacing: -.08em; box-shadow: inset 0 1px #ffffff33, 0 10px 28px #0005; }
+.brand-mark.logo-mark { padding: 0; }
+.logo-preset-studio-aqua { background: linear-gradient(140deg, #9ccaff, #70e1c5); }
+.logo-preset-server-slate { color: #e8efff; background: linear-gradient(140deg, #536277, #1e2737); }
+.logo-preset-world-spruce { color: #e7f7e5; background: linear-gradient(140deg, #9dc85f, #205741); }
+.brand-mark.logo-custom, .logo-preview-mark.logo-custom { background: transparent; }
+.logo-preset-glyph { display: block; }
+.logo-custom-image { width: 100%; height: 100%; object-fit: contain; }
+.logo-preview-mark .logo-custom-image { transform: scale(1); }
+.logo-search-anchor { position: relative; }
+.logo-regex-builder { position: relative; z-index: 2; display: grid; gap: 12px; margin-top: 10px; padding: 14px; border: 1px solid var(--primary); border-radius: 16px; background: var(--surface-container-high); box-shadow: 0 14px 30px #0008; }
+.logo-regex-token-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.logo-regex-token-row .outlined-action { min-height: 34px; padding-inline: 11px; font-size: .75rem; }
+.logo-preset-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px; }
+.logo-preset-option { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; min-height: 72px; padding: 10px; border: 1px solid var(--outline-variant); border-radius: 14px; color: var(--on-surface); background: #151922; text-align: left; }
+.logo-preset-option[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-container); }
+.logo-preset-swatch { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; color: #002b45; font-size: .76rem; font-weight: 900; letter-spacing: -.06em; }
+.logo-preset-option strong, .logo-preset-option small { display: block; }
+.logo-preset-option small { margin-top: 3px; }
+.logo-presentation-controls { grid-column: 1 / -1; }
+.logo-color-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; align-items: center; }
+.logo-color-row input[type="color"] { width: 52px; min-height: 44px; padding: 4px; border: 1px solid var(--outline); border-radius: 12px; background: var(--surface-container); }
+.logo-color-row input[type="text"] { min-width: 0; }
+
+@media (max-width: 1050px) {
+  .logo-customization-grid { grid-template-columns: 1fr; }
+}

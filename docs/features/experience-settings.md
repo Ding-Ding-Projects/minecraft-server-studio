@@ -8,12 +8,13 @@ The desktop main process owns the settings files. The renderer can use only the 
 
 | Record | Location | Contents | Secret boundary |
 | --- | --- | --- | --- |
+| App-logo settings and cache | This app's per-user application-data logo-customization directory | Schema version, selected shipped preset or validated derived custom asset metadata, presentation controls, and a private derived asset cache | The original source path is never persisted; the renderer receives only a bounded validated display representation. |
 | App presentation settings | This app's per-user application-data `settings` directory | Schema version, language mode, English/Cantonese message-playfulness values, dialog/message emoji preference, and display name | No credential is stored in this file. |
 | Appearance and tab-navigation settings | This app's per-user application-data `settings` directory | Versioned theme, density, seed color, bounded typography, selected server-settings tab, dock edge, and direct-target overrides | No credential, server setting, or shared School-mode state is stored in this record. |
 | Shared School-mode record | The per-user `Ding Ding Projects/shared-experience-settings` application-data directory | Schema version, mode enabled state, user-selected mode label, and update timestamp | The record contains no password, PIN, or recoverable credential material. |
 | Shared unlock credential | The shared record directory's protected credential-vault area | Electron `safeStorage` ciphertext and non-secret key metadata only | The credential is never returned to the renderer, status snapshot, console, export, or log. |
 
-Both JSON records use schema version `1`, exact-key validation, bounded text values, and atomic replacement. A malformed, unreadable, unsupported, or missing shared record is not treated as evidence that the mode is off.
+All three settings records use versioned, bounded schemas and atomic replacement. A malformed, unreadable, unsupported, or missing shared record is not treated as evidence that the mode is off.
 
 ## Presentation controls
 
@@ -30,6 +31,16 @@ Open **Studio preferences** from the left navigation to use these controls:
 The saved preference is applied immediately in the running renderer and the native window title. The installed application identity remains stable because the Electron application name and package configuration remain fixed.
 
 The optional spoken-event narrator and bounded scheduled language settings are documented separately in [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md). The schedule can temporarily override the effective language without overwriting this saved base preference. The separate persisted [appearance and tab-navigation foundation](appearance-and-tabs.md) applies its direct targets live without changing this application identity or the shared School-mode record.
+
+## App-logo customization
+
+The same preferences dialog includes a local app-logo surface with three shipped visual presets and a native image picker for PNG or JPEG. The picker and decoder run through a narrow main-process boundary. Actual bytes, image signature, dimensions, decoded size, pixel count, regular-file status, static-image constraints, and a 4 MiB source bound are validated before a private cache changes. Animated PNG, malformed input, unsupported formats, symlink inputs, and unsafe dimensions are rejected without replacing the prior valid mark.
+
+The renderer never receives a local path or a file URL. It receives a bounded PNG/JPEG display representation only after validation. Preset choice, fit/fill/contain behavior, crop position and zoom, focal point, transparent/solid background treatment, background color, reset, and an adjacent bounded regex builder for the preset search are available in the settings card. Reset removes the active private derived asset and restores Studio Aqua; it does not modify the shipped executable, package identifier, application ID, installer, updater feed, or application-data identity.
+
+The logo card is marked for the same live School-mode suppression behavior as other optional presentation controls. While the mode is effective, the visible app mark falls back to the shipped Studio Aqua preset until the mode is turned off.
+
+See [App-logo customization](app-logo-customization.md) for the format, cache, conversion, failure, and security boundaries.
 
 ## Shared School mode
 
@@ -58,7 +69,7 @@ If the credential is lost, the preferences dialog displays the exact shared appl
 - The shared record has no network client, synchronization service, analytics, or telemetry behavior.
 - The service does not write settings into the repository, a server folder, an export, or a console log.
 - Missing or unreadable shared state fails closed to English safety presentation instead of pretending that the mode is disabled.
-- The current foundation does not implement a personal-vocabulary upload, a full every-element appearance editor, complete tab-management suite, complete regex coverage, local history, exports, or full universal-surface coverage. Narrator, scheduled-language, authenticator, toy-lock, file-converter, local-model, and bounded appearance/tab foundations are documented separately and remain incomplete where their own articles say so.
+- The current foundation does not implement a personal-vocabulary upload, a full every-element appearance editor, complete tab-management suite, complete regex coverage, or full universal-surface coverage. Local history and redacted exports, narrator, scheduled-language, authenticator, toy-lock, file-converter, local-model, bounded appearance/tab, and local logo foundations are documented separately and remain incomplete where their own articles say so.
 
 ## Verification status
 
@@ -67,6 +78,8 @@ This feature was added during the active speed-delivery workflow. Tests, linting
 ## Suggested related articles
 
 - [Local status and desktop completeness](local-status-and-completeness.md)
+- [App-logo customization](app-logo-customization.md)
+- [Local history and safe exports](local-history-and-safe-exports.md)
 - [Appearance and tab-navigation foundation](appearance-and-tabs.md)
 - [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)
 - [Server orchestration](server-orchestration.md)

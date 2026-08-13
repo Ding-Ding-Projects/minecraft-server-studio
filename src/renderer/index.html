@@ -10,7 +10,7 @@
     <main class="app-shell">
       <aside class="sidebar" aria-label="Server navigation">
         <div class="brand-lockup">
-          <div class="brand-mark" aria-hidden="true">MS</div>
+          <div id="brand-mark" class="brand-mark" aria-hidden="true">MS</div>
           <div>
             <p class="eyebrow" id="brand-eyebrow" data-i18n="brand.eyebrow">LOCAL CONTROL CENTER</p>
             <h1 id="brand-title">Minecraft Server Studio</h1>
@@ -878,6 +878,54 @@
             <label class="switch-field"><input id="dialog-emoji" type="checkbox"><span><strong data-i18n="settings.dialogEmoji">Show emoji decorations in dialogs and message boxes</strong><small data-i18n="settings.dialogEmojiDescription">Decorative emoji never replace the factual message or control labels.</small></span></label>
             <label class="field"><span data-i18n="settings.displayName">Display name</span><input id="experience-display-name" type="text" maxlength="80" required><small data-i18n="settings.displayNameDescription">Changes only what this app shows in its title and app-owned copy. Package identity, data location, installer identity, and update identity do not change.</small></label>
           </div>
+        </section>
+
+        <section class="experience-card logo-customization-card" data-school-hidden data-settings-card data-settings-search="app logo brand visual preset local PNG JPEG crop fit focal background color regex">
+          <div>
+            <h3 id="logo-customization-title" data-i18n="settings.logoTitle">App logo</h3>
+            <p class="muted" data-i18n="settings.logoDescription">Choose a shipped visual preset or a bounded local PNG or JPEG. This changes only app presentation; package, executable, installer, data, and update identities stay fixed.</p>
+          </div>
+          <div class="logo-customization-grid">
+            <section class="logo-preview-block" aria-labelledby="logo-preview-title">
+              <h4 id="logo-preview-title" data-i18n="settings.logoPreview">Live logo preview</h4>
+              <div id="logo-preview" class="logo-preview-stage" role="img" data-i18n-aria-label="settings.logoPreview" aria-label="Current app logo preview"></div>
+              <p id="logo-storage-status" class="experience-status" aria-live="polite" data-i18n="settings.logoStoragePending">Loading app-private logo settings…</p>
+            </section>
+            <section class="logo-source-controls" aria-labelledby="logo-source-title">
+              <h4 id="logo-source-title" data-i18n="settings.logoSource">Shipped presets and local image</h4>
+              <div class="logo-search-anchor">
+                <label class="field" for="logo-preset-search"><span data-i18n="settings.logoSearch">Find a shipped preset</span><div class="browse-row"><input id="logo-preset-search" type="search" maxlength="160" autocomplete="off" data-i18n-placeholder="settings.logoSearchPlaceholder" placeholder="Search shipped presets"><button id="logo-regex-builder-button" class="outlined-action" type="button" aria-expanded="false" aria-controls="logo-regex-builder" data-i18n="settings.logoRegexButton">Build regex</button></div></label>
+                <section id="logo-regex-builder" class="logo-regex-builder" role="dialog" aria-labelledby="logo-regex-title" hidden>
+                  <div><h4 id="logo-regex-title" data-i18n="settings.logoRegexTitle">Preset regex builder</h4><p class="muted" data-i18n="settings.logoRegexDescription">Build a bounded pattern for this preset search only. Plain text remains the default.</p></div>
+                  <div class="settings-grid">
+                    <label class="field"><span data-i18n="settings.logoRegexPattern">Raw pattern</span><input id="logo-regex-pattern" type="text" maxlength="160" autocomplete="off"></label>
+                    <label class="field"><span data-i18n="settings.logoRegexFlags">Flags</span><select id="logo-regex-flags"><option value="i" data-i18n="settings.logoRegexIgnoreCase">Ignore case</option><option value="" data-i18n="settings.logoRegexCaseSensitive">Case sensitive</option><option value="im" data-i18n="settings.logoRegexIgnoreCaseMultiline">Ignore case + multiline</option></select></label>
+                    <label class="field wide"><span data-i18n="settings.logoRegexSample">Sample text</span><textarea id="logo-regex-sample" maxlength="1024" rows="3"></textarea></label>
+                  </div>
+                  <div class="logo-regex-token-row" data-i18n-aria-label="settings.logoRegexTokens" aria-label="Regex construction tokens"><button type="button" class="outlined-action" data-logo-regex-token="logo" data-i18n="settings.logoRegexLiteral">Literal</button><button type="button" class="outlined-action" data-logo-regex-token="[A-Za-z]" data-i18n="settings.logoRegexClass">Character class</button><button type="button" class="outlined-action" data-logo-regex-token="^" data-i18n="settings.logoRegexAnchor">Anchor</button><button type="button" class="outlined-action" data-logo-regex-token="()" data-i18n="settings.logoRegexGroup">Group</button><button type="button" class="outlined-action" data-logo-regex-token="|" data-i18n="settings.logoRegexAlternation">Alternation</button><button type="button" class="outlined-action" data-logo-regex-token="+" data-i18n="settings.logoRegexQuantifier">Quantifier</button></div>
+                  <p id="logo-regex-feedback" class="experience-status" aria-live="polite" data-i18n="settings.logoRegexEmpty">Enter a pattern to preview matches and capture groups.</p>
+                  <div class="dialog-actions"><button id="logo-regex-copy-button" class="outlined-action" type="button" data-i18n="settings.logoRegexCopy">Copy pattern</button><button id="logo-regex-apply-button" class="primary-action" type="button" data-i18n="settings.logoRegexApply">Apply regex search</button></div>
+                </section>
+              </div>
+              <p id="logo-preset-search-results" class="muted" aria-live="polite">Loading shipped presets…</p>
+              <div id="logo-preset-list" class="logo-preset-list" role="group" data-i18n-aria-label="settings.logoPresetList" aria-label="Shipped app logo presets"></div>
+              <label class="field"><span data-i18n="settings.logoCustomImage">Custom local raster image</span><div class="browse-row"><input id="logo-custom-status" type="text" readonly data-i18n-value="settings.logoNoCustom" value="No custom image selected"><button id="pick-logo-button" class="outlined-action" type="button" data-i18n="settings.logoPick">Choose image</button></div><small data-i18n="settings.logoCustomHint">PNG and JPEG are checked for actual bytes, dimensions, pixel limits, static-image safety, and decoder support before a private cache is updated. The source path is never saved.</small></label>
+            </section>
+          </div>
+          <section class="logo-presentation-controls" aria-labelledby="logo-presentation-title">
+            <div><h4 id="logo-presentation-title" data-i18n="settings.logoPresentation">Rendering controls</h4><p class="muted" data-i18n="settings.logoPresentationDescription">These values change the visible preview and saved app branding without changing installed product identity.</p></div>
+            <div class="settings-grid">
+              <label class="field"><span data-i18n="settings.logoFit">Fit mode</span><select id="logo-fit"><option value="contain" data-i18n="settings.logoFitContain">Contain</option><option value="cover" data-i18n="settings.logoFitCover">Fill and crop</option><option value="fill" data-i18n="settings.logoFitFill">Stretch to bounds</option></select><small id="logo-fit-detail">Fit mode applies when a custom raster image is selected.</small></label>
+              <label class="field"><span data-i18n="settings.logoBackground">Background</span><select id="logo-background-mode"><option value="transparent" data-i18n="settings.logoBackgroundTransparent">Transparent</option><option value="color" data-i18n="settings.logoBackgroundColorMode">Solid color</option></select></label>
+              <label class="field"><span data-i18n="settings.logoCropX">Crop horizontal position</span><input id="logo-crop-x" type="number" min="0" max="100" step="0.01" value="50"></label>
+              <label class="field"><span data-i18n="settings.logoCropY">Crop vertical position</span><input id="logo-crop-y" type="number" min="0" max="100" step="0.01" value="50"></label>
+              <label class="field"><span data-i18n="settings.logoZoom">Crop zoom</span><input id="logo-crop-zoom" type="number" min="1" max="3" step="0.01" value="1"></label>
+              <label class="field"><span data-i18n="settings.logoFocalX">Focal point horizontal position</span><input id="logo-focal-x" type="number" min="0" max="100" step="0.01" value="50"></label>
+              <label class="field"><span data-i18n="settings.logoFocalY">Focal point vertical position</span><input id="logo-focal-y" type="number" min="0" max="100" step="0.01" value="50"></label>
+              <label class="field"><span data-i18n="settings.logoBackgroundColor">Background color</span><div class="logo-color-row"><input id="logo-background-color" type="color" value="#10131a"><input id="logo-background-hex" type="text" maxlength="7" pattern="#[0-9A-Fa-f]{6}" value="#10131a" data-i18n-aria-label="settings.logoBackgroundHex" aria-label="Background color hexadecimal value"></div></label>
+            </div>
+            <div class="dialog-actions"><button id="reset-logo-button" type="button" class="outlined-action" data-i18n="settings.logoReset">Reset shipped logo</button><button id="save-logo-presentation-button" type="button" class="primary-action" data-i18n="settings.logoApply">Apply logo rendering</button></div>
+          </section>
         </section>
 
         <section class="experience-card appearance-card" aria-labelledby="appearance-tabs-title" data-settings-card data-settings-search="appearance theme density seed typography font tabs dock navigation search regex">

@@ -26,6 +26,12 @@ const state = {
   activeTab: 'general',
   pluginPath: '',
   experience: null,
+  logo: null,
+  logoSearch: {
+    mode: 'plain',
+    query: '',
+    flags: 'i'
+  },
   pluginPlan: null,
   pluginPlanServerId: null,
   applicationUpdate: null,
@@ -62,7 +68,8 @@ const state = {
     toyLockDraft: false,
     toyLockUnlock: false,
     supportTicketDraft: false,
-    appearance: false
+    appearance: false,
+    logoPresentation: false
   }
 };
 
@@ -220,6 +227,385 @@ const FALLBACK_EXPERIENCE = Object.freeze({
   shared: Object.freeze({ state: 'not-loaded', effectiveSchoolMode: true, schoolMode: Object.freeze({ enabled: false, label: 'Mode' }) }),
   credential: Object.freeze({ state: 'unavailable', configured: false })
 });
+
+const FALLBACK_LOGO = Object.freeze({
+  source: Object.freeze({ kind: 'preset', presetId: 'studio-aqua' }),
+  activeSource: Object.freeze({ kind: 'preset', presetId: 'studio-aqua' }),
+  presentation: Object.freeze({
+    fit: 'contain',
+    crop: Object.freeze({ x: 50, y: 50, zoom: 1 }),
+    focalPoint: Object.freeze({ x: 50, y: 50 }),
+    background: Object.freeze({ mode: 'transparent', color: '#10131a' })
+  }),
+  storage: Object.freeze({ state: 'not-loaded', detail: 'Logo settings have not loaded.' }),
+  cache: Object.freeze({ state: 'not-loaded', detail: 'No custom image has been selected.', customSelected: false, active: false }),
+  presets: Object.freeze([
+    Object.freeze({ id: 'studio-aqua', mark: 'MS', theme: 'aqua' }),
+    Object.freeze({ id: 'server-slate', mark: 'SV', theme: 'slate' }),
+    Object.freeze({ id: 'world-spruce', mark: 'WL', theme: 'spruce' })
+  ])
+});
+
+const LOGO_PRESET_COPY = Object.freeze({
+  'studio-aqua': Object.freeze({ title: 'Studio Aqua', description: 'The shipped Minecraft Server Studio mark.' }),
+  'server-slate': Object.freeze({ title: 'Server Slate', description: 'A quiet server-console mark.' }),
+  'world-spruce': Object.freeze({ title: 'World Spruce', description: 'A green world-management mark.' })
+});
+const LOGO_PRESET_CLASSES = Object.freeze(['logo-preset-studio-aqua', 'logo-preset-server-slate', 'logo-preset-world-spruce']);
+
+function currentLogo() {
+  return state.logo || FALLBACK_LOGO;
+}
+
+function logoPresetById(id, logo = currentLogo()) {
+  const presets = Array.isArray(logo.presets) ? logo.presets : FALLBACK_LOGO.presets;
+  return presets.find((preset) => preset?.id === id) || FALLBACK_LOGO.presets[0];
+}
+
+function effectiveLogo() {
+  const logo = currentLogo();
+  if (!currentSchoolMode().effectiveSchoolMode) return logo;
+  return {
+    ...logo,
+    activeSource: { kind: 'preset', presetId: 'studio-aqua' }
+  };
+}
+
+function clampLogoNumber(value, fallback, minimum, maximum) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.round(parsed * 100) / 100));
+}
+
+function logoPresentationFromControls() {
+  const fallback = currentLogo().presentation || FALLBACK_LOGO.presentation;
+  const colorText = String($('#logo-background-hex')?.value || '').trim();
+  const colorPicker = String($('#logo-background-color')?.value || '').trim();
+  const color = /^#[0-9a-fA-F]{6}$/.test(colorText)
+    ? colorText.toLowerCase()
+    : (/^#[0-9a-fA-F]{6}$/.test(colorPicker) ? colorPicker.toLowerCase() : fallback.background.color);
+  const fit = ['contain', 'cover', 'fill'].includes($('#logo-fit')?.value) ? $('#logo-fit').value : fallback.fit;
+  const backgroundMode = ['transparent', 'color'].includes($('#logo-background-mode')?.value)
+    ? $('#logo-background-mode').value
+    : fallback.background.mode;
+  return {
+    fit,
+    crop: {
+      x: clampLogoNumber($('#logo-crop-x')?.value, fallback.crop.x, 0, 100),
+      y: clampLogoNumber($('#logo-crop-y')?.value, fallback.crop.y, 0, 100),
+      zoom: clampLogoNumber($('#logo-crop-zoom')?.value, fallback.crop.zoom, 1, 3)
+    },
+    focalPoint: {
+      x: clampLogoNumber($('#logo-focal-x')?.value, fallback.focalPoint.x, 0, 100),
+      y: clampLogoNumber($('#logo-focal-y')?.value, fallback.focalPoint.y, 0, 100)
+    },
+    background: { mode: backgroundMode, color }
+  };
+}
+
+function safeLogoDataUrl(value) {
+  if (typeof value !== 'string' || value.length < 24 || value.length > 5_600_000) return '';
+  return /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value) ? value : '';
+}
+
+function localizedLogoPreset(preset) {
+  const presetId = preset?.id || 'studio-aqua';
+  const fallback = LOGO_PRESET_COPY[presetId] || LOGO_PRESET_COPY['studio-aqua'];
+  const titleKey = 'settings.logoPreset.' + presetId + '.title';
+  const descriptionKey = 'settings.logoPreset.' + presetId + '.description';
+  const title = copyText(titleKey);
+  const description = copyText(descriptionKey);
+  return {
+    title: title === titleKey ? fallback.title : title,
+    description: description === descriptionKey ? fallback.description : description
+  };
+}
+
+function setLogoSurfaceBackground(element, presentation) {
+  if (!element) return;
+  const background = presentation?.background || FALLBACK_LOGO.presentation.background;
+  element.dataset.background = background.mode === 'color' ? 'color' : 'transparent';
+  element.style.backgroundColor = background.mode === 'color' ? background.color : '';
+}
+
+function renderLogoMark(element, snapshot = effectiveLogo(), presentation = snapshot.presentation || FALLBACK_LOGO.presentation, preview = false) {
+  if (!element) return;
+  const source = snapshot?.activeSource || FALLBACK_LOGO.activeSource;
+  const presetId = source.kind === 'preset' ? source.presetId : null;
+  const preset = logoPresetById(presetId || 'studio-aqua', snapshot);
+  element.replaceChildren();
+  element.classList.remove(...LOGO_PRESET_CLASSES, 'logo-custom', 'logo-mark', 'logo-preview-mark');
+  element.classList.add('logo-mark');
+  if (preview) element.classList.add('logo-preview-mark');
+  setLogoSurfaceBackground(element, presentation);
+
+  const dataUrl = source.kind === 'custom' ? safeLogoDataUrl(source.dataUrl) : '';
+  if (dataUrl) {
+    element.classList.add('logo-custom');
+    const image = document.createElement('img');
+    image.className = 'logo-custom-image';
+    image.alt = '';
+    image.src = dataUrl;
+    image.style.objectFit = presentation.fit;
+    const objectX = clampLogoNumber(presentation.focalPoint.x + ((presentation.crop.x - 50) * 0.5), 50, 0, 100);
+    const objectY = clampLogoNumber(presentation.focalPoint.y + ((presentation.crop.y - 50) * 0.5), 50, 0, 100);
+    image.style.objectPosition = String(objectX) + '% ' + String(objectY) + '%';
+    image.style.transformOrigin = String(presentation.focalPoint.x) + '% ' + String(presentation.focalPoint.y) + '%';
+    image.style.transform = 'scale(' + String(presentation.crop.zoom) + ')';
+    element.append(image);
+    return;
+  }
+
+  element.classList.add('logo-preset-' + preset.id);
+  const glyph = document.createElement('span');
+  glyph.className = 'logo-preset-glyph';
+  glyph.setAttribute('aria-hidden', 'true');
+  glyph.textContent = preset.mark || 'MS';
+  glyph.style.transformOrigin = String(presentation.focalPoint.x) + '% ' + String(presentation.focalPoint.y) + '%';
+  glyph.style.transform = 'translate(' + String((presentation.crop.x - 50) * 0.1) + '%, ' + String((presentation.crop.y - 50) * 0.1) + '%) scale(' + String(presentation.crop.zoom) + ')';
+  element.append(glyph);
+}
+
+function renderLogoPreview(snapshot = effectiveLogo(), presentation = snapshot.presentation || FALLBACK_LOGO.presentation) {
+  renderLogoMark($('#brand-mark'), snapshot, presentation, false);
+  const stage = $('#logo-preview');
+  if (!stage) return;
+  setLogoSurfaceBackground(stage, presentation);
+  stage.replaceChildren();
+  const mark = document.createElement('div');
+  mark.setAttribute('aria-hidden', 'true');
+  stage.append(mark);
+  renderLogoMark(mark, snapshot, presentation, true);
+  const source = snapshot?.activeSource || FALLBACK_LOGO.activeSource;
+  const preset = logoPresetById(source.kind === 'preset' ? source.presetId : 'studio-aqua', snapshot);
+  const label = source.kind === 'custom' && safeLogoDataUrl(source.dataUrl)
+    ? copyText('settings.logoCustomPreview')
+    : copyText('settings.logoPresetPreview', { name: localizedLogoPreset(preset).title });
+  stage.setAttribute('aria-label', label.startsWith('settings.') ? 'Current app logo preview' : label);
+}
+
+function hydrateLogoPresentationControls() {
+  const logo = currentLogo();
+  const presentation = logo.presentation || FALLBACK_LOGO.presentation;
+  if ($('#logo-fit')) $('#logo-fit').value = presentation.fit;
+  if ($('#logo-background-mode')) $('#logo-background-mode').value = presentation.background.mode;
+  if ($('#logo-crop-x')) $('#logo-crop-x').value = String(presentation.crop.x);
+  if ($('#logo-crop-y')) $('#logo-crop-y').value = String(presentation.crop.y);
+  if ($('#logo-crop-zoom')) $('#logo-crop-zoom').value = String(presentation.crop.zoom);
+  if ($('#logo-focal-x')) $('#logo-focal-x').value = String(presentation.focalPoint.x);
+  if ($('#logo-focal-y')) $('#logo-focal-y').value = String(presentation.focalPoint.y);
+  if ($('#logo-background-color')) $('#logo-background-color').value = presentation.background.color;
+  if ($('#logo-background-hex')) $('#logo-background-hex').value = presentation.background.color;
+}
+
+function safeLogoRegex(pattern, flags) {
+  if (typeof pattern !== 'string' || pattern.length > 160) throw new Error('Logo regex patterns must be 160 characters or fewer.');
+  if (!/^(?:|i|im)$/.test(flags)) throw new Error('Logo regex flags are invalid.');
+  const nestedUnbounded = /(?:\([^)]*[+*][^)]*\)|\[[^\]]*[+*][^\]]*\])[+*{]/.test(pattern);
+  const repeatedWildcard = /(?:\.\*|\.\+)[^|]{0,80}(?:\.\*|\.\+)/.test(pattern);
+  if (nestedUnbounded || repeatedWildcard) {
+    throw new Error('This logo regex can cause unsafe backtracking. Simplify nested or repeated unbounded parts.');
+  }
+  return new RegExp(pattern, flags);
+}
+
+function updateLogoRegexFeedback() {
+  const feedback = $('#logo-regex-feedback');
+  if (!feedback) return null;
+  const pattern = String($('#logo-regex-pattern')?.value || '');
+  const flags = String($('#logo-regex-flags')?.value || 'i');
+  const sample = String($('#logo-regex-sample')?.value || '').slice(0, 1024);
+  if (!pattern) {
+    feedback.textContent = copyText('settings.logoRegexEmpty');
+    feedback.dataset.state = 'idle';
+    return null;
+  }
+  try {
+    const expression = safeLogoRegex(pattern, flags);
+    const globalFlags = (flags.includes('i') ? 'i' : '') + (flags.includes('m') ? 'm' : '') + 'g';
+    const globalExpression = new RegExp(expression.source, globalFlags);
+    const matches = [...sample.matchAll(globalExpression)].slice(0, 8);
+    const captureCount = matches.reduce((total, match) => total + Math.max(0, match.length - 1), 0);
+    feedback.textContent = copyText('settings.logoRegexValid', { matches: matches.length, captures: captureCount });
+    feedback.dataset.state = 'ready';
+    return expression;
+  } catch (error) {
+    feedback.textContent = error?.message || copyText('settings.logoRegexInvalid');
+    feedback.dataset.state = 'invalid';
+    return null;
+  }
+}
+
+function renderLogoPresetList() {
+  const container = $('#logo-preset-list');
+  if (!container) return;
+  const logo = currentLogo();
+  const results = $('#logo-preset-search-results');
+  const query = String(state.logoSearch.query || '').trim();
+  let expression = null;
+  if (state.logoSearch.mode === 'regex') expression = updateLogoRegexFeedback();
+  const presets = (Array.isArray(logo.presets) ? logo.presets : FALLBACK_LOGO.presets).filter((preset) => {
+    const copy = localizedLogoPreset(preset);
+    const haystack = preset.id + ' ' + (preset.mark || '') + ' ' + copy.title + ' ' + copy.description;
+    if (!query) return true;
+    if (state.logoSearch.mode === 'regex') return Boolean(expression?.test(haystack));
+    return haystack.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+  });
+  container.replaceChildren();
+  for (const preset of presets) {
+    const copy = localizedLogoPreset(preset);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'logo-preset-option';
+    button.setAttribute('aria-pressed', String(logo.source?.kind === 'preset' && logo.source.presetId === preset.id));
+    button.setAttribute('aria-label', copy.title + '. ' + copy.description);
+    const swatch = document.createElement('span');
+    swatch.className = 'logo-preset-swatch logo-preset-' + preset.id;
+    swatch.setAttribute('aria-hidden', 'true');
+    swatch.textContent = preset.mark || 'MS';
+    const text = document.createElement('span');
+    const title = document.createElement('strong');
+    title.textContent = copy.title;
+    const description = document.createElement('small');
+    description.textContent = copy.description;
+    text.append(title, description);
+    button.append(swatch, text);
+    button.addEventListener('click', () => selectLogoPreset(preset.id));
+    container.append(button);
+  }
+  if (results) {
+    results.textContent = presets.length
+      ? copyText('settings.logoSearchResults', { count: presets.length })
+      : copyText('settings.logoSearchNoResults');
+  }
+}
+
+function renderLogoCustomization() {
+  const logo = currentLogo();
+  const storage = logo.storage || FALLBACK_LOGO.storage;
+  const cache = logo.cache || FALLBACK_LOGO.cache;
+  const status = $('#logo-storage-status');
+  const customStatus = $('#logo-custom-status');
+  if (status) {
+    status.textContent = cache.detail || storage.detail || copyText('settings.logoStoragePending');
+    status.dataset.state = cache.state === 'ready' ? 'ready' : cache.state === 'invalid' || cache.state === 'missing' ? 'invalid' : storage.state || 'idle';
+  }
+  if (customStatus) {
+    customStatus.value = cache.customSelected
+      ? (cache.active ? copyText('settings.logoCustomLoaded') : copyText('settings.logoCustomUnavailable'))
+      : copyText('settings.logoNoCustom');
+  }
+  const fitDetail = $('#logo-fit-detail');
+  if (fitDetail) fitDetail.textContent = logo.source?.kind === 'custom' ? copyText('settings.logoFitCustom') : copyText('settings.logoFitPreset');
+  hydrateLogoPresentationControls();
+  renderLogoPresetList();
+  renderLogoPreview(effectiveLogo(), logo.presentation || FALLBACK_LOGO.presentation);
+}
+
+async function refreshLogoSettings() {
+  const logo = await safely(() => window.studio.logoSettings());
+  if (!logo) return null;
+  state.logo = logo;
+  state.unsaved.logoPresentation = false;
+  renderLogoCustomization();
+  return logo;
+}
+
+function previewLogoPresentation() {
+  state.unsaved.logoPresentation = true;
+  renderLogoPreview(effectiveLogo(), logoPresentationFromControls());
+}
+
+async function selectLogoPreset(presetId) {
+  const logo = await safely(() => window.studio.selectLogoPreset(presetId), { key: 'toast.logoPresetSaved' });
+  if (!logo) return;
+  state.logo = logo;
+  state.unsaved.logoPresentation = false;
+  renderLogoCustomization();
+}
+
+async function pickLogo() {
+  const logo = await safely(() => window.studio.pickLogo(), { key: 'toast.logoImported' });
+  if (!logo) return;
+  state.logo = logo;
+  state.unsaved.logoPresentation = false;
+  renderLogoCustomization();
+}
+
+async function saveLogoPresentation() {
+  const logo = await safely(() => window.studio.updateLogoPresentation(logoPresentationFromControls()), { key: 'toast.logoPresentationSaved' });
+  if (!logo) return;
+  state.logo = logo;
+  state.unsaved.logoPresentation = false;
+  renderLogoCustomization();
+}
+
+async function resetLogo() {
+  const logo = await safely(() => window.studio.resetLogo(), { key: 'toast.logoReset' });
+  if (!logo) return;
+  state.logo = logo;
+  state.unsaved.logoPresentation = false;
+  renderLogoCustomization();
+}
+
+function openLogoRegexBuilder() {
+  const builder = $('#logo-regex-builder');
+  const button = $('#logo-regex-builder-button');
+  if (!builder || !button) return;
+  const open = builder.hidden;
+  builder.hidden = !open;
+  button.setAttribute('aria-expanded', String(open));
+  if (open) {
+    $('#logo-regex-pattern')?.focus();
+    updateLogoRegexFeedback();
+  } else {
+    $('#logo-preset-search')?.focus();
+  }
+}
+
+function insertLogoRegexToken(token) {
+  const input = $('#logo-regex-pattern');
+  if (!input || typeof token !== 'string') return;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.setRangeText(token, start, end, 'end');
+  input.focus();
+  updateLogoRegexFeedback();
+}
+
+async function copyLogoRegexPattern() {
+  const pattern = String($('#logo-regex-pattern')?.value || '');
+  try {
+    await navigator.clipboard.writeText(pattern);
+    toast({ key: 'toast.logoRegexCopied' }, 'success');
+  } catch {
+    toast({ key: 'toast.logoRegexCopyUnavailable' }, 'error');
+  }
+}
+
+function safeLogoRegexForApply(pattern, flags) {
+  try {
+    safeLogoRegex(pattern, flags);
+    return true;
+  } catch (error) {
+    const feedback = $('#logo-regex-feedback');
+    if (feedback) {
+      feedback.textContent = error?.message || copyText('settings.logoRegexInvalid');
+      feedback.dataset.state = 'invalid';
+    }
+    return false;
+  }
+}
+
+function applyLogoRegexSearch() {
+  const pattern = String($('#logo-regex-pattern')?.value || '');
+  const flags = String($('#logo-regex-flags')?.value || 'i');
+  if (!safeLogoRegexForApply(pattern, flags)) return;
+  state.logoSearch = { mode: 'regex', query: pattern, flags };
+  const search = $('#logo-preset-search');
+  if (search) search.value = pattern;
+  renderLogoPresetList();
+}
 
 function currentExperience() {
   return state.experience || FALLBACK_EXPERIENCE;
@@ -444,6 +830,12 @@ function applyLocalizedCopy() {
   });
   $$('[data-i18n-placeholder]').forEach((element) => {
     element.placeholder = copyText(element.dataset.i18nPlaceholder);
+  });
+  $$('[data-i18n-aria-label]').forEach((element) => {
+    element.setAttribute('aria-label', copyText(element.dataset.i18nAriaLabel));
+  });
+  $$('[data-i18n-value]').forEach((element) => {
+    element.value = copyText(element.dataset.i18nValue);
   });
   $$('[data-i18n-display-name]').forEach((element) => {
     element.textContent = copyText(element.dataset.i18nDisplayName, { appName: currentExperienceLocal().displayName });
@@ -1043,6 +1435,7 @@ function applyExperienceSnapshot(snapshot) {
   applyAppearanceNavigation();
   hydrateExperienceControls();
   renderNarrationScheduleControls(narratorSnapshot);
+  renderLogoCustomization();
   renderPreferenceSearch();
   renderServers();
   renderEditor();
@@ -1051,6 +1444,7 @@ function applyExperienceSnapshot(snapshot) {
 
 function openExperienceSettings() {
   hydrateExperienceControls();
+  renderLogoCustomization();
   const dialog = $('#experience-settings-dialog');
   if (dialog && !dialog.open) dialog.showModal();
 }
@@ -1060,6 +1454,11 @@ function closeExperienceSettings() {
   if (state.unsaved.appearance) {
     state.unsaved.appearance = false;
     applyAppearanceNavigation();
+  }
+  if (state.unsaved.logoPresentation) {
+    state.unsaved.logoPresentation = false;
+    hydrateLogoPresentationControls();
+    renderLogoPreview(effectiveLogo(), currentLogo().presentation || FALLBACK_LOGO.presentation);
   }
   if (dialog?.open) dialog.close();
 }
@@ -4171,13 +4570,14 @@ function unsavedWorkState() {
     || state.unsaved.toyLockUnlock
     || state.unsaved.supportTicketDraft
     || state.unsaved.appearance
+    || state.unsaved.logoPresentation
     || createDialog?.open
     || experienceDialog?.open
     || confirmationDialog?.open
   );
   return {
     hasUnsavedWork,
-    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, authenticator, toy-lock, or Support Tickets draft, Status Hub bridge edit, appearance preview, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
+    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, logo presentation edit, authenticator, toy-lock, or Support Tickets draft, Status Hub bridge edit, appearance preview, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
   };
 }
 
@@ -4845,6 +5245,40 @@ function bindEvents() {
   $('#experience-settings-form').addEventListener('submit', saveExperienceSettings);
   $('#funny-english').addEventListener('input', previewFunnyLevelOutputs);
   $('#funny-cantonese').addEventListener('input', previewFunnyLevelOutputs);
+  $('#pick-logo-button').addEventListener('click', pickLogo);
+  $('#save-logo-presentation-button').addEventListener('click', saveLogoPresentation);
+  $('#reset-logo-button').addEventListener('click', resetLogo);
+  $('#logo-preset-search').addEventListener('input', (event) => {
+    state.logoSearch = { mode: 'plain', query: String(event.target.value || ''), flags: 'i' };
+    renderLogoPresetList();
+  });
+  $('#logo-regex-builder-button').addEventListener('click', openLogoRegexBuilder);
+  $('#logo-regex-pattern').addEventListener('input', updateLogoRegexFeedback);
+  $('#logo-regex-flags').addEventListener('change', updateLogoRegexFeedback);
+  $('#logo-regex-sample').addEventListener('input', updateLogoRegexFeedback);
+  $$('.logo-regex-token-row [data-logo-regex-token]').forEach((button) => button.addEventListener('click', () => insertLogoRegexToken(button.dataset.logoRegexToken)));
+  $('#logo-regex-apply-button').addEventListener('click', applyLogoRegexSearch);
+  $('#logo-regex-copy-button').addEventListener('click', copyLogoRegexPattern);
+  ['#logo-fit', '#logo-background-mode', '#logo-crop-x', '#logo-crop-y', '#logo-crop-zoom', '#logo-focal-x', '#logo-focal-y', '#logo-background-color', '#logo-background-hex'].forEach((selector) => {
+    const control = $(selector);
+    control?.addEventListener('input', previewLogoPresentation);
+    control?.addEventListener('change', previewLogoPresentation);
+  });
+  $('#logo-background-color').addEventListener('input', () => {
+    $('#logo-background-hex').value = $('#logo-background-color').value;
+    previewLogoPresentation();
+  });
+  $('#logo-background-hex').addEventListener('input', () => {
+    const value = String($('#logo-background-hex').value || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) $('#logo-background-color').value = value;
+    previewLogoPresentation();
+  });
+  $('#experience-settings-dialog').addEventListener('close', () => {
+    if (!state.unsaved.logoPresentation) return;
+    state.unsaved.logoPresentation = false;
+    hydrateLogoPresentationControls();
+    renderLogoPreview(effectiveLogo(), currentLogo().presentation || FALLBACK_LOGO.presentation);
+  });
   $('#save-narrator-settings-button').addEventListener('click', saveNarratorSettings);
   $('#narrator-preview').addEventListener('click', speakNarratorPreview);
   $('#narrator-english-rate').addEventListener('input', renderNarratorRangeOutputs);
@@ -5230,7 +5664,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
   renderCommandCenter();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });

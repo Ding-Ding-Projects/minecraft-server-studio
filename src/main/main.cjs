@@ -1,4 +1,4 @@
-const { app, autoUpdater, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { app, autoUpdater, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell } = require('electron');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
@@ -10,6 +10,7 @@ const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rc
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { FileConverter } = require('./file-converter.cjs');
 const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
+const { LogoManager } = require('./logo-manager.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
 const { BuildToolsOrchestrationController } = require('./buildtools-orchestration.cjs');
@@ -63,6 +64,7 @@ let ollamaSuite;
 let fileConverter;
 let buildToolsController;
 let offlineDocumentation;
+let logoManager;
 let scheduleTickTimer;
 let authenticatorService;
 let toyLockService;
@@ -379,6 +381,11 @@ app.whenReady().then(async () => {
   narrationScheduleSettings.initialize();
   scheduleTickTimer = setInterval(() => publishExperienceSettings(), 20_000);
   scheduleTickTimer.unref?.();
+  logoManager = new LogoManager({
+    dataDir: path.join(app.getPath('userData'), 'logo-customization'),
+    nativeImage
+  });
+  await logoManager.initialize();
   credentialVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
@@ -481,6 +488,11 @@ function requireUpdater() {
   return updateController;
 }
 
+function requireLogoManager() {
+  if (!logoManager) throw new Error('Logo customization controls are still starting.');
+  return logoManager;
+}
+
 function requireOllamaSuite() {
   if (!ollamaSuite) throw new Error('The local Ollama suite is still starting.');
   return ollamaSuite;
@@ -526,6 +538,16 @@ function recordLocalHistory(record) {
   }
 }
 
+async function recordLogoHistory(detail) {
+  await recordLocalHistory({
+    action: 'settings-changed',
+    subject: 'presentation',
+    subjectId: 'app-logo',
+    label: 'App logo settings changed',
+    detail
+  });
+}
+
 function requireAuthenticator() {
   if (!authenticatorService) throw new Error('The local authenticator is unavailable in this app build.');
   return authenticatorService;
@@ -564,6 +586,34 @@ ipcMain.handle('studio:update-appearance-navigation', async (_event, patch) => {
     detail: 'A local appearance or navigation preference changed. Exact values and sensitive data were omitted from history.'
   });
   return experienceSnapshot();
+});
+ipcMain.handle('studio:logo-settings', () => requireLogoManager().snapshot());
+ipcMain.handle('studio:pick-logo', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'PNG or JPEG image', extensions: ['png', 'jpg', 'jpeg'] }
+    ]
+  });
+  if (result.canceled || !result.filePaths[0]) return requireLogoManager().snapshot();
+  const snapshot = await requireLogoManager().importFile(result.filePaths[0]);
+  await recordLogoHistory('A locally validated app-logo image changed. Raw image bytes, source paths, and image metadata were omitted from history.');
+  return snapshot;
+});
+ipcMain.handle('studio:select-logo-preset', async (_event, presetId) => {
+  const snapshot = await requireLogoManager().selectPreset(presetId);
+  await recordLogoHistory('The selected shipped app-logo preset changed. Exact selection values were omitted from history.');
+  return snapshot;
+});
+ipcMain.handle('studio:update-logo-presentation', async (_event, presentation) => {
+  const snapshot = await requireLogoManager().updatePresentation(presentation);
+  await recordLogoHistory('App-logo rendering controls changed. Exact color, crop, focal-point, and source values were omitted from history.');
+  return snapshot;
+});
+ipcMain.handle('studio:reset-logo', async () => {
+  const snapshot = await requireLogoManager().reset();
+  await recordLogoHistory('The app logo returned to its shipped preset. Raw image bytes, source paths, and image metadata were omitted from history.');
+  return snapshot;
 });
 ipcMain.handle('studio:narration-schedule-settings', () => experienceSnapshot().narrationSchedule);
 ipcMain.handle('studio:update-narrator-settings', async (_event, patch) => {

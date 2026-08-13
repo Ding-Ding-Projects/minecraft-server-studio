@@ -79,6 +79,16 @@ asset, and timing evidence.
 - Do not treat a release-note hyperlink as an attached, downloaded, or bundled
   dim-sum image.
 
+## Local app-logo customization foundation
+
+The desktop source now keeps app-logo choices in a separate versioned private store. The main process owns native file selection, actual-byte inspection, PNG/JPEG signature and dimension validation, static-image restrictions, packaged-decoder validation, bounded cache promotion, reset, and atomic settings writes. The renderer receives no selected source path or file URL; it renders a shipped preset or a bounded derived display representation only after validation.
+
+The preferences card exposes Studio Aqua, Server Slate, and World Spruce marks; a local PNG/JPEG picker; crop, fit, focal-point, background, and color controls; an adjacent bounded regex builder for its own preset search; and reset. The visible mark falls back to Studio Aqua while shared School mode is effective. No executable icon, application ID, installer metadata, update-feed address, package name, or application-data identity changed.
+
+Directly related source and documentation paths are src/main/logo-manager.cjs, src/main/main.cjs, src/main/preload.cjs, src/main/offline-docs.cjs, src/main/server-manager.cjs, src/renderer/experience-copy.js, src/renderer/index.html, src/renderer/renderer.js, src/renderer/styles.css, docs/features/app-logo-customization.md, docs/features/experience-settings.md, and docs/features/local-status-and-completeness.md. The app-logo article is registered in the fixed offline-documentation inventory beside the preserved appearance/tab article.
+
+No tests, linting, independent review, build, package, runtime interaction, or capture ran for this source-only candidate. This section does not claim conversion, packaged rendering, or a release.
+
 ## Paper JAR CLI control candidate
 
 The Paper JAR CLI lane adds `src/main/paper-cli-profile.cjs`, a typed profile
