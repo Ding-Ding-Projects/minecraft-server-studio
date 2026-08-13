@@ -19,6 +19,14 @@ const state = {
   pluginPlan: null,
   pluginPlanServerId: null,
   applicationUpdate: null,
+  ollama: null,
+  ollamaTab: 'runtime',
+  ollamaSearch: {
+    mode: 'plain',
+    query: '',
+    pattern: '',
+    flags: 'i'
+  },
   unsaved: {
     settings: false,
     createDraft: false,
@@ -1284,6 +1292,7 @@ function renderAll() {
   renderLocalStatus();
   renderBackupLifecycle();
   renderApplicationUpdate();
+  renderOllama();
   setActiveTab(state.activeTab);
 }
 
@@ -1444,6 +1453,233 @@ function renderApplicationUpdate() {
   $('#later-update-button').disabled = stateValue !== 'ready';
   $('#open-update-notes-button').disabled = !update.releaseNotesUrl;
   $('#restart-update-button').textContent = update.restartBlocked ? 'Save work before restart' : 'Restart to install update';
+}
+
+const OLLAMA_FALLBACK = Object.freeze({
+  state: 'not-checked',
+  detail: 'Refresh the fixed local endpoint to inspect the installed and running model inventory.',
+  updatedAt: null,
+  lastSuccessfulAt: null,
+  stale: false,
+  version: null,
+  installedModels: [],
+  runningModels: [],
+  capabilities: {}
+});
+
+function currentOllama() {
+  return state.ollama || OLLAMA_FALLBACK;
+}
+
+function ollamaStateLabel(value) {
+  return ({
+    'not-checked': 'Not checked',
+    checking: 'Checking local service',
+    healthy: 'Local service healthy',
+    unavailable: 'Local service unavailable',
+    offline: 'Local API offline',
+    failed: 'Local API response rejected'
+  })[value] || 'Local runtime status unavailable';
+}
+
+function ollamaModelText(model) {
+  const details = model?.details || {};
+  return [
+    model?.name,
+    model?.model,
+    details.family,
+    details.parameterSize,
+    details.quantizationLevel,
+    ...(Array.isArray(details.families) ? details.families : [])
+  ].filter(Boolean).join(' ').slice(0, 1024);
+}
+
+function normalizeOllamaRegexFlags(value) {
+  const flags = String(value || '').trim();
+  if (!/^[imu]*$/.test(flags)) return { valid: false, message: 'Only i, m, and u flags are supported for this bounded local model search.' };
+  if (new Set(flags).size !== flags.length) return { valid: false, message: 'Each regex flag can be used only once.' };
+  return { valid: true, flags };
+}
+
+function ollamaSearchMatcher() {
+  const search = state.ollamaSearch;
+  if (search.mode !== 'regex') {
+    const query = search.query.trim().toLocaleLowerCase();
+    return {
+      mode: 'plain',
+      valid: true,
+      match: (model) => !query || ollamaModelText(model).toLocaleLowerCase().includes(query)
+    };
+  }
+  const pattern = search.pattern.trim();
+  const normalizedFlags = normalizeOllamaRegexFlags(search.flags);
+  if (!normalizedFlags.valid) return { mode: 'regex', valid: false, message: normalizedFlags.message, match: () => false };
+  if (!pattern) return { mode: 'regex', valid: true, empty: true, regex: null, match: () => true };
+  try {
+    const regex = new RegExp(pattern, normalizedFlags.flags);
+    return { mode: 'regex', valid: true, regex, match: (model) => regex.test(ollamaModelText(model)) };
+  } catch (error) {
+    return { mode: 'regex', valid: false, message: `Pattern is invalid: ${error?.message || 'unknown regex error'}.`, match: () => false };
+  }
+}
+
+function distinctObservedOllamaModels(source) {
+  const records = [...(Array.isArray(source.installedModels) ? source.installedModels : []), ...(Array.isArray(source.runningModels) ? source.runningModels : [])];
+  const seen = new Set();
+  return records.filter((model) => {
+    const key = `${model?.name || ''}\u0000${model?.digest || ''}`;
+    if (!model?.name || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 256);
+}
+
+function renderOllamaRegexBuilder(source, matcher) {
+  const search = $('#ollama-model-search');
+  const toggle = $('#ollama-model-regex-toggle');
+  const builder = $('#ollama-model-regex-builder');
+  const pattern = $('#ollama-model-pattern');
+  const flags = $('#ollama-model-flags');
+  const feedback = $('#ollama-model-regex-feedback');
+  const matches = $('#ollama-model-regex-matches');
+  const regexMode = state.ollamaSearch.mode === 'regex';
+  if (search && document.activeElement !== search) search.value = regexMode ? state.ollamaSearch.pattern : state.ollamaSearch.query;
+  if (pattern && document.activeElement !== pattern) pattern.value = state.ollamaSearch.pattern;
+  if (flags && document.activeElement !== flags) flags.value = state.ollamaSearch.flags;
+  if (builder) builder.hidden = !regexMode;
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', String(regexMode));
+    toggle.textContent = regexMode ? 'Close regex builder' : 'Open regex builder';
+  }
+  if (!feedback || !matches) return;
+  if (!regexMode) {
+    feedback.textContent = 'Regex mode is inactive. Plain-text matching is applied to the observed local model names and metadata.';
+    matches.textContent = 'No regex pattern is active.';
+    return;
+  }
+  if (!matcher.valid) {
+    feedback.textContent = matcher.message;
+    matches.textContent = 'Invalid patterns do not filter or execute against the local model inventory.';
+    return;
+  }
+  if (matcher.empty) {
+    feedback.textContent = 'Regex mode is active. Enter a bounded pattern to filter the observed local model inventory.';
+    matches.textContent = 'An empty pattern currently leaves all observed model records visible.';
+    return;
+  }
+  const observed = distinctObservedOllamaModels(source);
+  const matched = observed.filter((model) => matcher.match(model));
+  feedback.textContent = `Regex mode is active with flags ${state.ollamaSearch.flags || '(none)'}. The pattern is evaluated only against ${observed.length} bounded local model record(s).`;
+  const first = matched[0];
+  const firstMatch = first ? matcher.regex.exec(ollamaModelText(first)) : null;
+  const captures = firstMatch && firstMatch.length > 1
+    ? firstMatch.slice(1).map((value, index) => `group ${index + 1}: ${String(value || '').slice(0, 80)}`).join(' · ')
+    : 'no capture groups observed';
+  matches.textContent = `${matched.length} matching model record(s). ${captures}.`;
+}
+
+function renderOllamaModelList(selector, models, label, matcher, running) {
+  const container = $(selector);
+  if (!container) return;
+  container.replaceChildren();
+  const records = Array.isArray(models) ? models.slice(0, 256) : [];
+  const visible = records.filter((model) => matcher.match(model));
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = records.length
+      ? `No observed ${label.toLowerCase()} models match the active search.`
+      : `No ${label.toLowerCase()} models were returned by the local API.`;
+    container.append(empty);
+    return;
+  }
+  for (const model of visible) {
+    const card = document.createElement('article');
+    card.className = 'ollama-model-record';
+    card.dataset.running = String(Boolean(running));
+    const title = document.createElement('strong');
+    title.textContent = model.name || 'Unnamed local model';
+    const metadata = [];
+    if (model.model && model.model !== model.name) metadata.push(model.model);
+    if (Number.isFinite(model.size)) metadata.push(formatBytes(model.size));
+    if (Number.isFinite(model.sizeVram)) metadata.push(`${formatBytes(model.sizeVram)} VRAM`);
+    if (Number.isFinite(model.contextLength)) metadata.push(`context ${model.contextLength.toLocaleString()}`);
+    if (model.details?.family) metadata.push(model.details.family);
+    if (model.details?.parameterSize) metadata.push(model.details.parameterSize);
+    if (model.details?.quantizationLevel) metadata.push(model.details.quantizationLevel);
+    if (model.expiresAt) metadata.push(`expires ${new Date(model.expiresAt).toLocaleString()}`);
+    const detail = document.createElement('span');
+    detail.textContent = metadata.length ? metadata.join(' · ') : 'The local API did not provide additional safe display metadata for this model.';
+    card.append(title, detail);
+    container.append(card);
+  }
+}
+
+function renderOllamaCapabilities(source) {
+  const container = $('#ollama-capability-list');
+  if (!container) return;
+  container.replaceChildren();
+  const capabilities = Object.values(source.capabilities || {});
+  if (!capabilities.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No local Ollama capability map is available yet.';
+    container.append(empty);
+    return;
+  }
+  capabilities.forEach((capability) => {
+    const card = document.createElement('article');
+    card.className = 'ollama-capability-record';
+    card.dataset.state = capability.state || 'unavailable';
+    const title = document.createElement('strong');
+    title.textContent = `${capability.label || 'Unnamed capability'} — ${capability.state || 'unavailable'}`;
+    const detail = document.createElement('span');
+    detail.textContent = capability.detail || 'No capability detail is available.';
+    card.append(title, detail);
+    container.append(card);
+  });
+}
+
+function renderOllama() {
+  const source = currentOllama();
+  const card = $('#ollama-suite-card');
+  if (!card) return;
+  card.dataset.state = source.state || 'not-checked';
+  $('#ollama-state').textContent = ollamaStateLabel(source.state);
+  $('#ollama-runtime-state').textContent = ollamaStateLabel(source.state);
+  $('#ollama-version').textContent = source.version || 'Not observed';
+  $('#ollama-last-success').textContent = source.lastSuccessfulAt ? new Date(source.lastSuccessfulAt).toLocaleString() : 'None this session';
+  $('#ollama-detail').textContent = source.detail || OLLAMA_FALLBACK.detail;
+  $('#refresh-ollama-button').disabled = source.state === 'checking';
+  const matcher = ollamaSearchMatcher();
+  renderOllamaRegexBuilder(source, matcher);
+  renderOllamaModelList('#ollama-installed-models', source.installedModels, 'Installed', matcher, false);
+  renderOllamaModelList('#ollama-running-models', source.runningModels, 'Running', matcher, true);
+  renderOllamaCapabilities(source);
+  setOllamaTab(state.ollamaTab);
+}
+
+function setOllamaTab(tab) {
+  const target = tab === 'capabilities' ? 'capabilities' : 'runtime';
+  state.ollamaTab = target;
+  $$('.ollama-tab').forEach((button) => {
+    const active = button.dataset.ollamaTab === target;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  $$('.ollama-panel').forEach((panel) => {
+    const active = panel.dataset.ollamaPanel === target;
+    panel.classList.toggle('active', active);
+    panel.hidden = !active;
+  });
+}
+
+async function refreshOllama() {
+  const snapshot = await safely(() => window.studio.refreshOllama());
+  if (!snapshot) return;
+  state.ollama = snapshot;
+  renderOllama();
 }
 
 function unsavedWorkState() {
@@ -2023,7 +2259,85 @@ function handleStudioEvent(event) {
     applyExperienceSnapshot(event.payload);
     return;
   }
+  if (event?.type === 'ollama-suite') {
+    state.ollama = event.ollama || null;
+    renderOllama();
+    return;
+  }
   logEvent(event || {});
+}
+
+function insertOllamaRegexToken(token) {
+  const input = $('#ollama-model-pattern');
+  if (!input) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  const value = input.value;
+  const next = `${value.slice(0, start)}${token}${value.slice(end)}`.slice(0, 128);
+  state.ollamaSearch.pattern = next;
+  state.ollamaSearch.query = next;
+  renderOllama();
+  input.focus();
+  const cursor = Math.min(start + token.length, next.length);
+  input.setSelectionRange(cursor, cursor);
+}
+
+function bindOllamaSuiteEvents() {
+  const search = $('#ollama-model-search');
+  const toggle = $('#ollama-model-regex-toggle');
+  const pattern = $('#ollama-model-pattern');
+  const flags = $('#ollama-model-flags');
+  search?.addEventListener('input', () => {
+    if (state.ollamaSearch.mode === 'regex') state.ollamaSearch.pattern = search.value.slice(0, 128);
+    else state.ollamaSearch.query = search.value.slice(0, 128);
+    renderOllama();
+  });
+  toggle?.addEventListener('click', () => {
+    const opening = state.ollamaSearch.mode !== 'regex';
+    if (opening) {
+      state.ollamaSearch.mode = 'regex';
+      state.ollamaSearch.pattern = state.ollamaSearch.query;
+    } else {
+      state.ollamaSearch.mode = 'plain';
+      state.ollamaSearch.query = state.ollamaSearch.pattern;
+    }
+    renderOllama();
+    if (opening) $('#ollama-model-pattern')?.focus();
+  });
+  pattern?.addEventListener('input', () => {
+    state.ollamaSearch.pattern = pattern.value.slice(0, 128);
+    state.ollamaSearch.query = state.ollamaSearch.pattern;
+    renderOllama();
+  });
+  flags?.addEventListener('input', () => {
+    state.ollamaSearch.flags = flags.value.slice(0, 3);
+    renderOllama();
+  });
+  $$('.regex-token-row [data-ollama-regex-token]').forEach((button) => button.addEventListener('click', () => insertOllamaRegexToken(button.dataset.ollamaRegexToken || '')));
+  $('#ollama-copy-pattern')?.addEventListener('click', async () => {
+    const matcher = ollamaSearchMatcher();
+    if (!matcher.valid) return toast(matcher.message || 'Enter a valid regex pattern before copying it.', 'error');
+    const serialized = `/${state.ollamaSearch.pattern}/${state.ollamaSearch.flags}`;
+    try {
+      await navigator.clipboard.writeText(serialized);
+      toast('The local model-search pattern was copied.');
+    } catch {
+      toast('Clipboard access was unavailable. Select the pattern text instead.', 'error');
+    }
+  });
+  $$('.ollama-tab').forEach((button, index, tabs) => {
+    button.addEventListener('click', () => setOllamaTab(button.dataset.ollamaTab));
+    button.addEventListener('keydown', (event) => {
+      const direction = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : direction ? (index + direction + tabs.length) % tabs.length : null;
+      if (nextIndex === null) return;
+      event.preventDefault();
+      const target = tabs[nextIndex];
+      setOllamaTab(target.dataset.ollamaTab);
+      target.focus();
+    });
+  });
+  $('#refresh-ollama-button')?.addEventListener('click', refreshOllama);
 }
 
 function bindEvents() {
@@ -2065,6 +2379,7 @@ function bindEvents() {
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
+  bindOllamaSuiteEvents();
   $('#save-status-hub-bridge-button').addEventListener('click', saveStatusHubBridgeSettings);
   $('#sync-status-hub-bridge-button').addEventListener('click', synchronizeStatusHubBridge);
   $('#clear-status-hub-bridge-button').addEventListener('click', clearStatusHubBridgeSettings);
@@ -2215,7 +2530,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama()]);
   renderCommandCenter();
 }
 

@@ -81,6 +81,78 @@
           </div>
         </section>
 
+        <section class="ollama-suite-card" id="ollama-suite-card" data-state="not-checked" aria-labelledby="ollama-suite-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LOCAL OLLAMA RUNTIME</p>
+              <h3 id="ollama-suite-title">Local Ollama suite</h3>
+              <p class="muted">This foundation reads only the documented local loopback API at <code>http://127.0.0.1:11434</code>. It never sends a cloud request, token, model prompt, or shell command.</p>
+            </div>
+            <div class="live-connection-actions">
+              <span id="ollama-state" class="status-chip">Not checked</span>
+              <button id="refresh-ollama-button" class="outlined-action" type="button">Refresh local Ollama</button>
+            </div>
+          </div>
+
+          <div class="ollama-suite-tabs" role="tablist" aria-label="Local Ollama suite sections">
+            <button id="ollama-runtime-tab" class="ollama-tab active" type="button" role="tab" aria-selected="true" aria-controls="ollama-panel-runtime" data-ollama-tab="runtime">Local runtime</button>
+            <button id="ollama-capabilities-tab" class="ollama-tab" type="button" role="tab" aria-selected="false" aria-controls="ollama-panel-capabilities" data-ollama-tab="capabilities" tabindex="-1">Feature map</button>
+          </div>
+
+          <section id="ollama-panel-runtime" class="ollama-panel active" role="tabpanel" aria-labelledby="ollama-runtime-tab" data-ollama-panel="runtime">
+            <div class="ollama-summary-grid" aria-live="polite">
+              <article><span>Runtime state</span><strong id="ollama-runtime-state">Not checked</strong></article>
+              <article><span>Ollama version</span><strong id="ollama-version">Not observed</strong></article>
+              <article><span>Last successful inventory</span><strong id="ollama-last-success">None this session</strong></article>
+            </div>
+            <p id="ollama-detail" class="muted" aria-live="polite">Refresh the fixed local endpoint to inspect the installed and running model inventory.</p>
+
+            <section class="ollama-search-card" aria-labelledby="ollama-model-search-title">
+              <div>
+                <h4 id="ollama-model-search-title">Find observed local models</h4>
+                <p class="muted">Plain-text filtering is the default. The adjacent regex builder evaluates only the bounded local inventory currently in this window.</p>
+              </div>
+              <div class="ollama-search-anchor">
+                <label class="field" for="ollama-model-search"><span>Installed or running model name</span><input id="ollama-model-search" type="search" maxlength="128" autocomplete="off" placeholder="Filter the observed local inventory"></label>
+                <button id="ollama-model-regex-toggle" class="outlined-action" type="button" aria-expanded="false" aria-controls="ollama-model-regex-builder">Open regex builder</button>
+                <section id="ollama-model-regex-builder" class="ollama-regex-builder" aria-label="Model search regex builder" hidden>
+                  <div class="settings-grid">
+                    <label class="field"><span>Raw pattern</span><input id="ollama-model-pattern" type="text" maxlength="128" autocomplete="off" placeholder="Example: ^family:tag$"></label>
+                    <label class="field"><span>Flags</span><input id="ollama-model-flags" type="text" maxlength="3" value="i" inputmode="text" autocomplete="off"><small>Only <code>i</code>, <code>m</code>, and <code>u</code> are accepted.</small></label>
+                  </div>
+                  <div class="regex-token-row" aria-label="Regex construction helpers">
+                    <button type="button" class="outlined-action" data-ollama-regex-token="^">Start ^</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="$">End $</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="[]">Class []</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="()">Group ()</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="|">Or |</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="+">Quantifier +</button>
+                    <button id="ollama-copy-pattern" type="button" class="outlined-action">Copy pattern</button>
+                  </div>
+                  <p id="ollama-model-regex-feedback" class="muted" aria-live="polite">Regex mode is inactive.</p>
+                  <p id="ollama-model-regex-matches" class="muted" aria-live="polite">No local model names have been evaluated.</p>
+                </section>
+              </div>
+            </section>
+
+            <div class="ollama-inventory-grid">
+              <section class="ollama-inventory-card" aria-labelledby="ollama-installed-title">
+                <div><h4 id="ollama-installed-title">Installed models</h4><p class="muted">Only records returned by <code>GET /api/tags</code> appear here.</p></div>
+                <div id="ollama-installed-models" class="ollama-model-list" aria-live="polite"></div>
+              </section>
+              <section class="ollama-inventory-card" aria-labelledby="ollama-running-title">
+                <div><h4 id="ollama-running-title">Running models</h4><p class="muted">Only records returned by <code>GET /api/ps</code> appear here.</p></div>
+                <div id="ollama-running-models" class="ollama-model-list" aria-live="polite"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="ollama-panel-capabilities" class="ollama-panel" role="tabpanel" aria-labelledby="ollama-capabilities-tab" data-ollama-panel="capabilities" hidden>
+            <p class="muted">This is a capability map, not a product catalog. Disabled items name the exact missing implementation rather than looking available.</p>
+            <div id="ollama-capability-list" class="ollama-capability-list" aria-live="polite"></div>
+          </section>
+        </section>
+
         <section class="empty-state" id="empty-state">
           <div class="empty-glyph" aria-hidden="true">▦</div>
           <h3 data-i18n="empty.title">Build a local server, not a pile of terminal commands.</h3>
