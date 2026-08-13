@@ -7,6 +7,18 @@
     <meta name="theme-color" content="#101827" />
     <title>Minecraft Server Studio · Paper and Spigot server management</title>
     <link rel="stylesheet" href="styles.css" />
+    <script id="mss-fixed-installer-manifest" type="application/json">
+      {
+        "schemaVersion": 1,
+        "releaseTag": "v0.1.0-build.104.1",
+        "version": "0.104.1",
+        "platform": "Windows x64",
+        "assetName": "Minecraft.Server.Studio-0.104.1-x64-Setup.exe",
+        "assetUrl": "https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.104.1/Minecraft.Server.Studio-0.104.1-x64-Setup.exe",
+        "releaseUrl": "https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.104.1",
+        "unsigned": true
+      }
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
@@ -33,10 +45,10 @@
               Minecraft Server Studio guides people from an empty folder to a configured Paper or Spigot server, with the controls they need close at hand and the technical work explained in plain language.
             </p>
             <div class="hero-actions">
-              <a class="secondary-button" data-mss-verified-installer="true" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.104.1/Minecraft.Server.Studio-0.104.1-x64-Setup.exe" aria-describedby="download-status" rel="noopener">Download Windows x64 installer (v0.104.1)</a>
+              <button class="secondary-button" type="button" data-mss-installer-open="true" aria-describedby="download-status" disabled>Review Windows x64 installer download</button>
               <a class="secondary-button" href="#feature-destinations">Explore feature previews</a>
             </div>
-            <p class="availability-note" id="download-status">Verified release <a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.104.1" rel="noopener">v0.1.0-build.104.1</a> provides the Windows x64 installer. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.</p>
+            <p class="availability-note" id="download-status">A fixed verified release manifest is required before this page offers an installer link. The browser can receive the immutable link only after you confirm a start decision.</p>
           </div>
 
           <figure class="illustration-card">
@@ -120,17 +132,17 @@
           <section class="preview-grid" aria-label="Browser-local feature previews">
           <article class="preview-panel" id="status-preview" data-contract-id="status-preview" data-contract-surface="status" tabindex="-1" aria-labelledby="status-preview-heading">
             <div class="panel-heading"><div><p class="eyebrow">Browser-local status</p><h2 id="status-preview-heading">Current public-page state</h2></div><span class="preview-status">No host connection</span></div>
-            <p data-contract-hook="status-summary">This status panel reports browser-local page state and the static verified release metadata embedded in this page. It does not inspect a server, desktop app, release workflow, installer download, local runtime, or user account.</p>
+            <p data-contract-hook="status-summary">This status panel reports browser-local page state and the fixed verified release manifest embedded in this page. It does not inspect a server, desktop app, release workflow, installer download, local runtime, or user account.</p>
             <div class="download-state-grid" aria-label="Browser-local status summary">
-              <article data-contract-hook="status-current-state"><strong>Current state</strong><output role="status" aria-live="polite" aria-atomic="true">Ready — a static direct link points to a verified published installer; no transfer is running from this page.</output></article>
+              <article data-contract-hook="status-current-state"><strong>Current state</strong><output role="status" aria-live="polite" aria-atomic="true">Ready — a fixed release manifest can open a user start decision; no browser transfer is observable from this page.</output></article>
               <article data-contract-hook="status-last-updated"><strong>Published release</strong><span>v0.1.0-build.104.1 · Windows x64 · unsigned installer</span></article>
               <article data-contract-hook="status-no-bridge"><strong>No chat bridge</strong><span>No chat bridge or backend is connected. Nothing on this page can send status outside this browser.</span></article>
             </div>
             <div class="auth-layout">
-              <div class="auth-card" data-contract-hook="status-local-evidence"><strong>Local evidence</strong><span>Marketing copy, static feature previews, and a verified direct installer link are visible in this page source.</span></div>
+              <div class="auth-card" data-contract-hook="status-local-evidence"><strong>Local evidence</strong><span>Marketing copy, static feature previews, a fixed release manifest, and a user start decision are visible in this page source.</span></div>
               <div class="auth-card" data-contract-hook="status-active-interactions"><strong>Active local interactions</strong><span>Browser-local preferences and, when a visitor chooses it, a separate local authenticator and toy-lock record can be active. The public page does not run desktop actions.</span></div>
             </div>
-            <div class="local-boundary-card" data-contract-hook="status-next-steps"><strong>Next step</strong><span>Download the verified Windows x64 installer using the direct link below. Installation and server management remain desktop-app tasks.</span></div>
+              <div class="local-boundary-card" data-contract-hook="status-next-steps"><strong>Next step</strong><span>Review the fixed Windows x64 installer decision before handing its immutable link to the browser. Installation and server management remain desktop-app tasks.</span></div>
           </article>
 
           <article class="preview-panel" id="settings-preview" data-contract-surface="settings" tabindex="-1" aria-labelledby="settings-preview-heading">
@@ -299,17 +311,18 @@
           </article>
 
           <article class="preview-panel" id="downloads-preview" data-contract-surface="download-flow" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Downloads and releases</p><h2>Installer status stays factual</h2></div><span class="preview-status">Verified v0.104.1 · Windows x64</span></div>
-            <p>A start, progress, and completion flow belongs to the installed app and its browser-extension integration. This public landing page provides a static direct link to a published asset; it does not simulate a transfer, observe download progress, or confirm a download or installation.</p>
-            <div class="download-state-grid" data-contract-hook="download-states"><article><strong>Start</strong><span><a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.104.1/Minecraft.Server.Studio-0.104.1-x64-Setup.exe" rel="noopener">Direct installer link available</a> for Windows x64 version 0.104.1.</span></article><article><strong>Progress</strong><span>No transfer is in progress or monitored on this static page.</span></article><article><strong>Completion</strong><span>This page cannot confirm whether a download or installation completed.</span></article></div>
-            <a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.104.1" rel="noopener">View release v0.1.0-build.104.1</a>
+            <div class="panel-heading"><div><p class="eyebrow">Downloads and releases</p><h2>Installer handoff stays factual</h2></div><span class="preview-status" data-mss-installer-version>Release manifest loading</span></div>
+            <p>This page validates one fixed, immutable published-release manifest before it offers a browser link. The start decision is real and user initiated. After the browser receives that link, this static page cannot observe bytes, rate, destination, pause, cancellation, completion, or installation.</p>
+            <div class="download-state-grid" data-contract-hook="download-states" data-mss-download-phase="ready"><article><strong>Start decision</strong><span data-mss-download-start-state>Waiting for a fixed verified release manifest. No installer link is available yet.</span></article><article><strong>Progress</strong><span data-mss-download-progress-state>Not observable: this page has no browser-download API, extension handoff, or transfer service.</span></article><article><strong>Completion</strong><span data-mss-download-completion-state>Not observable: no download, cancellation, or installation result can be confirmed here.</span></article></div>
+            <output class="download-flow-status" data-mss-installer-flow-status role="status" aria-live="polite" aria-atomic="true">Checking the fixed installer manifest before enabling a user-initiated browser handoff.</output>
+            <div class="install-actions"><button class="secondary-button" type="button" data-mss-installer-open="true" disabled>Review installer download</button><a class="secondary-button" data-mss-installer-release href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.104.1" rel="noopener">View verified release</a></div>
           </article>
           </section>
         </section>
 
         <section class="install-section" id="install">
-          <div><p class="eyebrow">Installer availability</p><h2>The Windows x64 desktop installer is available.</h2><p>Release v0.1.0-build.104.1 contains the version 0.104.1 Setup.exe. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning. This page provides the direct asset link but does not monitor or confirm the download or installation.</p></div>
-          <div class="install-actions"><a class="secondary-button" data-mss-verified-installer="true" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.104.1/Minecraft.Server.Studio-0.104.1-x64-Setup.exe" aria-describedby="release-status" rel="noopener">Download Windows x64 installer (v0.104.1)</a><a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.104.1" rel="noopener">View release v0.1.0-build.104.1</a><p id="release-status">Verified asset: Minecraft.Server.Studio-0.104.1-x64-Setup.exe · Windows x64 · unsigned.</p></div>
+          <div><p class="eyebrow">Installer availability</p><h2>The Windows x64 desktop installer is available.</h2><p data-mss-installer-summary>A fixed verified release manifest is required before this page can offer its immutable browser handoff. The installer remains unsigned, so Windows may show an unknown-publisher or SmartScreen warning. The page never monitors or confirms a browser download or installation.</p></div>
+          <div class="install-actions"><button class="secondary-button" type="button" data-mss-installer-open="true" aria-describedby="release-status" disabled>Review installer download</button><a class="secondary-button" data-mss-installer-release href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.104.1" rel="noopener">View verified release</a><p id="release-status" data-mss-installer-release-status>Checking the fixed installer manifest.</p></div>
         </section>
       </main>
 
@@ -319,6 +332,21 @@
         <a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio" rel="noopener">Project documentation</a>
       </footer>
     </div>
+    <dialog class="installer-start-dialog" data-mss-installer-start-dialog aria-labelledby="installer-start-dialog-title" aria-describedby="installer-start-dialog-boundary">
+      <form method="dialog">
+        <p class="eyebrow">Start download</p>
+        <h2 id="installer-start-dialog-title">Hand the installer link to this browser?</h2>
+        <p id="installer-start-dialog-boundary">This is a browser handoff, not an in-page transfer. The link comes only from the fixed verified release manifest shown below. This page cannot observe what the browser does after you choose Start browser download.</p>
+        <dl class="installer-manifest-details" data-mss-installer-manifest-details>
+          <div><dt>Release</dt><dd data-mss-installer-manifest-release>Unavailable</dd></div>
+          <div><dt>Asset</dt><dd data-mss-installer-manifest-asset>Unavailable</dd></div>
+          <div><dt>Platform</dt><dd data-mss-installer-manifest-platform>Unavailable</dd></div>
+          <div><dt>Signature</dt><dd data-mss-installer-manifest-signature>Unavailable</dd></div>
+        </dl>
+        <p class="installer-observability-note">The page can record only that you activated the browser link. It cannot read download bytes, rate, file location, browser cancellation, completion, or installation.</p>
+        <div class="installer-dialog-actions"><button type="submit" value="cancel" data-mss-installer-cancel>Cancel</button><a class="download-button" data-mss-installer-start aria-disabled="true">Start browser download</a></div>
+      </form>
+    </dialog>
     <div data-mss-live-region role="status" aria-live="polite" aria-atomic="true"></div>
     <script src="contract.js"></script>
     <script type="module" src="app.js"></script>

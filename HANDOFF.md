@@ -953,3 +953,35 @@ ran under the fast-delivery boundary. Follow-up work must add localization,
 complete notification export/history behavior, exhaustive destructive-action
 coverage, focused verification, packaged interaction, accessibility proof, and
 real captures before treating the feature as complete evidence.
+
+## Browser-local installer download handoff candidate
+
+The public companion site now replaces its static installer-preview copy with a
+fixed-manifest browser handoff. `site/index.html` embeds the already verified
+immutable release facts for `v0.1.0-build.104.1`; `site/app.js` rejects an
+incomplete, extra-field, inconsistent, or non-project manifest and does not
+invent a fallback asset URL. Every installer entry point opens the same start
+decision. Cancellation and Escape leave page-local notification and audit state
+unchanged, while the dialog's real asset link is the only path that hands a
+browser the immutable release URL.
+
+After that link activation, the page records only a browser-handoff request in
+its existing bounded local audit/notification model. It explicitly cannot
+observe bytes, rate, destination, pause, resume, browser cancellation,
+completion, checksum validation, installer execution, or application
+installation. The Downloads panel keeps those results unknown rather than
+showing simulated progress or success. The command palette registers the same
+start decision after revealing the Downloads panel.
+
+Directly related paths are `site/index.html`, `site/app.js`, `site/styles.css`,
+`site/README.md`, `site/CONTRACT.md`, `docs/features/browser-local-installer-download-handoff.md`,
+`docs/features/README.md`, `README.md`, `ROADMAP.md`, and this handoff. The
+hand-written companion-site inventory now uses the distinct
+`browser-installer-handoff` record and deliberately leaves localization, tests,
+built-site interaction, and capture evidence incomplete.
+
+No tests, linting, review, browser interaction, screen capture, package,
+deployment, release publication, or real installer transfer ran in this
+source-only fast-delivery lane. A subsequent evidence pass must exercise the
+real user-initiated link and preserve the explicit browser-observability
+limitation before representing it as verified.
