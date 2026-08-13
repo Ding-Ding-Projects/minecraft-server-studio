@@ -2527,7 +2527,7 @@ class ServerManager {
     if (server.software === 'paper') {
       await this.provisionPaper(server, jarPath);
     } else {
-      throw new Error('Prepare and explicitly execute the isolated BuildTools plan in the desktop BuildTools tab before setting up a Spigot server.');
+      throw new Error('Spigot server provisioning is unavailable in this plan-only BuildTools build. Review the typed plan in the BuildTools tab; it does not download, execute, or promote a server JAR.');
     }
     this.emit({ type: 'server-provisioned', serverId: id, message: `${server.software === 'paper' ? 'Paper' : 'Spigot'} is ready for ${server.name}.` });
     return { server: copyPublicServer(server), jarPath, reused: false };
