@@ -18,6 +18,7 @@
         </div>
 
         <button class="primary-action" id="new-server-button" type="button" data-i18n="nav.createServer">Create server</button>
+        <button class="text-action" id="authenticator-destination-button" type="button" aria-controls="authenticator-destination">Authenticator and toy locks</button>
         <label class="field search-field" for="server-search">
           <span data-i18n="nav.findServer">Find a server</span>
           <input id="server-search" type="search" placeholder="Filter by name or software" data-i18n-placeholder="nav.searchPlaceholder" autocomplete="off">
@@ -86,6 +87,82 @@
           <h3 data-i18n="empty.title">Build a local server, not a pile of terminal commands.</h3>
           <p data-i18n="empty.description">Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.</p>
           <button class="primary-action" id="empty-create-button" type="button" data-i18n="nav.createServer">Create server</button>
+        </section>
+
+        <section id="authenticator-destination" class="authenticator-destination hidden" aria-labelledby="authenticator-destination-title">
+          <div class="panel-heading authenticator-heading">
+            <div>
+              <p class="eyebrow">LOCAL AUTHENTICATOR FOUNDATION</p>
+              <h3 id="authenticator-destination-title">Authenticator and toy locks</h3>
+              <p class="muted">Codes are calculated locally in the main process. Secrets never appear in this list, the local metadata file, the console, or an ordinary export.</p>
+            </div>
+            <button id="return-to-servers-button" class="outlined-action" type="button">Return to servers</button>
+          </div>
+
+          <div class="tab-strip authenticator-tab-strip" role="tablist" aria-label="Authenticator destination tabs">
+            <button id="authenticator-codes-tab" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="authenticator-panel-codes" data-authenticator-tab="codes">Authenticator</button>
+            <button id="authenticator-locks-tab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="authenticator-panel-locks" data-authenticator-tab="locks">Toy locks</button>
+          </div>
+
+          <section id="authenticator-panel-codes" class="authenticator-panel" role="tabpanel" aria-labelledby="authenticator-codes-tab" data-authenticator-panel="codes">
+            <div id="authenticator-status" class="authenticator-status" aria-live="polite">Loading local authenticator status…</div>
+            <section class="authenticator-card" aria-labelledby="authenticator-add-title">
+              <div>
+                <h4 id="authenticator-add-title">Add a local TOTP entry</h4>
+                <p class="muted">Use either a manual Base32 secret or a standard <code>otpauth://totp/</code> URI. The secret is sent directly to protected local storage and is cleared from this form after a successful save.</p>
+              </div>
+              <form id="authenticator-entry-form" class="settings-grid" novalidate>
+                <label class="field"><span>Issuer</span><input id="authenticator-issuer" type="text" maxlength="96" autocomplete="off" placeholder="Example service"></label>
+                <label class="field"><span>Account</span><input id="authenticator-account" type="text" maxlength="160" autocomplete="off" placeholder="name@example.com"></label>
+                <label class="field"><span>Display label</span><input id="authenticator-label" type="text" maxlength="160" autocomplete="off" placeholder="Optional local label"></label>
+                <label class="field"><span>Group</span><input id="authenticator-group" type="text" maxlength="80" autocomplete="off" value="Ungrouped"></label>
+                <label class="field wide"><span>Manual Base32 secret</span><input id="authenticator-manual-secret" type="password" maxlength="4096" autocomplete="new-password" spellcheck="false" placeholder="Use this or the URI field, never both"><small>The visible code is computed in the main process; the original secret is not returned to this page.</small></label>
+                <label class="field wide"><span>Standard authenticator URI</span><input id="authenticator-uri" type="password" maxlength="8192" autocomplete="off" spellcheck="false" placeholder="otpauth://totp/Issuer:Account?secret=…"><small>URI import is local-only. It accepts only bounded standard TOTP fields.</small></label>
+                <label class="field"><span>Algorithm</span><select id="authenticator-algorithm"><option value="SHA-1">SHA-1</option><option value="SHA-256">SHA-256</option><option value="SHA-512">SHA-512</option></select></label>
+                <label class="field"><span>Digits</span><select id="authenticator-digits"><option value="6">6 digits</option><option value="7">7 digits</option><option value="8">8 digits</option></select></label>
+                <label class="field"><span>Period</span><input id="authenticator-period" type="number" min="1" max="86400" step="1" value="30"></label>
+                <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Save local authenticator entry</button><button id="authenticator-qr-unavailable" class="outlined-action" type="button" disabled aria-describedby="authenticator-qr-boundary">QR pairing/import unavailable</button><p id="authenticator-qr-boundary" class="muted">A bundled in-process QR renderer and decoder are not registered in this foundation, so no QR image, clipboard, or camera path is simulated.</p></div>
+              </form>
+            </section>
+
+            <section class="authenticator-card" aria-labelledby="authenticator-list-title">
+              <div class="panel-heading">
+                <div><h4 id="authenticator-list-title">Local code list</h4><p class="muted">The copy action copies a currently displayed code only after you choose it.</p></div>
+                <button id="authenticator-refresh-button" class="outlined-action" type="button">Refresh codes</button>
+              </div>
+              <div class="authenticator-search-row">
+                <label class="field" for="authenticator-search"><span>Find an authenticator entry</span><input id="authenticator-search" type="search" maxlength="160" autocomplete="off" placeholder="Filter issuer, account, label, or group"></label>
+                <button id="authenticator-regex-toggle" class="outlined-action" type="button" aria-expanded="false" aria-controls="authenticator-regex-builder">Regex builder</button>
+              </div>
+              <section id="authenticator-regex-builder" class="regex-builder" hidden aria-labelledby="authenticator-regex-title">
+                <div><h5 id="authenticator-regex-title">Authenticator list regex builder</h5><p class="muted">Plain text is the default. Regex evaluates only the bounded local labels shown here.</p></div>
+                <label class="switch-field"><input id="authenticator-regex-enabled" type="checkbox"><span><strong>Use regex for this list search</strong><small>Invalid patterns show an honest no-match state and do not change stored entries.</small></span></label>
+                <label class="field"><span>Pattern</span><input id="authenticator-regex-pattern" type="text" maxlength="128" autocomplete="off" placeholder="For example: ^Example"></label>
+                <label class="field"><span>Flags</span><input id="authenticator-regex-flags" type="text" maxlength="3" autocomplete="off" value="i" placeholder="i, m, or u"></label>
+                <div class="regex-token-row" aria-label="Guided regex construction"><button type="button" data-authenticator-regex-token="^">Start anchor</button><button type="button" data-authenticator-regex-token="$">End anchor</button><button type="button" data-authenticator-regex-token="\\d">Digit</button><button type="button" data-authenticator-regex-token="[abc]">Character class</button><button type="button" data-authenticator-regex-token="(group)">Group</button><button type="button" data-authenticator-regex-token="|">Alternation</button><button type="button" data-authenticator-regex-token="+">Quantifier</button></div>
+                <p id="authenticator-regex-status" class="muted" aria-live="polite">Plain-text search is active.</p>
+              </section>
+              <div id="authenticator-entry-list" class="authenticator-entry-list" aria-live="polite"></div>
+            </section>
+          </section>
+
+          <section id="authenticator-panel-locks" class="authenticator-panel" role="tabpanel" aria-labelledby="authenticator-locks-tab" data-authenticator-panel="locks" hidden>
+            <div id="toy-lock-status" class="authenticator-status" aria-live="polite">Loading toy-lock status…</div>
+            <section class="authenticator-card" aria-labelledby="toy-lock-create-title">
+              <div><h4 id="toy-lock-create-title">Create a per-target toy lock</h4><p class="muted">Each lock has its own protected credential. This is a for-fun user-experience speed bump, not security or encryption.</p></div>
+              <form id="toy-lock-create-form" class="settings-grid" novalidate>
+                <label class="field"><span>Target type</span><select id="toy-lock-target-type"><option value="tab">Tab</option><option value="element">Element</option></select></label>
+                <label class="field"><span>Target identifier</span><input id="toy-lock-target-id" type="text" maxlength="160" value="authenticator" autocomplete="off"><small>Use an exact app-owned identifier. The built-in authenticator tab is <code>authenticator</code>.</small></label>
+                <label class="field wide"><span>Target label</span><input id="toy-lock-target-label" type="text" maxlength="160" value="Authenticator destination" autocomplete="off"></label>
+                <label class="field"><span>Credential method</span><select id="toy-lock-method"><option value="password">Password</option><option value="totp">TOTP</option></select></label>
+                <label class="field"><span>Unlock duration</span><select id="toy-lock-duration"><option value="session">Until app closes</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">60 minutes</option></select></label>
+                <div id="toy-lock-password-fields" class="settings-grid wide"><label class="field"><span>New password</span><input id="toy-lock-password" type="password" maxlength="256" autocomplete="new-password"></label><label class="field"><span>Confirm password</span><input id="toy-lock-password-confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div>
+                <div id="toy-lock-totp-fields" class="settings-grid wide" hidden><label class="field"><span>Manual Base32 TOTP secret</span><input id="toy-lock-totp-secret" type="password" maxlength="4096" autocomplete="new-password" spellcheck="false"><small>QR pairing is not available in this foundation. Use a manually supplied secret only if you understand it is a toy lock.</small></label></div>
+                <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Create toy lock</button><p class="muted">Recovery: delete the application-data folder shown below yourself. No ticket is sent, no network request is made, and nobody is reading it.</p><code id="toy-lock-recovery-directory">Loading local recovery folder…</code></div>
+              </form>
+            </section>
+            <section class="authenticator-card" aria-labelledby="toy-lock-list-title"><div><h4 id="toy-lock-list-title">Configured toy locks</h4><p class="muted">Only the authenticator tab is actively guarded by this foundation. Other recorded targets remain inventory-only until their own context-menu and keyboard routes are wired.</p></div><div id="toy-lock-list" class="toy-lock-list" aria-live="polite"></div></section>
+          </section>
         </section>
 
         <section class="server-editor hidden" id="server-editor" aria-label="Server configuration">
@@ -467,6 +544,16 @@
         <label class="field"><span>Slide to authorize</span><input id="command-confirmation-slider" type="range" min="0" max="100" value="0" disabled><small>Both confirmations are required before the full-range authorization control becomes available.</small></label>
         <div class="dialog-actions"><button id="command-confirmation-cancel" type="button" class="outlined-action">Emergency exit</button><button id="command-confirmation-accept" type="button" class="danger-action" disabled>Authorize operation</button></div>
       </section>
+    </dialog>
+
+    <dialog id="toy-lock-unlock-dialog" aria-labelledby="toy-lock-unlock-title">
+      <form id="toy-lock-unlock-form" method="dialog" class="toy-lock-unlock-form">
+        <div class="dialog-heading"><div><p class="eyebrow">TOY LOCK</p><h2 id="toy-lock-unlock-title">Unlock target</h2></div><button id="close-toy-lock-unlock-dialog" class="icon-action" type="button" aria-label="Close toy-lock unlock dialog">×</button></div>
+        <p id="toy-lock-unlock-copy">Enter this lock's own credential. This is a user-experience lock, not a security boundary.</p>
+        <label class="field"><span id="toy-lock-unlock-credential-label">Credential</span><input id="toy-lock-unlock-credential" type="password" maxlength="4096" autocomplete="one-time-code"></label>
+        <p id="toy-lock-unlock-recovery" class="muted">Recovery: delete the application's local data folder yourself. No ticket is sent anywhere.</p>
+        <div class="dialog-actions"><button id="toy-lock-unlock-cancel" class="outlined-action" type="button">Cancel</button><button class="primary-action" type="submit">Unlock</button></div>
+      </form>
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>

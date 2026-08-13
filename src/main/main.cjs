@@ -9,6 +9,8 @@ const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
+let AuthenticatorService;
+let ToyLockService;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
 } catch {
@@ -18,6 +20,16 @@ try {
   ({ SharedStatusHubClient } = require('./shared-status-hub-client.cjs'));
 } catch {
   SharedStatusHubClient = null;
+}
+try {
+  ({ AuthenticatorService } = require('./authenticator-service.cjs'));
+} catch {
+  AuthenticatorService = null;
+}
+try {
+  ({ ToyLockService } = require('./toy-lock-service.cjs'));
+} catch {
+  ToyLockService = null;
 }
 
 app.setName('Minecraft Server Studio');
@@ -33,6 +45,8 @@ const MAX_RCON_PACKET_BYTES = 256 * 1024;
 const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 let statusHubBridge;
 let updateController;
+let authenticatorService;
+let toyLockService;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -312,6 +326,19 @@ app.whenReady().then(async () => {
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
   }) : null;
+  authenticatorService = AuthenticatorService ? new AuthenticatorService({
+    dataDir: path.join(app.getPath('userData'), 'authenticator'),
+    credentialVault,
+    onChange: () => sendToRenderer({ type: 'authenticator-changed' })
+  }) : null;
+  toyLockService = ToyLockService ? new ToyLockService({
+    dataDir: path.join(app.getPath('userData'), 'toy-locks'),
+    recoveryDirectory: app.getPath('userData'),
+    credentialVault,
+    onChange: () => sendToRenderer({ type: 'toy-locks-changed' })
+  }) : null;
+  authenticatorService?.initialize();
+  toyLockService?.initialize();
   schoolModeVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(sharedSettingsDirectory, 'credential-vault'),
     safeStorage
@@ -372,6 +399,16 @@ function requireManager() {
 function requireUpdater() {
   if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
   return updateController;
+}
+
+function requireAuthenticator() {
+  if (!authenticatorService) throw new Error('The local authenticator is unavailable in this app build.');
+  return authenticatorService;
+}
+
+function requireToyLocks() {
+  if (!toyLockService) throw new Error('Toy locks are unavailable in this app build.');
+  return toyLockService;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -483,6 +520,14 @@ ipcMain.handle('studio:open-folder', async (_event, folder) => {
 });
 ipcMain.handle('studio:data-directory', () => path.join(app.getPath('userData'), 'servers'));
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
+ipcMain.handle('studio:authenticator-status', () => requireAuthenticator().getStatus());
+ipcMain.handle('studio:authenticator-snapshot', () => requireAuthenticator().snapshot());
+ipcMain.handle('studio:create-authenticator-entry', (_event, input) => requireAuthenticator().createEntry(input));
+ipcMain.handle('studio:toy-lock-status', () => requireToyLocks().getStatus());
+ipcMain.handle('studio:list-toy-locks', () => requireToyLocks().listLocks());
+ipcMain.handle('studio:create-toy-lock', (_event, input) => requireToyLocks().createLock(input));
+ipcMain.handle('studio:unlock-toy-lock', (_event, lockId, credential) => requireToyLocks().unlock(lockId, credential));
+ipcMain.handle('studio:relock-toy-lock', (_event, lockId) => requireToyLocks().relock(lockId));
 ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
   status: statusHubBridge.getStatus(),
   configuration: statusHubBridge.getConfigurationForRenderer()

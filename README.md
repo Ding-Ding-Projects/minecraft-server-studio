@@ -17,6 +17,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
 - Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory. An optional main-process Status Hub bridge can be configured separately; it keeps the local destination as the fallback and never reports registration, update, inbox-poll, or reply delivery without an accepted transport response.
 - Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
+- Use the local authenticator destination for vault-backed RFC 6238 TOTP code snapshots and optional independently credentialed toy-lock records. QR pairing/import, every-element lock wiring, secret export, and synchronization remain explicitly unavailable in this foundation.
 
 ## Desktop workflow
 
@@ -74,6 +75,7 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 - The management protocol is TLS-first and stores any bearer credential reference through protected storage. The generic WebSocket transport does not invent a provider-specific bearer handshake; it never enables methods before `rpc.discover` advertises them and is not a Paper HTTP API.
 - Command discovery never scrapes or invents commands. It runs only selected-JAR `--help`/`--version` probes with direct Java arguments, or user-selected fixed `help`, `plugins`, and Paper `paper` queries against an already-running local console or protected loopback RCON route. Every bounded response keeps source, route, timestamp, truncation, and failure state; plugin descriptor metadata remains non-executable until live runtime evidence confirms the command name.
 - RCON passwords and management bearer credentials are stored through the operating system protected-storage boundary and omitted from the local registry, exports, and console logs. Minecraft still requires its active RCON password in its local configuration; treat the server folder as sensitive.
+- Authenticator secrets and toy-lock password verifiers remain in protected credential storage; the metadata store and renderer receive only non-secret entry/lock details and short-lived code snapshots. Toy locks are user-experience speed bumps, not encryption or security; the UI names the local application-data deletion recovery route.
 - The CLI never accepts an RCON password from command-line arguments, environment variables, stdin, or `servers.json`. Its one-shot local gateway reads the app-private protected value only under the same Windows account, uses it only for a fixed loopback connection, and emits no credential data.
 - Plugins are local JARs selected through the operating-system file picker. Minecraft Server Studio calculates SHA-256 and inspects bounded JAR, manifest, descriptor, dependency, duplicate, and cycle evidence before staging, but it does not claim to audit or trust third-party plugin safety.
 - The optional Status Hub bridge is HTTPS-only except for an explicitly enabled HTTP development route at the exact numeric loopback host `127.0.0.1` or `::1`. Once an eligible endpoint and vault enrollment token are available, the main process generates and stores a fresh session key through `CredentialVault`; it is not returned by the Hub. Enrollment tokens and session keys are not accepted by renderer forms, placed in exports, or copied into local status history. An attempted connection does not claim external delivery.
@@ -90,6 +92,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Spigot BuildTools planning](docs/features/spigot-buildtools.md)
 - [Command Center](docs/features/command-center.md)
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
+- [Local authenticator and toy-lock foundation](docs/features/authenticator-and-toy-locks.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)

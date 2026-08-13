@@ -19,12 +19,23 @@ const state = {
   pluginPlan: null,
   pluginPlanServerId: null,
   applicationUpdate: null,
+  workspaceDestination: 'servers',
+  authenticator: null,
+  authenticatorStatus: null,
+  toyLocks: null,
+  toyLockStatus: null,
+  activeAuthenticatorTab: 'codes',
+  activeToyLockId: null,
+  pendingAuthenticatorDestination: false,
   unsaved: {
     settings: false,
     createDraft: false,
     pluginSelection: false,
     consoleDraft: false,
-    statusHubBridge: false
+    statusHubBridge: false,
+    authenticatorEntry: false,
+    toyLockDraft: false,
+    toyLockUnlock: false
   }
 };
 
@@ -1123,6 +1134,7 @@ function renderServers() {
     item.innerHTML = `<strong>${escapeHtml(server.name)}</strong><span class="server-meta"><span>${escapeHtml(server.software)} · ${escapeHtml(server.minecraftVersion)}</span><span><i class="dot ${server.status}"></i>${escapeHtml(server.status)}</span></span>`;
     item.addEventListener('click', () => {
       if (state.selectedId !== server.id) resetBackupLifecycleState();
+      state.workspaceDestination = 'servers';
       state.selectedId = server.id;
       state.pluginPath = '';
       state.pluginPlan = null;
@@ -1199,6 +1211,19 @@ function renderEditor() {
   const server = selectedServer();
   const editor = $('#server-editor');
   const empty = $('#empty-state');
+  const authenticatorDestination = $('#authenticator-destination');
+  if (state.workspaceDestination === 'authenticator') {
+    editor.classList.add('hidden');
+    empty.classList.add('hidden');
+    authenticatorDestination.classList.remove('hidden');
+    $('#server-title').textContent = 'Local authenticator';
+    $('#server-software').textContent = 'PRIVATE LOCAL CODES AND TOY LOCKS';
+    $('#server-status').textContent = 'Local only';
+    $('#server-status').className = 'status-chip';
+    ['open-folder-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
+    return;
+  }
+  authenticatorDestination.classList.add('hidden');
   if (!server) {
     editor.classList.add('hidden');
     empty.classList.remove('hidden');
@@ -1276,10 +1301,354 @@ function rconConsoleLine(value) {
   return `${prefix}: ${response.text || '(no response)'}`;
 }
 
+function authenticatorRegexConfig() {
+  const enabled = $('#authenticator-regex-enabled')?.checked === true;
+  const pattern = $('#authenticator-regex-pattern')?.value || '';
+  const flags = $('#authenticator-regex-flags')?.value || '';
+  if (!enabled) return { enabled: false, error: '', matcher: null };
+  if (pattern.length === 0) return { enabled: true, error: 'Enter a regex pattern before enabling regex search.', matcher: null };
+  if (pattern.length > 128 || flags.length > 3 || !/^[imu]*$/.test(flags) || new Set(flags).size !== flags.length) {
+    return { enabled: true, error: 'Use a bounded pattern and unique i, m, or u flags only.', matcher: null };
+  }
+  try {
+    return { enabled: true, error: '', matcher: new RegExp(pattern, flags) };
+  } catch {
+    return { enabled: true, error: 'This regex pattern is invalid. No entries match until it is corrected.', matcher: null };
+  }
+}
+
+function updateAuthenticatorRegexStatus() {
+  const config = authenticatorRegexConfig();
+  const status = $('#authenticator-regex-status');
+  if (status) {
+    status.textContent = config.enabled
+      ? (config.error || 'Regex search is active for bounded local labels.')
+      : 'Plain-text search is active.';
+    status.dataset.state = config.error ? 'invalid' : (config.enabled ? 'active' : 'plain');
+  }
+  return config;
+}
+
+function authenticatorEntryMatches(entry, config) {
+  const haystack = [entry.issuer, entry.account, entry.label, entry.group].join(' · ').slice(0, 512);
+  const query = ($('#authenticator-search')?.value || '').trim();
+  if (config.enabled) return Boolean(config.matcher && config.matcher.test(haystack));
+  return !query || haystack.toLocaleLowerCase('en-US').includes(query.toLocaleLowerCase('en-US'));
+}
+
+function formatAuthenticatorCode(code) {
+  const value = String(code || '');
+  if (!/^\d{6,8}$/.test(value)) return 'Unavailable';
+  const split = Math.ceil(value.length / 2);
+  return `${value.slice(0, split)} ${value.slice(split)}`;
+}
+
+function renderAuthenticator() {
+  const status = state.authenticatorStatus || state.authenticator?.status;
+  const statusTarget = $('#authenticator-status');
+  if (statusTarget) {
+    if (!status) {
+      statusTarget.textContent = 'Loading local authenticator status…';
+      statusTarget.dataset.state = 'loading';
+    } else {
+      statusTarget.textContent = `${status.detail} ${status.clock?.detail || ''}`.trim();
+      statusTarget.dataset.state = status.state || 'unavailable';
+      $('#authenticator-qr-unavailable').disabled = status.registration?.qr?.available !== true;
+      $('#authenticator-qr-boundary').textContent = status.registration?.qr?.reason || 'QR pairing is unavailable.';
+    }
+  }
+
+  const list = $('#authenticator-entry-list');
+  if (!list) return;
+  list.replaceChildren();
+  const config = updateAuthenticatorRegexStatus();
+  const entries = Array.isArray(state.authenticator?.entries) ? state.authenticator.entries : [];
+  const visible = config.enabled && config.error ? [] : entries.filter((entry) => authenticatorEntryMatches(entry, config));
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = entries.length
+      ? (config.enabled && config.error ? 'Fix the regex pattern to show matching entries.' : 'No local authenticator entries match this search.')
+      : 'No local authenticator entries have been saved yet.';
+    list.append(empty);
+    return;
+  }
+  for (const entry of visible) {
+    const card = document.createElement('article');
+    card.className = 'authenticator-entry-card';
+    card.dataset.state = entry.codeState || 'unavailable';
+    const heading = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = entry.label;
+    const detail = document.createElement('span');
+    detail.textContent = `${entry.issuer} · ${entry.account} · ${entry.group}`;
+    heading.append(title, detail);
+
+    const codeBox = document.createElement('div');
+    codeBox.className = 'authenticator-code-box';
+    const code = document.createElement('output');
+    code.textContent = entry.codeState === 'ready' ? formatAuthenticatorCode(entry.code) : 'Unavailable';
+    code.setAttribute('aria-label', entry.codeState === 'ready' ? `Current code for ${entry.label}` : `Code unavailable for ${entry.label}`);
+    const countdown = document.createElement('span');
+    countdown.textContent = entry.codeState === 'ready'
+      ? `${entry.secondsRemaining} seconds remaining · next ${formatAuthenticatorCode(entry.nextCode)}`
+      : (entry.detail || 'Protected credential unavailable.');
+    codeBox.append(code, countdown);
+
+    const actions = document.createElement('div');
+    actions.className = 'authenticator-entry-actions';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'outlined-action';
+    copy.textContent = 'Copy current code';
+    copy.disabled = entry.codeState !== 'ready';
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(entry.code);
+        toast(`Current code copied for ${entry.label}.`, 'success');
+      } catch {
+        toast('Clipboard access was unavailable. The code remains visible for manual entry.', 'error');
+      }
+    });
+    actions.append(copy);
+    card.append(heading, codeBox, actions);
+    list.append(card);
+  }
+}
+
+function renderToyLocks() {
+  const status = state.toyLockStatus || state.toyLocks?.status;
+  const statusTarget = $('#toy-lock-status');
+  if (statusTarget) {
+    statusTarget.textContent = status?.detail || 'Loading toy-lock status…';
+    statusTarget.dataset.state = status?.state || 'loading';
+  }
+  const recoveryDirectory = $('#toy-lock-recovery-directory');
+  if (recoveryDirectory && status?.recoveryDirectory) recoveryDirectory.textContent = status.recoveryDirectory;
+  const list = $('#toy-lock-list');
+  if (!list) return;
+  list.replaceChildren();
+  const locks = Array.isArray(state.toyLocks?.locks) ? state.toyLocks.locks : [];
+  if (!locks.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No toy locks are configured. The authenticator tab is the only actively guarded target in this foundation.';
+    list.append(empty);
+    return;
+  }
+  for (const lock of locks) {
+    const card = document.createElement('article');
+    card.className = 'toy-lock-card';
+    card.dataset.state = lock.state;
+    const title = document.createElement('strong');
+    title.textContent = lock.targetLabel;
+    const detail = document.createElement('span');
+    const duration = lock.unlockMinutes === 0 ? 'until the app closes' : `for ${lock.unlockMinutes} minutes`;
+    detail.textContent = `${lock.targetType} · ${lock.targetId} · ${lock.method.toUpperCase()} · ${lock.state} ${duration}`;
+    const stateDetail = document.createElement('small');
+    stateDetail.textContent = lock.state === 'unlocked'
+      ? (lock.unlockedUntil ? `Unlocked until ${new Date(lock.unlockedUntil).toLocaleTimeString()}.` : 'Unlocked until the app closes.')
+      : 'Locked. Use this lock\'s own credential to unlock it.';
+    const actions = document.createElement('div');
+    actions.className = 'authenticator-entry-actions';
+    const control = document.createElement('button');
+    control.type = 'button';
+    control.className = 'outlined-action';
+    control.textContent = lock.state === 'unlocked' ? 'Lock again' : 'Unlock';
+    control.addEventListener('click', () => {
+      if (lock.state === 'unlocked') relockToyLock(lock.id);
+      else openToyLockUnlockDialog(lock);
+    });
+    actions.append(control);
+    card.append(title, detail, stateDetail, actions);
+    list.append(card);
+  }
+}
+
+function setAuthenticatorTab(tab) {
+  state.activeAuthenticatorTab = tab;
+  $$('.authenticator-tab-strip .tab').forEach((button) => {
+    const active = button.dataset.authenticatorTab === tab;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  });
+  $$('.authenticator-panel').forEach((panel) => {
+    const active = panel.dataset.authenticatorPanel === tab;
+    panel.hidden = !active;
+  });
+}
+
+function activeToyLockForAuthenticatorTab() {
+  return (state.toyLocks?.locks || []).find((lock) => lock.targetType === 'tab' && lock.targetId === 'authenticator' && lock.state === 'locked') || null;
+}
+
+async function openAuthenticatorDestination() {
+  await refreshToyLocks();
+  const lock = activeToyLockForAuthenticatorTab();
+  if (lock) {
+    state.pendingAuthenticatorDestination = true;
+    openToyLockUnlockDialog(lock);
+    toast('The authenticator tab is locked by its configured toy lock.', 'info');
+    return;
+  }
+  state.pendingAuthenticatorDestination = false;
+  state.workspaceDestination = 'authenticator';
+  renderAll();
+  await Promise.all([refreshAuthenticator(), refreshToyLocks()]);
+}
+
+function returnToServers() {
+  state.pendingAuthenticatorDestination = false;
+  state.workspaceDestination = 'servers';
+  renderAll();
+}
+
+async function authenticatorCall(work, quiet) {
+  if (!quiet) return safely(work);
+  try {
+    return await work();
+  } catch {
+    return null;
+  }
+}
+
+async function refreshAuthenticator(options = {}) {
+  const quiet = options?.quiet === true;
+  const status = await authenticatorCall(() => window.studio.authenticatorStatus(), quiet);
+  if (status) state.authenticatorStatus = status;
+  if (status?.state === 'metadata-unavailable') {
+    state.authenticator = { status, entries: [] };
+    renderAuthenticator();
+    return;
+  }
+  const snapshot = await authenticatorCall(() => window.studio.authenticatorSnapshot(), quiet);
+  if (snapshot) {
+    state.authenticator = snapshot;
+    state.authenticatorStatus = snapshot.status || state.authenticatorStatus;
+  }
+  renderAuthenticator();
+}
+
+async function refreshToyLocks() {
+  const status = await safely(() => window.studio.toyLockStatus());
+  if (status) state.toyLockStatus = status;
+  if (status?.state === 'metadata-unavailable') {
+    state.toyLocks = { status, locks: [] };
+    renderToyLocks();
+    return;
+  }
+  const snapshot = await safely(() => window.studio.listToyLocks());
+  if (snapshot) {
+    state.toyLocks = snapshot;
+    state.toyLockStatus = snapshot.status || state.toyLockStatus;
+  }
+  renderToyLocks();
+}
+
+async function createAuthenticatorEntry(event) {
+  event.preventDefault();
+  const result = await safely(() => window.studio.createAuthenticatorEntry({
+    issuer: $('#authenticator-issuer').value,
+    account: $('#authenticator-account').value,
+    label: $('#authenticator-label').value,
+    group: $('#authenticator-group').value,
+    manualSecret: $('#authenticator-manual-secret').value,
+    otpauthUri: $('#authenticator-uri').value,
+    algorithm: $('#authenticator-algorithm').value,
+    digits: Number($('#authenticator-digits').value),
+    period: Number($('#authenticator-period').value)
+  }));
+  if (!result) return;
+  ['authenticator-issuer', 'authenticator-account', 'authenticator-label', 'authenticator-manual-secret', 'authenticator-uri'].forEach((id) => { $(`#${id}`).value = ''; });
+  $('#authenticator-group').value = 'Ungrouped';
+  state.unsaved.authenticatorEntry = false;
+  toast(`Local authenticator entry saved: ${result.label}.`, 'success');
+  await refreshAuthenticator();
+}
+
+function toggleToyLockMethod() {
+  const totp = $('#toy-lock-method').value === 'totp';
+  $('#toy-lock-password-fields').hidden = totp;
+  $('#toy-lock-totp-fields').hidden = !totp;
+}
+
+async function createToyLock(event) {
+  event.preventDefault();
+  const result = await safely(() => window.studio.createToyLock({
+    targetType: $('#toy-lock-target-type').value,
+    targetId: $('#toy-lock-target-id').value.trim(),
+    targetLabel: $('#toy-lock-target-label').value,
+    method: $('#toy-lock-method').value,
+    password: $('#toy-lock-password').value,
+    passwordConfirmation: $('#toy-lock-password-confirmation').value,
+    totpSecret: $('#toy-lock-totp-secret').value,
+    unlockMinutes: $('#toy-lock-duration').value
+  }));
+  if (!result) return;
+  ['toy-lock-password', 'toy-lock-password-confirmation', 'toy-lock-totp-secret'].forEach((id) => { $(`#${id}`).value = ''; });
+  state.unsaved.toyLockDraft = false;
+  toast(`Toy lock created for ${result.targetLabel}.`, 'success');
+  await refreshToyLocks();
+}
+
+function openToyLockUnlockDialog(lock) {
+  state.activeToyLockId = lock.id;
+  const dialog = $('#toy-lock-unlock-dialog');
+  $('#toy-lock-unlock-title').textContent = `Unlock ${lock.targetLabel}`;
+  $('#toy-lock-unlock-copy').textContent = `Enter the independent ${lock.method.toUpperCase()} credential for ${lock.targetLabel}. This is a toy lock, not a security boundary.`;
+  $('#toy-lock-unlock-credential-label').textContent = lock.method === 'totp' ? 'Current TOTP code' : 'Password';
+  const credential = $('#toy-lock-unlock-credential');
+  credential.value = '';
+  credential.autocomplete = lock.method === 'totp' ? 'one-time-code' : 'current-password';
+  credential.inputMode = lock.method === 'totp' ? 'numeric' : 'text';
+  const recovery = state.toyLockStatus?.recoveryDirectory || state.toyLocks?.status?.recoveryDirectory || '';
+  $('#toy-lock-unlock-recovery').textContent = recovery
+    ? `Recovery: delete ${recovery} yourself to reset every toy lock. No ticket is sent anywhere.`
+    : 'Recovery: delete the application data folder yourself to reset every toy lock. No ticket is sent anywhere.';
+  dialog.showModal();
+  credential.focus();
+}
+
+function closeToyLockUnlockDialog() {
+  state.activeToyLockId = null;
+  state.pendingAuthenticatorDestination = false;
+  state.unsaved.toyLockUnlock = false;
+  $('#toy-lock-unlock-dialog').close();
+}
+
+async function submitToyLockUnlock(event) {
+  event.preventDefault();
+  const lockId = state.activeToyLockId;
+  if (!lockId) return;
+  const unlocked = await safely(() => window.studio.unlockToyLock(lockId, $('#toy-lock-unlock-credential').value));
+  if (!unlocked) return;
+  $('#toy-lock-unlock-credential').value = '';
+  const shouldOpenAuthenticator = state.pendingAuthenticatorDestination && unlocked.targetType === 'tab' && unlocked.targetId === 'authenticator';
+  state.activeToyLockId = null;
+  state.pendingAuthenticatorDestination = false;
+  state.unsaved.toyLockUnlock = false;
+  $('#toy-lock-unlock-dialog').close();
+  await refreshToyLocks();
+  if (shouldOpenAuthenticator) {
+    state.workspaceDestination = 'authenticator';
+    renderAll();
+    await refreshAuthenticator();
+  }
+}
+
+async function relockToyLock(lockId) {
+  const result = await safely(() => window.studio.relockToyLock(lockId));
+  if (!result) return;
+  toast(`Toy lock restored for ${result.targetLabel}.`, 'success');
+  await refreshToyLocks();
+}
+
 function renderAll() {
   renderServers();
   renderDependencies();
   renderEditor();
+  renderAuthenticator();
+  renderToyLocks();
   renderConsole();
   renderLocalStatus();
   renderBackupLifecycle();
@@ -1289,7 +1658,7 @@ function renderAll() {
 
 function setActiveTab(tab) {
   state.activeTab = tab;
-  $$('.tab').forEach((button) => {
+  $$('#server-editor .tab').forEach((button) => {
     const active = button.dataset.tab === tab;
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', String(active));
@@ -1456,13 +1825,16 @@ function unsavedWorkState() {
     || state.unsaved.pluginSelection
     || state.unsaved.consoleDraft
     || state.unsaved.statusHubBridge
+    || state.unsaved.authenticatorEntry
+    || state.unsaved.toyLockDraft
+    || state.unsaved.toyLockUnlock
     || createDialog?.open
     || experienceDialog?.open
     || confirmationDialog?.open
   );
   return {
     hasUnsavedWork,
-    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, Status Hub bridge edit, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
+    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, authenticator or toy-lock draft, Status Hub bridge edit, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
   };
 }
 
@@ -2023,6 +2395,14 @@ function handleStudioEvent(event) {
     applyExperienceSnapshot(event.payload);
     return;
   }
+  if (event?.type === 'authenticator-changed') {
+    refreshAuthenticator();
+    return;
+  }
+  if (event?.type === 'toy-locks-changed') {
+    refreshToyLocks();
+    return;
+  }
   logEvent(event || {});
 }
 
@@ -2037,6 +2417,47 @@ function bindEvents() {
   $('#save-school-mode-label-button').addEventListener('click', saveSchoolModeLabel);
   $('#save-school-mode-credential-button').addEventListener('click', saveSchoolModeCredential);
   $('#school-mode-enabled').addEventListener('change', changeSchoolMode);
+  $('#authenticator-destination-button').addEventListener('click', openAuthenticatorDestination);
+  $('#return-to-servers-button').addEventListener('click', returnToServers);
+  $$('.authenticator-tab-strip .tab').forEach((button) => button.addEventListener('click', () => setAuthenticatorTab(button.dataset.authenticatorTab)));
+  $('#authenticator-entry-form').addEventListener('submit', createAuthenticatorEntry);
+  $('#authenticator-entry-form').addEventListener('input', () => { state.unsaved.authenticatorEntry = true; });
+  $('#authenticator-entry-form').addEventListener('change', () => { state.unsaved.authenticatorEntry = true; });
+  $('#authenticator-refresh-button').addEventListener('click', refreshAuthenticator);
+  $('#authenticator-search').addEventListener('input', renderAuthenticator);
+  $('#authenticator-regex-toggle').addEventListener('click', () => {
+    const builder = $('#authenticator-regex-builder');
+    builder.hidden = !builder.hidden;
+    $('#authenticator-regex-toggle').setAttribute('aria-expanded', String(!builder.hidden));
+    if (!builder.hidden) $('#authenticator-regex-pattern').focus();
+  });
+  ['authenticator-regex-enabled', 'authenticator-regex-pattern', 'authenticator-regex-flags'].forEach((id) => {
+    $(`#${id}`).addEventListener(id === 'authenticator-regex-enabled' ? 'change' : 'input', renderAuthenticator);
+  });
+  $$('[data-authenticator-regex-token]').forEach((button) => button.addEventListener('click', () => {
+    const input = $('#authenticator-regex-pattern');
+    const token = button.dataset.authenticatorRegexToken || '';
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.setRangeText(token, start, end, 'end');
+    input.focus();
+    renderAuthenticator();
+  }));
+  $('#toy-lock-create-form').addEventListener('submit', createToyLock);
+  $('#toy-lock-create-form').addEventListener('input', () => { state.unsaved.toyLockDraft = true; });
+  $('#toy-lock-create-form').addEventListener('change', () => { state.unsaved.toyLockDraft = true; });
+  $('#toy-lock-method').addEventListener('change', toggleToyLockMethod);
+  $('#toy-lock-unlock-form').addEventListener('submit', submitToyLockUnlock);
+  $('#toy-lock-unlock-credential').addEventListener('input', () => { state.unsaved.toyLockUnlock = Boolean($('#toy-lock-unlock-credential').value); });
+  $('#close-toy-lock-unlock-dialog').addEventListener('click', closeToyLockUnlockDialog);
+  $('#toy-lock-unlock-cancel').addEventListener('click', closeToyLockUnlockDialog);
+  $('#toy-lock-unlock-dialog').addEventListener('close', () => {
+    if (state.activeToyLockId) {
+      state.activeToyLockId = null;
+      state.pendingAuthenticatorDestination = false;
+      state.unsaved.toyLockUnlock = false;
+    }
+  });
   $('#new-server-button').addEventListener('click', openCreateDialog);
   $('#empty-create-button').addEventListener('click', openCreateDialog);
   $('#close-create-dialog').addEventListener('click', () => { state.unsaved.createDraft = false; $('#create-dialog').close(); });
@@ -2115,7 +2536,7 @@ function bindEvents() {
       renderDependencies();
     }
   });
-  $$('.tab').forEach((button) => button.addEventListener('click', () => setActiveTab(button.dataset.tab)));
+  $$('#server-editor .tab').forEach((button) => button.addEventListener('click', () => setActiveTab(button.dataset.tab)));
   $('#settings-form').addEventListener('submit', saveSettings);
   $('#memory-gb').addEventListener('input', () => { $('#memory-output').value = $('#memory-gb').value; });
   $('#view-distance').addEventListener('input', () => { $('#view-distance-output').value = $('#view-distance').value; });
@@ -2209,14 +2630,19 @@ function bindEvents() {
 async function initialize() {
   renderAdvancedControls();
   bindEvents();
+  toggleToyLockMethod();
+  setAuthenticatorTab(state.activeAuthenticatorTab);
   window.studio.onEvent(handleStudioEvent);
   window.studio.onUnsavedWorkQuery(unsavedWorkState);
   const experience = await safely(() => window.studio.experienceSettings());
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshAuthenticator(), refreshToyLocks()]);
   renderCommandCenter();
+  setInterval(() => {
+    if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });
+  }, 1_000);
 }
 
 initialize();
