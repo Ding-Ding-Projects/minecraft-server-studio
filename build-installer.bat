@@ -25,9 +25,16 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
-set "MSS_SETUP=dist\squirrel-windows\Minecraft.Server.Studio-0.1.0-x64-Setup.exe"
+set "MSS_SOURCE_VERSION="
+for /f "usebackq delims=" %%V in (`node -p "require('./package.json').version"`) do set "MSS_SOURCE_VERSION=%%V"
+if not defined MSS_SOURCE_VERSION (
+  echo ERROR: package.json did not provide the source version for the expected installer filename.
+  popd
+  exit /b 1
+)
+set "MSS_SETUP=dist\squirrel-windows\Minecraft.Server.Studio-%MSS_SOURCE_VERSION%-x64-Setup.exe"
 if not exist "%MSS_SETUP%" (
-  echo ERROR: Expected installer was not found at %MSS_SETUP%.
+  echo ERROR: Expected configured installer was not found at %MSS_SETUP%.
   popd
   exit /b 1
 )

@@ -58,8 +58,32 @@ jobs:
       - name: Restore declared dependencies
         run: npm ci
 
+      - name: Derive immutable Squirrel application version
+        shell: pwsh
+        run: |
+          $runNumber = [string]$env:GITHUB_RUN_NUMBER
+          $runAttempt = [string]$env:GITHUB_RUN_ATTEMPT
+          if ($runNumber -notmatch '^[1-9]\d*$' -or $runAttempt -notmatch '^[1-9]\d*$') {
+            throw "GitHub Actions did not provide positive numeric run metadata (run=$runNumber, attempt=$runAttempt)."
+          }
+
+          $sourceVersion = & node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version"
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sourceVersion) -or $sourceVersion -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+            throw "package.json must contain a strict three-part source version before release packaging; received '$sourceVersion'."
+          }
+
+          $squirrelVersion = "0.$runNumber.$runAttempt"
+          if ($squirrelVersion -notmatch '^0\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+            throw "The computed Squirrel version is not strict stable SemVer: $squirrelVersion"
+          }
+
+          $releaseTag = "v$sourceVersion-build.$runNumber.$runAttempt"
+          Add-Content -Path $env:GITHUB_ENV -Value "SQUIRREL_VERSION=$squirrelVersion"
+          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_TAG=$releaseTag"
+
       - name: Build unsigned Squirrel.Windows package
-        run: npm run package
+        shell: pwsh
+        run: npm run package -- "-c.extraMetadata.version=$env:SQUIRREL_VERSION"
 
       - name: Validate unsigned Squirrel artifacts
         shell: pwsh
@@ -68,12 +92,21 @@ jobs:
           if (-not (Test-Path -LiteralPath $squirrelOutput -PathType Container)) {
             throw "Squirrel output directory was not created: $squirrelOutput"
           }
+          if ([string]::IsNullOrWhiteSpace($env:SQUIRREL_VERSION) -or $env:SQUIRREL_VERSION -notmatch '^0\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+            throw "The workflow has no valid injected Squirrel version: '$env:SQUIRREL_VERSION'."
+          }
+
+          $expectedSetupName = "Minecraft.Server.Studio-$env:SQUIRREL_VERSION-x64-Setup.exe"
+          $expectedFullPackageName = "minecraft-server-studio-$env:SQUIRREL_VERSION-full.nupkg"
 
           $setupFiles = @(Get-ChildItem -LiteralPath $squirrelOutput -File -Filter '*Setup.exe')
           if ($setupFiles.Count -ne 1) {
             throw "Expected exactly one Setup.exe artifact, found $($setupFiles.Count)."
           }
           $setupFile = $setupFiles[0]
+          if (-not [string]::Equals($setupFile.Name, $expectedSetupName, [StringComparison]::Ordinal)) {
+            throw "Setup executable $($setupFile.Name) does not match the injected application version artifact name $expectedSetupName."
+          }
 
           $releasesFile = Join-Path $squirrelOutput 'RELEASES'
           if (-not (Test-Path -LiteralPath $releasesFile -PathType Leaf)) {
@@ -81,14 +114,20 @@ jobs:
           }
 
           $fullPackages = @(Get-ChildItem -LiteralPath $squirrelOutput -File -Filter '*-full.nupkg')
-          if ($fullPackages.Count -lt 1) {
-            throw 'No Squirrel full package (*.nupkg) was produced.'
+          if ($fullPackages.Count -ne 1) {
+            throw "Expected exactly one Squirrel full package, found $($fullPackages.Count)."
           }
+          $fullPackage = $fullPackages[0]
+          if (-not [string]::Equals($fullPackage.Name, $expectedFullPackageName, [StringComparison]::Ordinal)) {
+            throw "Full package $($fullPackage.Name) does not match the injected application version package name $expectedFullPackageName."
+          }
+
           $releasesText = Get-Content -LiteralPath $releasesFile -Raw
-          foreach ($fullPackage in $fullPackages) {
-            if ($releasesText -notmatch [regex]::Escape($fullPackage.Name)) {
-              throw "RELEASES does not reference the full package $($fullPackage.Name)."
-            }
+          $releaseRows = @($releasesText -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+          $expectedReleaseRowPattern = '^[a-f0-9]{40}\s+' + [regex]::Escape($expectedFullPackageName) + '\s+[1-9]\d*$'
+          $expectedReleaseRows = @($releaseRows | Where-Object { $_ -match $expectedReleaseRowPattern })
+          if ($expectedReleaseRows.Count -ne 1) {
+            throw "RELEASES must contain exactly one valid row for $expectedFullPackageName; found $($expectedReleaseRows.Count)."
           }
 
           $signature = Get-AuthenticodeSignature -FilePath $setupFile.FullName
@@ -98,7 +137,7 @@ jobs:
 
           $deltaPackages = @(Get-ChildItem -LiteralPath $squirrelOutput -File -Filter '*-delta.nupkg')
           $releaseAssets = @($setupFile.FullName, $releasesFile) +
-            @($fullPackages | ForEach-Object { $_.FullName }) +
+            @($fullPackage.FullName) +
             @($deltaPackages | ForEach-Object { $_.FullName })
           $releaseAssets = @($releaseAssets | Select-Object -Unique)
 
@@ -128,6 +167,8 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "SQUIRREL_OUTPUT=$squirrelOutput"
           Add-Content -Path $env:GITHUB_ENV -Value "SETUP_PATH=$($setupFile.FullName)"
           Add-Content -Path $env:GITHUB_ENV -Value "SETUP_NAME=$($setupFile.Name)"
+          Add-Content -Path $env:GITHUB_ENV -Value "FULL_PACKAGE_PATH=$($fullPackage.FullName)"
+          Add-Content -Path $env:GITHUB_ENV -Value "FULL_PACKAGE_NAME=$($fullPackage.Name)"
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASES_PATH=$releasesFile"
           Add-Content -Path $env:GITHUB_ENV -Value "ARTIFACT_HASHES_PATH=$hashFile"
           Add-Content -Path $env:GITHUB_ENV -Value "ARTIFACT_HASHES_JSON_PATH=$hashRowsFile"
@@ -152,7 +193,7 @@ jobs:
           $catalogRecord = 'hk-dish-0001'
           $codeName = 'Classic Har Gow · 蝦餃'
           $photoUrl = 'https://github.com/Ding-Ding-Projects/dim-sum-photos/releases/download/catalog-v1/hk-dish-0001-classic-har-gow.png'
-          $currentTag = "v0.1.0-build.$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
+          $currentTag = $env:RELEASE_TAG
           $metadataPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\dim-sum-release-metadata.md'
           $omissionReason = $null
           $canAssignCodeName = $false
@@ -213,17 +254,23 @@ jobs:
 
           Add-Content -Path $env:GITHUB_ENV -Value "DIM_SUM_RELEASE_NOTES_PATH=$metadataPath"
 
-      - name: Create or update non-draft release
+      - name: Create immutable non-draft release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "v0.1.0-build.$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
-          $releaseTitle = "Minecraft Server Studio $tag"
-          $fullPackages = @(Get-ChildItem -LiteralPath $env:SQUIRREL_OUTPUT -File -Filter '*-full.nupkg')
+          $tag = $env:RELEASE_TAG
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw 'The release tag was not derived before publication.'
+          }
+          $releaseTitle = "Minecraft Server Studio $env:SQUIRREL_VERSION"
+          $fullPackage = Get-Item -LiteralPath $env:FULL_PACKAGE_PATH -ErrorAction Stop
+          if (-not [string]::Equals($fullPackage.Name, $env:FULL_PACKAGE_NAME, [StringComparison]::Ordinal)) {
+            throw "The validated full package $($fullPackage.Name) does not match FULL_PACKAGE_NAME $env:FULL_PACKAGE_NAME."
+          }
           $deltaPackages = @(Get-ChildItem -LiteralPath $env:SQUIRREL_OUTPUT -File -Filter '*-delta.nupkg')
           $assets = @($env:SETUP_PATH, $env:RELEASES_PATH) +
-            @($fullPackages | ForEach-Object { $_.FullName }) +
+            @($fullPackage.FullName) +
             @($deltaPackages | ForEach-Object { $_.FullName })
           $assets = @($assets | Select-Object -Unique)
           $setupAssetName = [IO.Path]::GetFileName($env:SETUP_PATH)
@@ -244,16 +291,7 @@ jobs:
           $existingJson = & gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,isDraft,url 2>$null
           if ($LASTEXITCODE -eq 0) {
             $existing = $existingJson | ConvertFrom-Json
-            if ($existing.targetCommitish -ne $env:GITHUB_SHA) {
-              throw "Existing release $tag targets $($existing.targetCommitish), not $env:GITHUB_SHA."
-            }
-            if ($existing.isDraft) {
-              throw "Existing release $tag is a draft and cannot satisfy this workflow's non-draft release contract."
-            }
-            & gh release upload $tag @assets --clobber --repo $env:GITHUB_REPOSITORY
-            if ($LASTEXITCODE -ne 0) {
-              throw "Unable to refresh release assets for $tag."
-            }
+            throw "Release tag $tag already exists at $($existing.url); immutable Squirrel assets must not be replaced."
           } else {
             & gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title $releaseTitle --notes-file $initialBodyPath @assets
             if ($LASTEXITCODE -ne 0) {
@@ -284,7 +322,10 @@ jobs:
             $hashMarkdown.TrimEnd(),
             '',
             "- Setup executable (exact generated Squirrel asset name): $setupAssetName",
-            'The package validation confirmed one Setup.exe artifact, RELEASES, at least one full Squirrel package referenced by RELEASES, and an unsigned Setup.exe status.',
+            "- Full Squirrel package (exact generated update asset name): $($fullPackage.Name)",
+            "- Squirrel/Electron application version: $env:SQUIRREL_VERSION",
+            "- Release provenance tag: $tag",
+            'The package validation confirmed exactly one version-matched Setup.exe, exactly one version-matched full Squirrel package, exactly one matching RELEASES row, and an unsigned Setup.exe status.',
             '',
             '## Source line count',
             'Generated by `node scripts/line-count.cjs --format markdown` at the release commit. The report includes its category table and explicit exclusions for generated dependency resolution data, dependencies, vendor trees, build output, and coverage output.',
@@ -397,6 +438,8 @@ jobs:
           $metadata = [ordered]@{
             runId = $env:GITHUB_RUN_ID
             runAttempt = $env:GITHUB_RUN_ATTEMPT
+            squirrelVersion = $env:SQUIRREL_VERSION
+            releaseTag = $env:RELEASE_TAG
             commit = $env:GITHUB_SHA
             job = $env:GITHUB_JOB
             jobStatus = '${{ job.status }}'
