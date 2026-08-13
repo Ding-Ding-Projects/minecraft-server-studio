@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Minecraft Server Studio</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Server navigation">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">MS</div>
+          <div>
+            <p class="eyebrow">LOCAL CONTROL CENTER</p>
+            <h1>Minecraft Server Studio</h1>
+          </div>
+        </div>
+
+        <button class="primary-action" id="new-server-button" type="button">Create server</button>
+        <label class="field search-field" for="server-search">
+          <span>Find a server</span>
+          <input id="server-search" type="search" placeholder="Filter by name or software" autocomplete="off">
+        </label>
+        <div class="server-list" id="server-list" role="list" aria-live="polite"></div>
+        <div class="sidebar-footer">
+          <button class="text-action" id="refresh-button" type="button">Refresh local data</button>
+          <p id="data-directory" class="muted">Loading local data location…</p>
+        </div>
+      </aside>
+
+      <section class="workspace" aria-label="Minecraft server workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="server-software">NO SERVER SELECTED</p>
+            <h2 id="server-title">Create your first Minecraft server</h2>
+          </div>
+          <div class="topbar-actions">
+            <span class="status-chip status-stopped" id="server-status">Stopped</span>
+            <button class="outlined-action" id="open-folder-button" type="button" disabled>Open folder</button>
+            <button class="outlined-action" id="setup-button" type="button" disabled>Set up server</button>
+            <button class="danger-action" id="stop-button" type="button" disabled>Stop</button>
+            <button class="primary-action" id="start-button" type="button" disabled>Start server</button>
+          </div>
+        </header>
+
+        <section class="dependency-card" aria-labelledby="dependency-title">
+          <div>
+            <p class="eyebrow">AUTOMATIC SETUP</p>
+            <h3 id="dependency-title">Required tools</h3>
+            <p>Paper needs Java. Spigot setup also needs Git. Minecraft Server Studio detects both and can install missing tools using Windows package managers after you select the action.</p>
+          </div>
+          <div class="dependency-actions">
+            <div class="dependency-list" id="dependency-list" aria-live="polite"></div>
+            <button class="outlined-action" id="refresh-dependencies-button" type="button">Detect tools</button>
+            <button class="primary-action" id="install-dependencies-button" type="button">Install missing tools</button>
+          </div>
+        </section>
+
+        <section class="empty-state" id="empty-state">
+          <div class="empty-glyph" aria-hidden="true">▦</div>
+          <h3>Build a local server, not a pile of terminal commands.</h3>
+          <p>Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.</p>
+          <button class="primary-action" id="empty-create-button" type="button">Create server</button>
+        </section>
+
+        <section class="server-editor hidden" id="server-editor" aria-label="Server configuration">
+          <div class="tab-strip" role="tablist" aria-label="Server settings tabs">
+            <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-general" data-tab="general">General</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world">World</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay">Gameplay</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network">Network</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime">Runtime</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced">Advanced</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins">Plugins</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console">Console</button>
+          </div>
+
+          <form id="settings-form">
+            <section id="panel-general" class="settings-panel active" role="tabpanel" aria-labelledby="general-tab" data-panel="general">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">CORE SERVER IDENTITY</p>
+                  <h3>General settings</h3>
+                </div>
+                <button class="primary-action" id="save-general-button" type="submit">Save all settings</button>
+              </div>
+              <div class="settings-grid">
+                <label class="field"><span>Server display name</span><input id="edit-name" name="name" type="text" maxlength="80" required></label>
+                <label class="field"><span>Software</span><input id="edit-software" type="text" readonly></label>
+                <label class="field"><span>Minecraft version</span><input id="edit-version" type="text" readonly></label>
+                <label class="field"><span>Server folder</span><div class="browse-row"><input id="edit-path" type="text" readonly><button id="edit-open-folder" type="button" class="icon-action" aria-label="Open selected server folder">↗</button></div></label>
+                <label class="field wide"><span>Server message of the day</span><textarea id="motd" rows="3" maxlength="256"></textarea></label>
+                <label class="switch-field"><input id="eula-accepted" type="checkbox"><span><strong>Accept the Minecraft EULA</strong><small>Starting the server writes the acceptance state to eula.txt. Read Mojang's terms before selecting this.</small></span></label>
+                <label class="switch-field"><input id="online-mode" type="checkbox"><span><strong>Require authenticated Minecraft accounts</strong><small>Keep this enabled for normal online-mode server authentication.</small></span></label>
+                <label class="switch-field"><input id="white-list" type="checkbox"><span><strong>Enable whitelist</strong><small>Use server commands to add permitted players after startup.</small></span></label>
+              </div>
+            </section>
+
+            <section id="panel-world" class="settings-panel" role="tabpanel" data-panel="world" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">GENERATE AND PROTECT</p><h3>World settings</h3></div><button class="primary-action" type="submit">Save world settings</button></div>
+              <div class="settings-grid">
+                <label class="field"><span>Level name</span><input id="level-name" type="text" maxlength="64"></label>
+                <label class="field"><span>World seed</span><input id="level-seed" type="text" placeholder="Leave empty for a random seed"></label>
+                <label class="field"><span>World type</span><select id="level-type"><option value="minecraft:normal">Normal</option><option value="minecraft:flat">Superflat</option><option value="minecraft:large_biomes">Large biomes</option><option value="minecraft:amplified">Amplified</option><option value="minecraft:single_biome_surface">Single biome</option></select></label>
+                <label class="field"><span>Spawn protection radius</span><input id="spawn-protection" type="number" min="0" max="1024" step="1"></label>
+                <label class="field"><span>Maximum world size</span><input id="max-world-size" type="number" min="1" max="29999984" step="1"></label>
+                <label class="switch-field"><input id="generate-structures" type="checkbox"><span><strong>Generate structures</strong><small>Controls villages, temples, strongholds, and other world structures.</small></span></label>
+                <label class="switch-field"><input id="allow-nether" type="checkbox"><span><strong>Allow Nether travel</strong><small>Allow portals to the Nether dimension.</small></span></label>
+              </div>
+            </section>
+
+            <section id="panel-gameplay" class="settings-panel" role="tabpanel" data-panel="gameplay" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">RULES AND DIFFICULTY</p><h3>Gameplay settings</h3></div><button class="primary-action" type="submit">Save gameplay settings</button></div>
+              <div class="settings-grid">
+                <label class="field"><span>Default game mode</span><select id="gamemode"><option value="survival">Survival</option><option value="creative">Creative</option><option value="adventure">Adventure</option><option value="spectator">Spectator</option></select></label>
+                <label class="field"><span>Difficulty</span><select id="difficulty"><option value="peaceful">Peaceful</option><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option></select></label>
+                <label class="field"><span>Maximum players</span><input id="max-players" type="number" min="1" max="10000" step="1"></label>
+                <label class="field"><span>Player idle timeout (minutes)</span><input id="player-idle-timeout" type="number" min="0" max="1440" step="1"></label>
+                <label class="field"><span>View distance: <output id="view-distance-output">10</output> chunks</span><input id="view-distance" type="range" min="2" max="32" step="1"></label>
+                <label class="field"><span>Simulation distance: <output id="simulation-distance-output">10</output> chunks</span><input id="simulation-distance" type="range" min="3" max="32" step="1"></label>
+                <label class="switch-field"><input id="pvp" type="checkbox"><span><strong>Enable player-vs-player combat</strong><small>Allow players to damage one another.</small></span></label>
+                <label class="switch-field"><input id="hardcore" type="checkbox"><span><strong>Hardcore mode</strong><small>Players who die are banned from the world.</small></span></label>
+                <label class="switch-field"><input id="allow-flight" type="checkbox"><span><strong>Allow flight</strong><small>Prevent flight-kick behavior for compatible clients and plugins.</small></span></label>
+                <label class="switch-field"><input id="spawn-animals" type="checkbox"><span><strong>Spawn animals</strong><small>Allow passive mobs to spawn naturally.</small></span></label>
+                <label class="switch-field"><input id="spawn-monsters" type="checkbox"><span><strong>Spawn monsters</strong><small>Allow hostile mobs to spawn naturally.</small></span></label>
+                <label class="switch-field"><input id="enable-command-block" type="checkbox"><span><strong>Enable command blocks</strong><small>Allow command block execution in this server.</small></span></label>
+                <label class="switch-field"><input id="force-gamemode" type="checkbox"><span><strong>Force the default game mode</strong><small>Apply the selected default game mode when players join.</small></span></label>
+              </div>
+            </section>
+
+            <section id="panel-network" class="settings-panel" role="tabpanel" data-panel="network" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">PORTS AND REMOTE CONTROL</p><h3>Network settings</h3></div><button class="primary-action" type="submit">Save network settings</button></div>
+              <div class="settings-grid">
+                <label class="field"><span>Game port</span><input id="server-port" type="number" min="1" max="65535" step="1"></label>
+                <label class="field"><span>Query port</span><input id="query-port" type="number" min="1" max="65535" step="1"></label>
+                <label class="field"><span>RCON port</span><input id="rcon-port" type="number" min="1" max="65535" step="1"></label>
+                <label class="field"><span>RCON password</span><input id="rcon-password" type="password" autocomplete="new-password" placeholder="Required only when RCON is enabled"></label>
+                <label class="field"><span>Operator permission level</span><select id="op-permission-level"><option value="1">1 — bypass spawn protection</option><option value="2">2 — use commands</option><option value="3">3 — manage players</option><option value="4">4 — all commands</option></select></label>
+                <label class="field"><span>Function permission level</span><select id="function-permission-level"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+                <label class="switch-field"><input id="enable-query" type="checkbox"><span><strong>Enable GameSpy4 query</strong><small>Expose server status through the configured query port.</small></span></label>
+                <label class="switch-field"><input id="enable-rcon" type="checkbox"><span><strong>Enable RCON</strong><small>Required for the external CLI to send commands to a running server.</small></span></label>
+                <label class="switch-field"><input id="broadcast-rcon-to-ops" type="checkbox"><span><strong>Broadcast RCON commands to operators</strong><small>Show remote-console command execution to online operators.</small></span></label>
+                <label class="switch-field"><input id="enforce-secure-profile" type="checkbox"><span><strong>Enforce secure player profiles</strong><small>Require secure chat profile validation when supported.</small></span></label>
+                <label class="switch-field"><input id="prevent-proxy-connections" type="checkbox"><span><strong>Prevent proxy connections</strong><small>Use Mojang session server checks when appropriate for your network.</small></span></label>
+              </div>
+            </section>
+
+            <section id="panel-runtime" class="settings-panel" role="tabpanel" data-panel="runtime" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">JAVA AND PERFORMANCE</p><h3>Runtime settings</h3></div><button class="primary-action" type="submit">Save runtime settings</button></div>
+              <div class="settings-grid">
+                <label class="field wide"><span>Java executable (optional)</span><div class="browse-row"><input id="java-path" type="text" placeholder="Automatic Java discovery is used when this is blank"><button id="clear-java-button" type="button" class="icon-action" aria-label="Clear custom Java path">×</button></div><small>Use a full java.exe path only when automatic discovery should not be used.</small></label>
+                <label class="field wide"><span>Allocated memory: <output id="memory-output">4</output> GB</span><input id="memory-gb" type="range" min="1" max="32" step="1"><small>Startup uses the same value for Java -Xms and -Xmx so the allocation is predictable.</small></label>
+                <label class="field"><span>Entity broadcast range (%)</span><input id="entity-broadcast-range" type="number" min="10" max="1000" step="10"></label>
+                <label class="field"><span>Resource pack URL</span><input id="resource-pack" type="url" inputmode="url" placeholder="Optional HTTPS URL"></label>
+                <label class="field wide"><span>Resource pack prompt</span><textarea id="resource-pack-prompt" rows="2" maxlength="256" placeholder="Optional message shown before download"></textarea></label>
+                <label class="switch-field"><input id="sync-chunk-writes" type="checkbox"><span><strong>Synchronize chunk writes</strong><small>Use the server's safer synchronous chunk write behavior.</small></span></label>
+                <label class="switch-field"><input id="hide-online-players" type="checkbox"><span><strong>Hide online players in status responses</strong><small>Limit player-name disclosure through server-list ping responses.</small></span></label>
+              </div>
+            </section>
+
+            <section id="panel-advanced" class="settings-panel" role="tabpanel" data-panel="advanced" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">STANDARD SERVER PROPERTIES</p><h3>Advanced settings</h3><p class="muted">Every remaining managed server property is shown with a value-appropriate control. Some fields are version-sensitive; leave their default intact unless you know the server behavior you need.</p></div><button class="primary-action" type="submit">Save advanced settings</button></div>
+              <div id="advanced-controls" class="settings-grid"></div>
+            </section>
+
+            <section id="panel-plugins" class="settings-panel" role="tabpanel" data-panel="plugins" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">PAPER AND SPIGOT EXTENSIONS</p><h3>Plugin folder</h3></div></div>
+              <div class="plugin-install-card">
+                <div><h4>Install a plugin JAR</h4><p>Select a local plugin JAR. Minecraft Server Studio copies it into the selected server's plugins folder without opening a shell.</p></div>
+                <div class="plugin-actions"><input id="plugin-path" type="text" readonly placeholder="No plugin selected"><button id="browse-plugin-button" class="outlined-action" type="button">Choose JAR</button><button id="install-plugin-button" class="primary-action" type="button">Install plugin</button></div>
+              </div>
+              <div class="plugin-list" id="plugin-list" aria-live="polite"></div>
+            </section>
+
+            <section id="panel-console" class="settings-panel" role="tabpanel" data-panel="console" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">LIVE PROCESS OUTPUT</p><h3>Server console</h3></div><button id="clear-console-button" class="outlined-action" type="button">Clear output</button></div>
+              <pre class="console-output" id="console-output" aria-live="polite">Waiting for a server event…</pre>
+              <div class="console-composer"><label class="field"><span>Server command</span><input id="console-command" type="text" maxlength="1024" placeholder="say Welcome to the server"></label><button id="send-console-button" class="primary-action" type="button">Send to local process</button><button id="send-rcon-button" class="outlined-action" type="button">Send over RCON</button></div>
+              <div class="command-presets" aria-label="Console command presets"><button type="button" data-command="list">List players</button><button type="button" data-command="save-all">Save world</button><button type="button" data-command="whitelist list">List whitelist</button><button type="button" data-command="stop">Stop cleanly</button></div>
+            </section>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="create-dialog" aria-labelledby="create-title">
+      <form id="create-form" method="dialog">
+        <div class="dialog-heading"><div><p class="eyebrow">NEW LOCAL SERVER</p><h2 id="create-title">Create a Minecraft server</h2></div><button class="icon-action" type="button" id="close-create-dialog" aria-label="Close create server dialog">×</button></div>
+        <p>Choose the server software, version, folder, and initial capacity. All other settings remain editable after creation.</p>
+        <div class="settings-grid">
+          <label class="field"><span>Server name</span><input id="create-name" type="text" maxlength="80" required placeholder="Weekend Paper"></label>
+          <label class="field"><span>Folder name</span><input id="create-directory" type="text" maxlength="64" required placeholder="weekend-paper"></label>
+          <fieldset class="software-picker wide"><legend>Server software</legend><label><input type="radio" name="create-software" value="paper" checked><span><strong>Paper</strong><small>Fast server implementation with a rich plugin ecosystem.</small></span></label><label><input type="radio" name="create-software" value="spigot"><span><strong>Spigot</strong><small>Builds with official BuildTools and supports compatible plugins.</small></span></label></fieldset>
+          <label class="field"><span>Minecraft version</span><input id="create-version" type="text" list="paper-versions" required value="1.21.4"><datalist id="paper-versions"></datalist><small>Paper versions are refreshed from the official Paper API. Spigot uses the chosen revision with BuildTools.</small></label>
+          <label class="field"><span>Server root folder</span><div class="browse-row"><input id="create-root" type="text" required placeholder="Choose a parent folder"><button id="browse-root-button" type="button" class="outlined-action">Browse</button></div></label>
+          <label class="field"><span>Initial game port</span><input id="create-port" type="number" min="1" max="65535" required value="25565"></label>
+          <label class="field"><span>Initial memory: <output id="create-memory-output">4</output> GB</span><input id="create-memory" type="range" min="1" max="32" value="4"></label>
+          <label class="switch-field wide"><input id="create-eula" type="checkbox"><span><strong>I have read and accept the Minecraft EULA for this server</strong><small>The server cannot be started until this is selected. Your acceptance is written to the server's eula.txt file.</small></span></label>
+        </div>
+        <div class="dialog-actions"><button type="button" id="cancel-create-button" class="outlined-action">Cancel</button><button type="submit" class="primary-action">Create server</button></div>
+      </form>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="A local-first Minecraft server planning dashboard for Minecraft Server Studio." />
+    <meta name="theme-color" content="#101827" />
+    <title>Minecraft Server Studio · Operations dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-app-bar">
+        <a class="brand" href="#overview" aria-label="Minecraft Server Studio overview">
+          <span class="brand-mark" aria-hidden="true">MS</span>
+          <span><strong>Minecraft Server Studio</strong><small>Operations dashboard</small></span>
+        </a>
+        <div class="connection-state" aria-label="Connection state">
+          <span class="status-dot status-dot--idle" aria-hidden="true"></span>
+          Desktop service not connected
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="theme-toggle" type="button" aria-pressed="false" aria-label="Use light theme">◐</button>
+          <button class="text-button boundary-trigger" type="button">Local-only boundary</button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="navigation-rail" aria-label="Dashboard sections">
+          <p class="rail-label">Workspace</p>
+          <div class="tab-list" role="tablist" aria-orientation="vertical">
+            <button class="nav-tab is-active" type="button" role="tab" aria-selected="true" data-target="overview"><span aria-hidden="true">◫</span><span>Overview</span></button>
+            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="create-server"><span aria-hidden="true">＋</span><span>Create server</span></button>
+            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="configure"><span aria-hidden="true">⚙</span><span>Configure</span></button>
+            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="console"><span aria-hidden="true">›_</span><span>Console</span></button>
+            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="plugins"><span aria-hidden="true">⌘</span><span>Plugins</span></button>
+          </div>
+          <div class="rail-footer">
+            <span class="eyebrow">Execution mode</span>
+            <strong>Planning only</strong>
+            <p>Connect the desktop app to install, create, or start anything.</p>
+          </div>
+        </aside>
+
+        <main class="dashboard" id="main-content">
+          <section class="hero section-anchor" id="overview" tabindex="-1">
+            <div>
+              <p class="eyebrow">Local server workspace</p>
+              <h1>Shape the server before it touches your computer.</h1>
+              <p class="hero-copy">Choose Paper or Spigot, set resources and gameplay rules, then hand a complete plan to Minecraft Server Studio.</p>
+              <div class="hero-actions">
+                <button class="primary-button focus-target" type="button" data-target="create-server">Build a server plan <span aria-hidden="true">→</span></button>
+                <button class="secondary-button focus-target" type="button" data-target="dependency-panel">Review automatic setup</button>
+              </div>
+            </div>
+            <div class="hero-status-card" aria-label="Current server plan">
+              <div class="status-card-heading"><span class="status-dot status-dot--idle" aria-hidden="true"></span><span>Awaiting a desktop connection</span></div>
+              <dl class="summary-list">
+                <div><dt>Server software</dt><dd id="summary-software">Paper</dd></div>
+                <div><dt>Minecraft version</dt><dd id="summary-version">1.21.8</dd></div>
+                <div><dt>Automatic setup</dt><dd id="summary-install">Enabled</dd></div>
+              </dl>
+              <p class="muted-copy">This page stores no server credentials, files, or commands outside your browser session.</p>
+            </div>
+          </section>
+
+          <section class="metric-grid" aria-label="Workspace readiness">
+            <article class="metric-card"><span class="metric-label">Setup plan</span><strong id="setup-progress-text">4 tasks selected</strong><div class="progress-track"><span class="progress-bar" id="setup-progress-bar" style="width:64%"></span></div><span class="metric-detail">Java, server JAR, files, launch profile</span></article>
+            <article class="metric-card"><span class="metric-label">Lifecycle</span><strong>Not created</strong><span class="metric-detail">No local server process is running</span></article>
+            <article class="metric-card"><span class="metric-label">Plugin staging</span><strong id="plugin-count">No files selected</strong><span class="metric-detail">Choose local JAR files to prepare a hand-off</span></article>
+          </section>
+
+          <section class="dashboard-grid section-anchor" id="create-server" tabindex="-1">
+            <article class="surface-card server-recipe-card">
+              <div class="section-heading"><div><p class="eyebrow">New server recipe</p><h2>Create a server</h2></div><span class="status-chip">Plan is editable</span></div>
+              <form id="server-recipe-form" class="recipe-form">
+                <fieldset>
+                  <legend>Server software</legend>
+                  <div class="choice-grid" role="radiogroup" aria-label="Server software">
+                    <label class="choice-card is-selected"><input type="radio" name="software" value="Paper" checked /><span class="choice-mark" aria-hidden="true">P</span><span><strong>Paper</strong><small>Recommended performance and plugin API</small></span><span class="choice-check" aria-hidden="true">✓</span></label>
+                    <label class="choice-card"><input type="radio" name="software" value="Spigot" /><span class="choice-mark choice-mark--spigot" aria-hidden="true">S</span><span><strong>Spigot</strong><small>Conventional plugin server baseline</small></span><span class="choice-check" aria-hidden="true">✓</span></label>
+                  </div>
+                </fieldset>
+
+                <div class="field-grid">
+                  <label class="field-control"><span>Release channel</span><select id="minecraft-version"><option value="1.21.8" selected>1.21.8 · Latest stable</option><option value="1.21.7">1.21.7 · Stable</option><option value="1.21.6">1.21.6 · Stable</option><option value="1.20.6">1.20.6 · Long-term compatibility</option></select><small>The desktop app verifies the chosen build before download.</small></label>
+                  <label class="field-control"><span>Server profile</span><select id="server-profile"><option value="Small friends server">Small friends server · 2–8 players</option><option value="Community survival">Community survival · 8–30 players</option><option value="Creative workshop">Creative workshop · building tools</option><option value="Custom">Custom · keep current controls</option></select><small>Choosing a profile updates the related resource controls.</small></label>
+                </div>
+
+                <div class="name-builder"><span class="field-label">Server folder</span><div class="composed-input"><span aria-hidden="true">servers/</span><input id="server-name" type="text" value="weekend-world" maxlength="40" aria-describedby="server-name-help" /><button id="generate-server-name" type="button" class="inline-action">Generate</button></div><small id="server-name-help">Letters, numbers, hyphens, and underscores only. The desktop app checks availability.</small></div>
+                <label class="switch-row" for="auto-install"><span><strong>Automatically install required server dependencies</strong><small>When the desktop app creates this server, it resolves Java, the selected server JAR, starter files, and a launch profile automatically.</small></span><input id="auto-install" type="checkbox" checked /><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="switch-row" for="auto-start"><span><strong>Start after setup completes</strong><small>Requires EULA acknowledgement and a connected desktop application.</small></span><input id="auto-start" type="checkbox" /><span class="switch-control" aria-hidden="true"></span></label>
+                <div class="form-actions"><button class="primary-button" type="submit">Save server plan <span aria-hidden="true">→</span></button><span class="action-note">No server is created from this standalone page.</span></div>
+              </form>
+            </article>
+
+            <aside class="surface-card dependency-card" id="dependency-panel" tabindex="-1">
+              <div class="section-heading"><div><p class="eyebrow">Automatic setup</p><h2>Dependencies to resolve</h2></div><span class="status-chip status-chip--enabled">Enabled</span></div>
+              <ol class="dependency-list">
+                <li><span class="step-index">1</span><span><strong>Java runtime</strong><small>Temurin 21, selected automatically for current Paper and Spigot builds.</small></span><span class="state-label">Automatic</span></li>
+                <li><span class="step-index">2</span><span><strong>Server distribution</strong><small id="distribution-detail">Paper 1.21.8 will be verified before it is retrieved.</small></span><span class="state-label">Automatic</span></li>
+                <li><span class="step-index">3</span><span><strong>Initial server files</strong><small>Configuration, world folders, and a safe launch profile.</small></span><span class="state-label">Automatic</span></li>
+                <li><span class="step-index">4</span><span><strong>Optional plugin files</strong><small>Only local JARs you explicitly choose are staged.</small></span><span class="state-label state-label--optional">Optional</span></li>
+              </ol>
+              <div class="notice notice--info"><strong>Why this is a plan</strong><p>Automatic installation happens in the connected desktop app, with its own local paths and download checks. This page has no installer, shell access, or remote backend.</p></div>
+            </aside>
+          </section>
+
+          <section class="surface-card configuration-card section-anchor" id="configure" tabindex="-1">
+            <div class="section-heading"><div><p class="eyebrow">Live plan controls</p><h2>Configure gameplay and resources</h2></div><button class="secondary-button compact-button" id="reset-config" type="button">Restore profile defaults</button></div>
+            <div class="configuration-layout">
+              <div class="control-stack">
+                <div class="range-control"><div class="range-label"><label for="memory">Memory allocation</label><output id="memory-output" for="memory">4 GB</output></div><input id="memory" type="range" min="2" max="16" value="4" step="1" /><div class="range-bounds"><span>2 GB</span><span>16 GB</span></div></div>
+                <div class="range-control"><div class="range-label"><label for="max-players">Maximum players</label><output id="max-players-output" for="max-players">12</output></div><input id="max-players" type="range" min="2" max="100" value="12" step="1" /><div class="range-bounds"><span>2 players</span><span>100 players</span></div></div>
+                <div class="range-control"><div class="range-label"><label for="view-distance">View distance</label><output id="view-distance-output" for="view-distance">10 chunks</output></div><input id="view-distance" type="range" min="4" max="32" value="10" step="1" /><div class="range-bounds"><span>4 chunks</span><span>32 chunks</span></div></div>
+              </div>
+              <div class="field-grid configuration-fields">
+                <label class="field-control"><span>Game mode</span><select id="gamemode"><option value="survival" selected>Survival</option><option value="creative">Creative</option><option value="adventure">Adventure</option><option value="spectator">Spectator</option></select></label>
+                <label class="field-control"><span>Difficulty</span><select id="difficulty"><option value="normal" selected>Normal</option><option value="easy">Easy</option><option value="hard">Hard</option><option value="peaceful">Peaceful</option></select></label>
+                <label class="field-control"><span>Server port</span><input id="server-port" type="number" inputmode="numeric" min="1024" max="65535" value="25565" /><small>The desktop app checks whether the local port is available.</small></label>
+                <label class="field-control"><span>World seed</span><div class="composed-input seed-input"><input id="world-seed" type="text" value="" placeholder="Random on first launch" /><button id="randomize-seed" type="button" class="inline-action">Randomize</button></div><small>Leave blank to let Minecraft create a random seed.</small></label>
+              </div>
+              <div class="toggle-group">
+                <label class="switch-row" for="online-mode"><span><strong>Verify player accounts</strong><small>Uses Minecraft account authentication when the server runs.</small></span><input id="online-mode" type="checkbox" checked /><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="switch-row" for="allow-flight"><span><strong>Allow flight</strong><small>Useful for creative or modded environments.</small></span><input id="allow-flight" type="checkbox" /><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="switch-row" for="eula"><span><strong>I acknowledge the Minecraft EULA</strong><small>Required before the desktop app can launch the server.</small></span><input id="eula" type="checkbox" /><span class="switch-control" aria-hidden="true"></span></label>
+              </div>
+              <aside class="plan-preview" aria-label="Generated configuration preview"><div class="preview-heading"><span>Generated plan</span><button id="copy-plan" type="button" class="text-button compact-text-button">Copy</button></div><pre id="plan-preview">software=paper&#10;version=1.21.8&#10;memory=4G&#10;max-players=12&#10;view-distance=10&#10;gamemode=survival&#10;difficulty=normal&#10;server-port=25565&#10;online-mode=true&#10;allow-flight=false&#10;eula=false</pre></aside>
+            </div>
+          </section>
+
+          <section class="console-layout section-anchor" id="console" tabindex="-1">
+            <article class="surface-card command-card">
+              <div class="section-heading"><div><p class="eyebrow">Command composer</p><h2>Prepare a console command</h2></div><span class="status-chip">Not connected</span></div>
+              <p class="muted-copy">Choose an action and fill optional arguments. The connected desktop app is the only component that can send it to a server.</p>
+              <div class="quick-command-row" role="group" aria-label="Quick commands"><button class="command-chip is-selected" type="button" data-command="list">List players</button><button class="command-chip" type="button" data-command="say">Broadcast message</button><button class="command-chip" type="button" data-command="whitelist add">Add to whitelist</button><button class="command-chip" type="button" data-command="save-all">Save world</button></div>
+              <label class="field-control command-arguments"><span>Command arguments</span><input id="command-arguments" type="text" placeholder="Optional value or player name" /></label>
+              <div class="command-preview" aria-live="polite"><span>Prepared command</span><code id="command-preview">/list</code></div>
+              <div class="form-actions"><button id="copy-command" class="secondary-button" type="button">Copy command</button><button class="primary-button" type="button" disabled aria-describedby="send-command-help">Send from desktop app</button></div><small id="send-command-help" class="blocked-copy">Unavailable until the desktop application connects to a running server.</small>
+            </article>
+            <article class="surface-card event-card" aria-label="Local activity log"><div class="section-heading"><div><p class="eyebrow">Activity</p><h2>Local hand-off log</h2></div><button id="clear-log" type="button" class="text-button compact-text-button">Clear</button></div><ul id="event-log" class="event-log" aria-live="polite"><li><time>Now</time><span>Dashboard opened in planning-only mode.</span></li><li><time>Now</time><span>Automatic setup is enabled for the current server recipe.</span></li></ul></article>
+          </section>
+
+          <section class="surface-card plugins-card section-anchor" id="plugins" tabindex="-1">
+            <div class="section-heading"><div><p class="eyebrow">Optional extensions</p><h2>Stage plugin JAR files</h2></div><span class="status-chip">Local chooser</span></div>
+            <div class="plugin-layout">
+              <label class="drop-zone" id="plugin-drop-zone" for="plugin-files"><input id="plugin-files" type="file" accept=".jar,application/java-archive" multiple /><span class="drop-zone-icon" aria-hidden="true">⇪</span><strong>Choose plugin JAR files</strong><span>or drag them here to prepare a local-only hand-off</span><em>No files are uploaded by this page.</em></label>
+              <div class="plugin-staging"><label class="field-control"><span>Destination server</span><select id="plugin-destination"><option selected>weekend-world (planned)</option><option>Choose after desktop connection</option></select></label><ul id="plugin-list" class="plugin-list" aria-live="polite"><li class="empty-plugin-state">No plugin JAR files selected.</li></ul><button id="queue-plugins" class="secondary-button" type="button" disabled>Queue for desktop installation</button></div>
+            </div>
+            <div class="notice notice--warn"><strong>Compatibility is verified by the desktop app.</strong><p>Files selected here are only named in the local browser session. The desktop app validates JAR metadata and target compatibility before copying anything into a server.</p></div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="boundary-dialog" aria-labelledby="boundary-title">
+      <div class="dialog-header"><div><p class="eyebrow">Execution boundary</p><h2 id="boundary-title">This dashboard is intentionally local-only.</h2></div><button class="icon-button close-boundary" type="button" aria-label="Close boundary notice">×</button></div>
+      <p>It can organize a server recipe, select local files, and prepare commands in your current browser session. It cannot install Java, download a server JAR, create files, send console commands, or start Minecraft.</p>
+      <p>Those actions belong to the connected Minecraft Server Studio desktop application, where local paths, downloads, and process status can be checked safely.</p>
+      <button class="primary-button close-boundary" type="button">Understood</button>
+    </dialog>
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

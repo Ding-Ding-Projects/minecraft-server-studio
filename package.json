@@ -1,0 +1,47 @@
+{
+  "name": "minecraft-server-studio",
+  "version": "0.1.0",
+  "description": "A Windows desktop control center for Paper and Spigot Minecraft servers.",
+  "main": "src/main/main.cjs",
+  "author": "Ding Ding Projects",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "start:cli": "node src/cli/mss.cjs",
+    "package": "electron-builder --win squirrel",
+    "package:dir": "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron": "^37.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.0.12",
+    "electron-builder-squirrel-windows": "26.15.3"
+  },
+  "build": {
+    "appId": "com.dingdingprojects.minecraftserverstudio",
+    "productName": "Minecraft Server Studio",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "forceCodeSigning": false,
+    "signExecutable": false,
+    "signAndEditExecutable": false,
+    "win": {
+      "target": [
+        {
+          "target": "squirrel",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "squirrelWindows": {
+      "artifactName": "${productName}-${version}-${arch}-Setup.exe",
+      "msi": false
+    }
+  }
+}
