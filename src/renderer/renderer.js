@@ -752,34 +752,31 @@ async function executeBuildToolsPlan() {
   if (result) await refreshServers();
 }
 
-function requiredJavaFeature(server) {
-  const version = String(server?.minecraftVersion || '0').split('.').map((part) => Number(part) || 0);
-  const [major, minor, patch] = version;
-  if (server?.software === 'paper') {
-    if (major >= 26 && minor >= 1) return 25;
-    if (major === 1 && minor <= 11) return 8;
-    if (major === 1 && minor <= 16 && patch <= 4) return 11;
-    if (major === 1 && minor === 16 && patch >= 5) return 16;
-    if (major === 1 && minor >= 17 && minor <= 19) return 17;
-    return 21;
-  }
-  if (major === 1 && minor < 17) return 8;
-  if (major === 1 && minor === 17 && patch <= 1) return 16;
-  if (major === 1 && (minor > 20 || (minor === 20 && patch > 5))) return 21;
-  return 17;
-}
-
 function updateRuntimeRequirement() {
   const server = selectedServer();
   if (!server || !$('#runtime-requirement-title')) return;
-  const required = requiredJavaFeature(server);
-  $('#runtime-requirement-title').textContent = `${server.software[0].toUpperCase() + server.software.slice(1)} ${server.minecraftVersion} requires Java ${required} or later`;
-  $('#runtime-requirement-copy').textContent = server.software === 'paper' && required === 25
-    ? 'Paper 26.1 and newer requires Java 25. The app fails closed if its runtime inventory has no compatible Java feature.'
-    : `The app uses a flavor- and version-aware Java compatibility rule. The selected JAR preflight remains the final authority before launch.`;
+  const requirement = state.runtimeRequirement;
+  if (!requirement || requirement.minecraftVersion !== server.minecraftVersion || requirement.platform?.toLowerCase() !== server.software) {
+    $('#runtime-requirement-title').textContent = 'Refresh runtime inventory to verify the Java requirement';
+    $('#runtime-requirement-copy').textContent = 'The app does not guess Java compatibility. Refresh the inventory to read the bundled Paper or Spigot compatibility policy for this exact version.';
+    return;
+  }
+  if (requirement.status !== 'known') {
+    $('#runtime-requirement-title').textContent = 'Java requirement is not documented for this version';
+    $('#runtime-requirement-copy').textContent = requirement.message;
+    return;
+  }
+  $('#runtime-requirement-title').textContent = requirement.platform + ' ' + requirement.minecraftVersion + ' requires Java ' + requirement.feature;
+  $('#runtime-requirement-copy').textContent = requirement.source + '. The app will only launch after a direct runtime probe confirms this feature.';
 }
 
-function renderRuntimeInventory(inventory = []) {
+function renderRuntimeInventory(payload = []) {
+  const response = Array.isArray(payload) ? { runtimes: payload } : (payload || {});
+  const inventory = Array.isArray(response.runtimes) ? response.runtimes : [];
+  if (response.requirement) {
+    state.runtimeRequirement = response.requirement;
+    updateRuntimeRequirement();
+  }
   const select = $('#java-runtime');
   if (!select) return;
   const current = select.value;
@@ -799,6 +796,9 @@ function renderRuntimeInventory(inventory = []) {
   $('#java-runtime-state').textContent = inventory.length
     ? `${inventory.length} runtime candidate(s) discovered. Compatibility is checked again when launch is requested.`
     : 'No Java runtime inventory is available yet. Use Detect tools or Browse Java.';
+  if (response.installPlan?.portable?.state === 'missing-source') {
+    $('#java-runtime-state').textContent += ' ' + response.installPlan.portable.reason;
+  }
 }
 
 async function refreshPlugins() {

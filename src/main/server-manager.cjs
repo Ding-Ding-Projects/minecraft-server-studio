@@ -21,6 +21,7 @@ const {
   presentRegistry,
   ROUTES
 } = require('./command-center-registry.cjs');
+const javaRuntime = require('./java-runtime-manager.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
 const SPIGOT_BUILDTOOLS_URL = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
@@ -95,14 +96,13 @@ const DEFAULT_GAMERULES = Object.freeze({
 });
 
 const ALLOWED_PROPERTY_KEYS = new Set(Object.keys(DEFAULT_PROPERTIES));
-const SUPPORTED_JAVA_FEATURES = Object.freeze([8, 11, 16, 17, 21, 25]);
 const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'status-destination': { implementationPath: ['src/main/desktop-status-model.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/local-status-and-completeness.md'], localization: { state: 'pending', detail: 'Desktop localization resources are not yet complete.' }, test: { state: 'pending', detail: 'No test was run in this delivery pass.' }, capture: { state: 'pending', detail: 'No capture was run in this delivery pass.' }, evidence: { state: 'in-progress', detail: 'The local status model and visible renderer destination are registered, but no verification result is claimed.' } },
   'server-creation': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Structured Paper and Spigot server creation source is registered; verification remains pending.' } },
   'dependency-bootstrap': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/dependency-bootstrap.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Detection, installation, retry, and status source is registered; verification remains pending.' } },
   'paper': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection and setup source is registered; verification remains pending.' } },
   'spigot-buildtools': { implementationPath: ['src/main/buildtools-adapter.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/spigot-buildtools.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'BuildTools preflight and rich-control source is registered; verification remains pending.' } },
-  'java-runtime-and-jar-launch': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'The runtime inventory and launch profile are being completed.' } },
+  'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, direct probes, and launch preflight source are registered; verification remains pending.' } },
   'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Capability-first protocol discovery is being integrated.' } },
   'command-center': { implementationPath: ['src/main/command-center-registry.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/command-center.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Registry and renderer integration are being completed.' } },
   'plugins': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Plugin staging is present; manifest inspection is being integrated.' } },
@@ -172,71 +172,28 @@ function validVersion(value) {
   return /^\d+\.\d+(?:\.\d+)?$/.test(stringValue(value));
 }
 
-function parseMinecraftVersion(value) {
-  if (!validVersion(value)) return null;
-  const parts = stringValue(value).split('.').map((part) => Number(part));
-  if (parts.some((part) => !Number.isSafeInteger(part) || part < 0)) return null;
-  return [parts[0], parts[1], parts[2] || 0];
-}
-
-function compareMinecraftVersions(left, right) {
-  const a = Array.isArray(left) ? left : parseMinecraftVersion(left);
-  const b = Array.isArray(right) ? right : parseMinecraftVersion(right);
-  if (!a || !b) return null;
-  for (let index = 0; index < 3; index += 1) {
-    if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
-  }
-  return 0;
-}
-
-function javaRequirementForServer(server) {
-  const version = parseMinecraftVersion(server?.minecraftVersion);
-  if (!version) throw new Error('The selected Minecraft version is not numeric, so the Java requirement cannot be determined safely.');
-  const [major, minor, patch] = version;
-  if (server?.software === 'paper') {
-    if (compareMinecraftVersions(version, [26, 1, 0]) >= 0) return { feature: 25, source: 'Paper 26.1+ compatibility policy' };
-    if (major === 1 && minor >= 7 && minor <= 11) return { feature: 8, source: 'Paper 1.7.10–1.11 compatibility policy' };
-    if (major === 1 && (minor >= 12 && minor < 16 || (minor === 16 && patch <= 4))) return { feature: 11, source: 'Paper 1.12–1.16.4 compatibility policy' };
-    if (major === 1 && minor === 16 && patch === 5) return { feature: 16, source: 'Paper 1.16.5 compatibility policy' };
-    if (major === 1 && minor >= 17 && minor <= 19) return { feature: 17, source: 'Paper 1.17–1.19 compatibility policy' };
-    if (major === 1 && (minor === 20 || minor === 21 && patch <= 11)) return { feature: 21, source: 'Paper 1.20–1.21.11 compatibility policy' };
-    throw new Error('The selected Paper version is outside the supported Java compatibility policy. Choose a documented version or update the application policy.');
-  }
-  if (server?.software === 'spigot') {
-    if (compareMinecraftVersions(version, [1, 20, 5]) > 0) return { feature: 21, source: 'Spigot BuildTools compatibility policy' };
-    if (compareMinecraftVersions(version, [1, 17, 1]) > 0) return { feature: 17, source: 'Spigot BuildTools compatibility policy' };
-    if (major === 1 && minor === 17 && patch <= 1) return { feature: 16, source: 'Spigot BuildTools compatibility policy' };
-    if (compareMinecraftVersions(version, [1, 17, 0]) < 0) return { feature: 8, source: 'Spigot BuildTools compatibility policy' };
-    throw new Error('The selected Spigot version is outside the supported BuildTools Java compatibility policy. Choose a documented version or update the application policy.');
-  }
-  throw new Error('Choose Paper or Spigot before resolving Java.');
-}
-
-function javaDependencyForFeature(feature) {
-  const normalized = Number(feature);
-  if (!SUPPORTED_JAVA_FEATURES.includes(normalized)) throw new Error('This Java feature is not supported by the automatic installer.');
+function javaInstallerDependencyForFeature(feature, portableSources) {
+  const plan = javaRuntime.createJavaInstallPlan(feature, { portableSources });
   return {
     ...DEPENDENCIES.java,
-    label: `Eclipse Temurin ${normalized} JDK`,
-    installers: [
-      { command: 'winget', args: ['install', '--id', `EclipseAdoptium.Temurin.${normalized}.JDK`, '--exact', '--accept-package-agreements', '--accept-source-agreements'] },
-      { command: 'choco', args: ['install', `temurin${normalized}`, '-y'] }
-    ]
+    label: plan.label,
+    installers: plan.packageInstallers.map((installer) => ({
+      command: installer.command,
+      args: [...installer.args]
+    })),
+    installPlan: plan
   };
 }
 
-function portableJavaSpec(feature) {
-  const normalized = Number(feature);
-  if (!SUPPORTED_JAVA_FEATURES.includes(normalized)) throw new Error('This Java feature is not supported by the automatic installer.');
+function managedJavaPortableSpec(feature, portableSources) {
+  const plan = javaRuntime.createJavaInstallPlan(feature, { portableSources });
   return {
-    archiveName: `temurin-${normalized}.zip`,
-    destination: path.join('java', String(normalized)),
-    executableNames: ['java.exe'],
+    archiveName: plan.portable.archiveName || 'java-' + plan.feature + '-windows.zip',
+    destination: path.join('java', String(plan.feature)),
+    executableNames: ['java.exe', 'java'],
     async source() {
-      const metadata = await fetchJson(`https://api.adoptium.net/v3/assets/latest/${normalized}/hotspot?architecture=x64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=windows&vendor=eclipse`);
-      const packageInfo = metadata?.[0]?.binary?.package;
-      if (!packageInfo?.link) throw new Error(`The official Eclipse Adoptium service did not return a Windows Java ${normalized} package.`);
-      return { url: packageInfo.link, sha256: packageInfo.checksum || null };
+      if (plan.portable.state !== 'configured') throw new Error(plan.portable.reason);
+      return { url: plan.portable.url, sha256: plan.portable.sha256 };
     }
   };
 }
@@ -282,28 +239,6 @@ function normalizeLaunchProfile(input = {}) {
     }
   }
   return { gc, diagnostics, expertTokens };
-}
-
-function launchTokensForServer(server, javaFeature, jarPath) {
-  const profile = normalizeLaunchProfile(server.launchProfile);
-  const memory = parseMemoryGb(server.memoryGb);
-  const tokens = [`-Xms${memory}G`, `-Xmx${memory}G`];
-  if (profile.gc === 'g1') tokens.push('-XX:+UseG1GC');
-  if (profile.gc === 'serial') tokens.push('-XX:+UseSerialGC');
-  if (profile.gc === 'zgc') {
-    if (javaFeature < 17) throw new Error('ZGC requires a selected Java runtime that supports it. Choose G1 or a compatible runtime.');
-    tokens.push('-XX:+UseZGC');
-  }
-  const diagnosticDirectory = path.join(server.serverPath, '.minecraft-server-studio', 'diagnostics');
-  if (profile.diagnostics === 'gc-log') {
-    tokens.push(`-Xlog:gc*:file=${path.join(diagnosticDirectory, 'gc-%t.log')}:time,uptime:filecount=5,filesize=10M`);
-  }
-  if (profile.diagnostics === 'jfr') {
-    if (javaFeature < 11) throw new Error('Java Flight Recorder requires a selected Java runtime that supports it.');
-    tokens.push(`-XX:StartFlightRecording=filename=${path.join(diagnosticDirectory, 'server-%t.jfr')},dumponexit=true`);
-  }
-  tokens.push(...profile.expertTokens, '-jar', jarPath, 'nogui');
-  return { tokens, diagnosticDirectory, profile };
 }
 
 function parseProperties(content) {
@@ -423,16 +358,6 @@ async function getCommandVersion(executable, args) {
   }
 }
 
-function parseJavaFeatureVersion(output) {
-  const text = stringValue(output);
-  const legacy = text.match(/(?:java|openjdk)\s+version\s+"1\.(8)(?:\.\d+)?/i);
-  if (legacy) return 8;
-  const modern = text.match(/(?:java|openjdk)\s+(?:version\s+)?"?(\d+)(?:\.\d+){0,3}/i) || text.match(/\b(\d+)(?:\.\d+){1,3}\b/);
-  if (!modern) return null;
-  const feature = Number(modern[1]);
-  return Number.isSafeInteger(feature) && feature >= 8 && feature <= 99 ? feature : null;
-}
-
 async function fetchJson(url) {
   const response = await fetch(url, {
     headers: { 'User-Agent': 'Minecraft-Server-Studio/0.1.0' },
@@ -508,6 +433,10 @@ class ServerManager {
     this.commandDiscovery = new Map();
     this.registryFile = path.join(this.dataDir, 'servers.json');
     this.toolchainDir = path.join(this.dataDir, 'toolchain');
+    this.javaPortableSources = options.javaPortableSources && typeof options.javaPortableSources === 'object'
+      ? options.javaPortableSources
+      : Object.create(null);
+    this.managedJavaPaths = new Set();
   }
 
   emit(event) {
@@ -936,9 +865,18 @@ class ServerManager {
   }
 
   async findDependency(id, dependency = DEPENDENCIES[id], javaFeature = null) {
+    if (id === 'java') {
+      const candidates = await javaRuntime.discoverJavaRuntimeCandidates({
+        explicitPaths: [...this.managedJavaPaths]
+      });
+      const candidate = candidates[0];
+      return candidate
+        ? { available: true, path: candidate.path, source: candidate.source }
+        : { available: false, path: null, source: null };
+    }
     const fromPath = await commandExists(dependency.command);
     if (fromPath.available) return { ...fromPath, source: 'PATH' };
-    const portable = id === 'java' && javaFeature ? portableJavaSpec(javaFeature) : PORTABLE_TOOLCHAIN[id];
+    const portable = PORTABLE_TOOLCHAIN[id];
     if (portable) {
       const executable = await findFileRecursively(
         path.join(this.toolchainDir, portable.destination),
@@ -946,10 +884,8 @@ class ServerManager {
       );
       if (executable) return { available: true, path: executable, source: 'portable toolchain' };
     }
-    const likelyLocations = id === 'java'
-      ? [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Eclipse Adoptium'), path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Java')]
-      : [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git'), path.join(process.env.LOCALAPPDATA || this.dataDir, 'Programs', 'Git')];
-    const names = id === 'java' ? ['java.exe'] : ['git.exe'];
+    const likelyLocations = [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git'), path.join(process.env.LOCALAPPDATA || this.dataDir, 'Programs', 'Git')];
+    const names = ['git.exe'];
     for (const location of likelyLocations) {
       const executable = await findFileRecursively(location, names);
       if (executable) return { available: true, path: executable, source: 'installed location' };
@@ -958,7 +894,9 @@ class ServerManager {
   }
 
   async installPortableDependency(id, javaFeature = null) {
-    const portable = id === 'java' && javaFeature ? portableJavaSpec(javaFeature) : PORTABLE_TOOLCHAIN[id];
+    const portable = id === 'java' && javaFeature
+      ? managedJavaPortableSpec(javaFeature, this.javaPortableSources)
+      : PORTABLE_TOOLCHAIN[id];
     if (!portable) throw new Error(`No portable fallback is registered for ${id}.`);
     const source = await portable.source();
     const downloads = path.join(this.toolchainDir, 'downloads');
@@ -970,7 +908,13 @@ class ServerManager {
     this.emit({ type: 'dependency-progress', dependency: id, message: `Installing ${DEPENDENCIES[id].label} into the app's private toolchain.` });
     await downloadFile(source.url, archive, source.sha256, (message) => this.emit({ type: 'dependency-output', dependency: id, message }));
     await expandZip(archive, destination, (line) => this.emit({ type: 'dependency-output', dependency: id, message: line }));
-    const installed = await this.findDependency(id, id === 'java' && javaFeature ? javaDependencyForFeature(javaFeature) : DEPENDENCIES[id], javaFeature);
+    if (id === 'java') {
+      const executable = await findFileRecursively(destination, ['java.exe', 'java'], 5);
+      if (!executable) throw new Error('The portable Java extraction completed but did not expose a Java executable.');
+      this.managedJavaPaths.add(executable);
+      return { available: true, path: executable, source: 'app-managed runtime' };
+    }
+    const installed = await this.findDependency(id, DEPENDENCIES[id]);
     if (!installed.available) throw new Error(`The portable ${DEPENDENCIES[id].label} extraction completed but its executable was not found.`);
     return installed;
   }
@@ -979,10 +923,12 @@ class ServerManager {
     const requested = [...new Set(ids)].filter((id) => DEPENDENCIES[id]);
     if (!requested.length) throw new Error('Choose at least one supported dependency to install.');
     const requestedServer = serverId ? await this.getServer(serverId) : null;
-    const javaFeature = requestedServer ? javaRequirementForServer(requestedServer).feature : 21;
+    const javaFeature = requestedServer ? javaRuntime.javaRequirementForServer(requestedServer).feature : 21;
     const results = [];
     for (const id of requested) {
-      const dependency = id === 'java' ? javaDependencyForFeature(javaFeature) : DEPENDENCIES[id];
+      const dependency = id === 'java'
+        ? javaInstallerDependencyForFeature(javaFeature, this.javaPortableSources)
+        : DEPENDENCIES[id];
       const before = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null);
       const javaBeforeMatches = id !== 'java' || (before.available && (await this.inspectJavaRuntime(before.path, requestedServer)).feature === javaFeature);
       if (before.available && javaBeforeMatches) {
@@ -1035,56 +981,55 @@ class ServerManager {
   async inspectJavaRuntime(candidate, server = null) {
     const executable = stringValue(candidate).trim();
     if (!executable) throw new Error('Choose a Java executable before requesting a runtime inspection.');
-    let result;
-    try {
-      result = await runCommand(executable, ['--version']);
-    } catch {
-      result = await runCommand(executable, ['-version']);
-    }
-    const transcript = redactOutput(`${result.stdout || ''}\n${result.stderr || ''}`).trim();
-    const feature = parseJavaFeatureVersion(transcript);
-    const required = server ? javaRequirementForServer(server) : null;
+    const probed = await javaRuntime.probeJavaRuntime(executable);
+    const required = server ? javaRuntime.describeJavaRequirementForServer(server) : null;
+    const compatible = Boolean(required && required.status === 'known' && probed.launchable && probed.feature === required.feature);
     return {
-      path: path.isAbsolute(executable) ? path.resolve(executable) : executable,
-      feature,
-      transcript: transcript.slice(0, 2048),
+      path: probed.path,
+      feature: probed.feature,
+      launchable: probed.launchable,
       requiredFeature: required?.feature || null,
-      compatibility: required && feature !== required.feature ? 'not-confirmed' : feature ? 'confirmed' : 'not-confirmed',
+      compatibility: compatible ? 'confirmed' : 'not-confirmed',
       requirementSource: required?.source || null,
-      verifiedAt: new Date().toISOString()
+      requirementState: required?.status || null,
+      error: probed.error ? redactOutput(probed.error).slice(0, 512) : null,
+      verifiedAt: probed.verifiedAt
     };
   }
 
   async runtimeInventory(id) {
     const server = await this.getServer(id);
-    const candidates = new Map();
-    const append = (candidate, source) => {
-      const value = stringValue(candidate).trim();
-      if (!value) return;
-      candidates.set(value.toLowerCase(), { path: value, source });
-    };
-    if (server.javaPath) append(server.javaPath, 'selected server runtime');
-    const discovered = await this.findDependency('java');
-    if (discovered.available) append(discovered.path || 'java', discovered.source || 'PATH');
-    for (const feature of SUPPORTED_JAVA_FEATURES) {
-      const portable = portableJavaSpec(feature);
-      const candidate = await findFileRecursively(path.join(this.toolchainDir, portable.destination), portable.executableNames.map((name) => name.toLowerCase()));
-      if (candidate) append(candidate, `app-managed Java ${feature}`);
-    }
-    const inventory = [];
-    for (const candidate of candidates.values()) {
+    const requirement = javaRuntime.describeJavaRequirementForServer(server);
+    const runtimeCandidates = await javaRuntime.discoverJavaRuntimeCandidates({
+      configuredPath: server.javaPath,
+      explicitPaths: [...this.managedJavaPaths]
+    });
+    const runtimes = [];
+    for (const candidate of runtimeCandidates) {
       try {
         const inspected = await this.inspectJavaRuntime(candidate.path, server);
-        inventory.push({ ...inspected, source: candidate.source, compatible: inspected.compatibility === 'confirmed' });
+        runtimes.push({ ...inspected, source: candidate.source, compatible: inspected.compatibility === 'confirmed' });
       } catch (error) {
-        inventory.push({ path: candidate.path, source: candidate.source, feature: null, compatibility: 'not-confirmed', compatible: false, error: redactOutput(error.message).slice(0, 512), verifiedAt: new Date().toISOString() });
+        runtimes.push({
+          path: candidate.path,
+          source: candidate.source,
+          feature: null,
+          launchable: false,
+          compatibility: 'not-confirmed',
+          compatible: false,
+          error: redactOutput(error.message).slice(0, 512),
+          verifiedAt: new Date().toISOString()
+        });
       }
     }
-    return inventory;
+    const installPlan = requirement.status === 'known'
+      ? javaRuntime.createJavaInstallPlan(requirement.feature, { portableSources: this.javaPortableSources })
+      : null;
+    return { requirement, runtimes, installPlan };
   }
 
   async resolveJava(server) {
-    const requirement = javaRequirementForServer(server);
+    const requirement = javaRuntime.javaRequirementForServer(server);
     let candidate;
     if (server.javaPath) {
       if (!path.isAbsolute(server.javaPath)) throw new Error('The configured Java path must be absolute. Choose it with the Browse Java control.');
@@ -1094,14 +1039,14 @@ class ServerManager {
       }
     } else {
       const inventory = await this.runtimeInventory(server.id);
-      const compatible = inventory.find((runtime) => runtime.compatible && path.isAbsolute(runtime.path));
+      const compatible = inventory.runtimes.find((runtime) => runtime.compatible && path.isAbsolute(runtime.path));
       if (!compatible) {
         throw new Error(`Java ${requirement.feature} is required for this server. Use the in-app dependency installer before setting up or starting it.`);
       }
       candidate = compatible.path;
     }
     const runtime = await this.inspectJavaRuntime(candidate, server);
-    if (runtime.feature !== requirement.feature) {
+    if (!runtime.launchable || runtime.feature !== requirement.feature) {
       const detected = runtime.feature ? `Java ${runtime.feature}` : 'an unrecognized Java version';
       throw new Error(`${server.software === 'paper' ? 'Paper' : 'Spigot BuildTools'} ${server.minecraftVersion} requires Java ${requirement.feature}; the selected runtime reports ${detected}. Choose a matching runtime or use the in-app installer.`);
     }
@@ -1164,15 +1109,25 @@ class ServerManager {
     const { jarPath } = await this.provisionServer(id);
     const java = await this.resolveJava(server);
     const runtime = await this.inspectJavaRuntime(java, server);
-    const launch = launchTokensForServer(server, runtime.feature, jarPath);
-    await fs.mkdir(launch.diagnosticDirectory, { recursive: true });
-    const child = spawn(java, launch.tokens, {
+    const preflight = await javaRuntime.createJavaLaunchPreflight({
+      requirement: javaRuntime.javaRequirementForServer(server),
+      runtime,
+      serverJar: jarPath,
+      memoryGb: server.memoryGb,
+      profile: normalizeLaunchProfile(server.launchProfile),
+      serverArgs: ['nogui'],
+      diagnosticsDirectory: path.join(server.serverPath, '.minecraft-server-studio', 'diagnostics')
+    });
+    if (preflight.state !== 'ready') throw new Error(preflight.issues[0].message);
+    const launch = preflight.launch;
+    if (launch.diagnosticsDirectory) await fs.mkdir(launch.diagnosticsDirectory, { recursive: true });
+    const child = spawn(launch.executable, launch.args, {
       cwd: server.serverPath,
       shell: false,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe']
     });
-    const processEntry = { child, startedAt: new Date().toISOString(), stopping: false, javaPath: java, launchTokens: launch.tokens, pid: child.pid || null };
+    const processEntry = { child, startedAt: new Date().toISOString(), stopping: false, javaPath: java, launchTokens: launch.args, pid: child.pid || null };
     this.processes.set(id, processEntry);
     const forward = (stream, channel) => stream.on('data', (chunk) => {
       for (const line of chunk.toString().split(/\r?\n/)) {
