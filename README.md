@@ -17,6 +17,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
 - Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory. An optional main-process Status Hub bridge can be configured separately; it keeps the local destination as the fallback and never reports registration, update, inbox-poll, or reply delivery without an accepted transport response.
 - Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
+- Inspect the fixed local Ollama service through main-process-only reads for version, installed models, and running models. The Local Ollama destination keeps Model Store catalog, pull, chat, and harness controls visibly disabled until their full local workflows exist; it never sends requests to a cloud endpoint or accepts an arbitrary shell command.
 
 ## Desktop workflow
 
@@ -91,6 +92,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Command Center](docs/features/command-center.md)
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
+- [Local Ollama suite foundation](docs/features/local-ollama-suite.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
 - [Feature documentation index](docs/features/README.md)
