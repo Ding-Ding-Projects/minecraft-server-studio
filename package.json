@@ -8,8 +8,8 @@
   "scripts": {
     "start": "electron .",
     "start:cli": "node src/cli/mss.cjs",
-    "package": "electron-builder --win squirrel",
-    "package:dir": "electron-builder --dir"
+    "package": "node scripts/verify-offline-docs-bundle.cjs && electron-builder --win squirrel",
+    "package:dir": "node scripts/verify-offline-docs-bundle.cjs && electron-builder --dir"
   },
   "devDependencies": {
     "electron": "^37.0.0",
@@ -22,6 +22,7 @@
     "asar": true,
     "files": [
       "src/**/*",
+      "docs/features/**/*",
       "package.json"
     ],
     "forceCodeSigning": false,

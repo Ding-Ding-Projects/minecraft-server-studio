@@ -1,12 +1,40 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { app, autoUpdater, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
+const { StudioSettingsService } = require('./studio-settings.cjs');
+const { NarrationScheduleSettingsService } = require('./narration-schedule-settings.cjs');
+const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
+const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
+const { FileConverter } = require('./file-converter.cjs');
+const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
+const { UpdateController } = require('./update-controller.cjs');
+const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
+const { BuildToolsOrchestrationController } = require('./buildtools-orchestration.cjs');
 let CredentialVault;
+let SharedStatusHubClient;
+let AuthenticatorService;
+let ToyLockService;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
 } catch {
   CredentialVault = null;
+}
+try {
+  ({ SharedStatusHubClient } = require('./shared-status-hub-client.cjs'));
+} catch {
+  SharedStatusHubClient = null;
+}
+try {
+  ({ AuthenticatorService } = require('./authenticator-service.cjs'));
+} catch {
+  AuthenticatorService = null;
+}
+try {
+  ({ ToyLockService } = require('./toy-lock-service.cjs'));
+} catch {
+  ToyLockService = null;
 }
 
 app.setName('Minecraft Server Studio');
@@ -14,6 +42,23 @@ app.setName('Minecraft Server Studio');
 let mainWindow;
 let serverManager;
 let credentialVault;
+let studioSettings;
+let narrationScheduleSettings;
+let schoolModeVault;
+let schoolModeCredentialKey;
+
+const MAX_RCON_PACKET_BYTES = 256 * 1024;
+const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
+let statusHubBridge;
+let updateController;
+let ollamaSuite;
+let fileConverter;
+let buildToolsController;
+let offlineDocumentation;
+let scheduleTickTimer;
+let authenticatorService;
+let toyLockService;
+const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
   const payload = Buffer.from(String(body), 'utf8');
@@ -47,40 +92,241 @@ function sendVaultBackedRconCommand({ host, port, password, command }) {
     const timer = setTimeout(() => fail(new Error('RCON did not respond within 10 seconds.')), 10_000);
     socket.once('connect', () => socket.write(rconPacket(1, 3, password)));
     socket.on('data', (chunk) => {
-      buffer = Buffer.concat([buffer, chunk]);
-      while (buffer.length >= 4) {
-        const length = buffer.readInt32LE(0);
-        if (length < 10 || length > 1024 * 1024 || buffer.length < length + 4) return;
-        const packet = buffer.subarray(0, length + 4);
-        buffer = buffer.subarray(length + 4);
-        const packetId = packet.readInt32LE(4);
-        const type = packet.readInt32LE(8);
-        if (!authenticated && type === 2) {
-          if (packetId === -1) return fail(new Error('RCON rejected the protected password.'));
-          authenticated = true;
-          socket.write(rconPacket(2, 2, text));
-        } else if (authenticated && packetId === 2) {
-          return succeed(packet.subarray(12, packet.length - 2).toString('utf8'));
+      try {
+        if (!Buffer.isBuffer(chunk) || buffer.length + chunk.length > MAX_RCON_BUFFER_BYTES) {
+          return fail(new Error('RCON response exceeded the safe response limit.'));
         }
+        buffer = Buffer.concat([buffer, chunk]);
+        while (buffer.length >= 4) {
+          const length = buffer.readInt32LE(0);
+          if (length < 10 || length > MAX_RCON_PACKET_BYTES) {
+            return fail(new Error('RCON returned an invalid or oversized response frame.'));
+          }
+          if (buffer.length < length + 4) return;
+          const packet = buffer.subarray(0, length + 4);
+          buffer = buffer.subarray(length + 4);
+          const packetId = packet.readInt32LE(4);
+          const type = packet.readInt32LE(8);
+          if (!authenticated && type === 2) {
+            if (packetId === -1) return fail(new Error('RCON rejected the protected password.'));
+            authenticated = true;
+            socket.write(rconPacket(2, 2, text));
+          } else if (authenticated && packetId === 2) {
+            return succeed(packet.subarray(12, packet.length - 2).toString('utf8'));
+          }
+        }
+      } catch {
+        return fail(new Error('RCON returned an invalid response frame.'));
       }
     });
     socket.once('error', () => fail(new Error('RCON connection failed.')));
   });
 }
 
-async function managementClientFor(server) {
+function managementCredentialIsStored(serverId) {
+  if (!credentialVault) return false;
+  try {
+    return credentialVault.has(credentialVault.createKey('minecraft-server-studio', `management:${serverId}`));
+  } catch {
+    return false;
+  }
+}
+
+function managementAuthenticationBlocker(server, serverId) {
+  if (!server.management?.credentialConfigured && !managementCredentialIsStored(serverId)) return null;
+  return 'A protected management credential is stored, but this build has no documented provider-specific authentication adapter. The generic WebSocket client intentionally will not send it. Clear the credential or use an endpoint that does not require authentication.';
+}
+
+async function managementClientFor(server, options = {}) {
   const endpoint = server.management?.endpoint;
   if (!endpoint) throw new Error('Configure a Minecraft Server Management Protocol endpoint before discovery.');
-  return new MinecraftManagementProtocolClient({
+  const authenticationBlocker = managementAuthenticationBlocker(server, options.serverId || server.id);
+  if (authenticationBlocker) throw new Error(authenticationBlocker);
+  const client = new MinecraftManagementProtocolClient({
     endpoint,
     allowInsecureLoopback: Boolean(server.management?.allowInsecureLoopback)
   });
+  if (options.restoreDiscovery === true) client.restoreDiscovery(server.management?.discovery);
+  return client;
+}
+
+function publicServerWithManagementCredentialState(server) {
+  if (!server || server.management?.authentication?.credentialConfigured || !managementCredentialIsStored(server.id)) return server;
+  return {
+    ...server,
+    management: {
+      ...server.management,
+      state: 'authentication-adapter-required',
+      capabilities: [],
+      authentication: {
+        state: 'provider-adapter-required',
+        credentialConfigured: true,
+        message: 'A protected credential is stored, but this build has no documented provider-specific authentication adapter and will not send it.'
+      }
+    }
+  };
 }
 
 function sendToRenderer(event) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('studio:event', event);
 }
+
+function requireStudioSettings() {
+  if (!studioSettings) throw new Error('Presentation settings are still starting.');
+  return studioSettings;
+}
+
+function schoolModeVaultStatus() {
+  if (!schoolModeVault || !schoolModeCredentialKey) {
+    return { state: 'unavailable', mode: 'none', configured: false, detail: 'Operating-system credential protection is unavailable.' };
+  }
+  const status = schoolModeVault.getStatus();
+  let configured = false;
+  try {
+    configured = status.state !== 'unavailable' && schoolModeVault.has(schoolModeCredentialKey);
+  } catch {
+    return { state: 'unavailable', mode: 'none', configured: false, detail: 'Operating-system credential protection is unavailable.' };
+  }
+  return {
+    state: status.state,
+    mode: status.mode,
+    configured,
+    detail: status.state === 'ready'
+      ? (configured ? 'A shared unlock credential is configured.' : 'Create an unlock password or PIN before enabling the shared mode.')
+      : 'Operating-system credential protection is unavailable.'
+  };
+}
+
+function experienceSnapshot() {
+  const settings = requireStudioSettings().snapshot();
+  const narrationSchedule = requireNarrationScheduleSettings().snapshot({ baseLanguage: settings.local.language });
+  return {
+    ...settings,
+    effectiveLocal: {
+      ...settings.local,
+      language: narrationSchedule.effective.language
+    },
+    narrationSchedule,
+    narratorRuntime: narratorRuntimeSnapshot(),
+    credential: schoolModeVaultStatus()
+  };
+}
+
+function narratorRuntimeSnapshot() {
+  if (typeof app.accessibilitySupportEnabled !== 'boolean') {
+    return {
+      screenReaderActive: true,
+      state: 'unavailable',
+      detail: 'This Electron runtime cannot report whether a platform accessibility client is active. Narrator speech yields until an equivalent supported signal is available.'
+    };
+  }
+  return {
+    screenReaderActive: app.accessibilitySupportEnabled === true,
+    state: app.accessibilitySupportEnabled === true ? 'active' : 'inactive',
+    detail: app.accessibilitySupportEnabled === true
+      ? 'A platform accessibility client is active, so narrator speech yields instead of competing with a screen reader.'
+      : 'No platform accessibility client is currently reported by Electron.'
+  };
+}
+
+function applyDisplayName(displayName) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setTitle(displayName);
+}
+
+function publishExperienceSettings() {
+  const snapshot = experienceSnapshot();
+  applyDisplayName(snapshot.local.displayName);
+  sendToRenderer({ type: 'experience-settings', payload: snapshot });
+  return snapshot;
+}
+
+function normalizeSchoolCredential(value, label) {
+  if (typeof value !== 'string') throw new Error(`${label} must be text.`);
+  if (value.length < 4 || value.length > 256) throw new Error(`${label} must contain between 4 and 256 characters.`);
+  if (/\u0000/.test(value)) throw new Error(`${label} contains an invalid character.`);
+  return value;
+}
+
+function credentialsMatch(left, right) {
+  const first = Buffer.from(left, 'utf8');
+  const second = Buffer.from(right, 'utf8');
+  return first.length === second.length && crypto.timingSafeEqual(first, second);
+}
+
+function requireSchoolModeVault() {
+  const status = schoolModeVaultStatus();
+  if (!schoolModeVault || !schoolModeCredentialKey || status.state !== 'ready') {
+    throw new Error('Operating-system credential protection is unavailable. Restore it before changing the shared mode.');
+  }
+  return status;
+}
+
+function verifySchoolModeCredential(candidate) {
+  const status = requireSchoolModeVault();
+  if (!status.configured) throw new Error('Create a shared unlock password or PIN before changing the shared mode.');
+  const supplied = normalizeSchoolCredential(candidate, 'Unlock password or PIN');
+  const stored = schoolModeVault.read(schoolModeCredentialKey);
+  if (!stored || !credentialsMatch(stored, supplied)) throw new Error('The unlock password or PIN did not match. You can recover by deleting the shared local application-data record yourself.');
+}
+
+function unavailableBridgeStatus() {
+  return {
+    state: 'failed',
+    endpoint: '',
+    allowInsecureLoopback: false,
+    localFallback: true,
+    detail: 'The optional Status Hub bridge is unavailable in this app build. Local status remains available.',
+    inboxState: 'not-polled',
+    observedReplyCount: 0,
+    latestReplySequence: null,
+    lastFailureCode: 'BRIDGE_UNAVAILABLE'
+  };
+}
+
+function requireStatusHubBridge() {
+  if (!statusHubBridge) throw new Error('The optional Status Hub bridge is unavailable in this app build. Local status remains available.');
+  return statusHubBridge;
+}
+
+async function localStatusWithBridge() {
+  const localStatus = await requireManager().localStatusSnapshot();
+  return {
+    ...localStatus,
+    snapshot: createLocalStatusSnapshot({
+      ...localStatus.snapshot,
+      statusHubBridge: statusHubBridge ? statusHubBridge.getStatus() : unavailableBridgeStatus()
+    })
+  };
+}
+
+function queryRendererUnsavedWork() {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
+    return Promise.resolve({ hasUnsavedWork: true, detail: 'The application window is unavailable to confirm unsaved work.' });
+  }
+  const requestId = crypto.randomUUID();
+  const senderId = mainWindow.webContents.id;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      unsavedWorkQueries.delete(requestId);
+      resolve({ hasUnsavedWork: true, detail: 'The application did not confirm unsaved work before the restart safety timeout.' });
+    }, 5_000);
+    unsavedWorkQueries.set(requestId, { resolve, timer, senderId });
+    mainWindow.webContents.send('studio:query-unsaved-work', { requestId });
+  });
+}
+
+ipcMain.on('studio:unsaved-work-response', (event, response) => {
+  const requestId = String(response?.requestId || '');
+  const pending = unsavedWorkQueries.get(requestId);
+  if (!pending || pending.senderId !== event.sender.id) return;
+  unsavedWorkQueries.delete(requestId);
+  clearTimeout(pending.timer);
+  pending.resolve({
+    hasUnsavedWork: Boolean(response?.hasUnsavedWork),
+    detail: typeof response?.detail === 'string' ? response.detail.slice(0, 160) : ''
+  });
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -89,6 +335,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 720,
     show: false,
+    title: experienceSnapshot().local.displayName,
     titleBarStyle: 'hidden',
     backgroundColor: '#10131a',
     webPreferences: {
@@ -102,11 +349,58 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const appData = app.getPath('appData');
+  const sharedSettingsDirectory = path.join(appData, 'Ding Ding Projects', 'shared-experience-settings');
+  studioSettings = new StudioSettingsService({
+    dataDir: path.join(app.getPath('userData'), 'settings'),
+    sharedDataDir: sharedSettingsDirectory,
+    onChange: publishExperienceSettings
+  });
+  studioSettings.initialize();
+  narrationScheduleSettings = new NarrationScheduleSettingsService({
+    dataDir: path.join(app.getPath('userData'), 'settings'),
+    onChange: publishExperienceSettings
+  });
+  narrationScheduleSettings.initialize();
+  scheduleTickTimer = setInterval(() => publishExperienceSettings(), 20_000);
+  scheduleTickTimer.unref?.();
   credentialVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
   }) : null;
+  authenticatorService = AuthenticatorService ? new AuthenticatorService({
+    dataDir: path.join(app.getPath('userData'), 'authenticator'),
+    credentialVault,
+    onChange: () => sendToRenderer({ type: 'authenticator-changed' })
+  }) : null;
+  toyLockService = ToyLockService ? new ToyLockService({
+    dataDir: path.join(app.getPath('userData'), 'toy-locks'),
+    recoveryDirectory: app.getPath('userData'),
+    credentialVault,
+    onChange: () => sendToRenderer({ type: 'toy-locks-changed' })
+  }) : null;
+  authenticatorService?.initialize();
+  toyLockService?.initialize();
+  schoolModeVault = CredentialVault ? new CredentialVault({
+    dataDir: path.join(sharedSettingsDirectory, 'credential-vault'),
+    safeStorage
+  }) : null;
+  schoolModeCredentialKey = schoolModeVault
+    ? schoolModeVault.createKey('ding-ding-projects', 'shared-school-mode-unlock')
+    : null;
+  try {
+    statusHubBridge = SharedStatusHubClient ? new SharedStatusHubClient({
+      dataDir: path.join(app.getPath('userData'), 'status-hub-bridge'),
+      credentialVault,
+      sessionTitle: 'Minecraft Server Studio desktop status',
+      repository: 'Ding-Ding-Projects/minecraft-server-studio',
+      agentLabel: 'minecraft-server-studio-desktop',
+      onStateChange: (bridge) => sendToRenderer({ type: 'status-hub-bridge', bridge })
+    }) : null;
+  } catch {
+    statusHubBridge = null;
+  }
   serverManager = new ServerManager({
     dataDir: path.join(app.getPath('userData'), 'servers'),
     credentialSecretProvider: async (kind, serverId) => {
@@ -115,14 +409,46 @@ app.whenReady().then(() => {
     },
     onEvent: sendToRenderer
   });
+  buildToolsController = new BuildToolsOrchestrationController({
+    serverManager,
+    repositoryRoots: [app.getAppPath()]
+  });
+  fileConverter = new FileConverter({
+    dataDir: path.join(app.getPath('userData'), 'file-converter'),
+    onEvent: sendToRenderer
+  });
+  await fileConverter.initialize();
+  updateController = new UpdateController({
+    app,
+    autoUpdater,
+    dataDir: path.join(app.getPath('userData'), 'updates'),
+    onStateChange: (update) => sendToRenderer({ type: 'application-update', update })
+  });
+  ollamaSuite = new LocalOllamaSuiteManager({
+    onStateChange: (ollama) => sendToRenderer({ type: 'ollama-suite', ollama })
+  });
+  offlineDocumentation = new OfflineDocumentationLibrary({ appPath: app.getAppPath() });
+  await updateController.initialize();
   createWindow();
+  ollamaSuite.refresh().catch(() => {});
+  serverManager.revalidateManagedJavaInventory().catch((error) => {
+    serverManager.emit({ type: 'dependency-output', dependency: 'java', message: 'The app-managed Java inventory could not be revalidated at startup: ' + String(error?.message || 'unknown error').slice(0, 512) });
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  app.on('accessibility-support-changed', () => publishExperienceSettings());
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  studioSettings?.stopWatching();
+  updateController?.shutdown();
+  if (scheduleTickTimer) clearInterval(scheduleTickTimer);
+  scheduleTickTimer = null;
 });
 
 function requireManager() {
@@ -130,7 +456,94 @@ function requireManager() {
   return serverManager;
 }
 
-ipcMain.handle('studio:list-servers', () => requireManager().listServers());
+function requireUpdater() {
+  if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
+  return updateController;
+}
+
+function requireOllamaSuite() {
+  if (!ollamaSuite) throw new Error('The local Ollama suite is still starting.');
+  return ollamaSuite;
+}
+
+function requireFileConverter() {
+  if (!fileConverter) throw new Error('Minecraft Server Studio local converter controls are still starting.');
+  return fileConverter;
+}
+
+function requireBuildToolsController() {
+  if (!buildToolsController) throw new Error('BuildTools planning controls are still starting.');
+  return buildToolsController;
+}
+
+function requireOfflineDocumentation() {
+  if (!offlineDocumentation) throw new Error('Offline documentation is still starting.');
+  return offlineDocumentation;
+}
+
+function requireNarrationScheduleSettings() {
+  if (!narrationScheduleSettings) throw new Error('Narrator and scheduled settings are still starting.');
+  return narrationScheduleSettings;
+}
+
+function requireAuthenticator() {
+  if (!authenticatorService) throw new Error('The local authenticator is unavailable in this app build.');
+  return authenticatorService;
+}
+
+function requireToyLocks() {
+  if (!toyLockService) throw new Error('Toy locks are unavailable in this app build.');
+  return toyLockService;
+}
+
+ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
+ipcMain.handle('studio:experience-settings', () => experienceSnapshot());
+ipcMain.handle('studio:update-experience-settings', (_event, patch) => {
+  requireStudioSettings().updateLocal(patch);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:narration-schedule-settings', () => experienceSnapshot().narrationSchedule);
+ipcMain.handle('studio:update-narrator-settings', (_event, patch) => {
+  requireNarrationScheduleSettings().updateNarrator(patch);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:add-scheduled-setting', (_event, draft) => {
+  requireNarrationScheduleSettings().addSchedule(draft);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:set-scheduled-setting-enabled', (_event, id, enabled) => {
+  requireNarrationScheduleSettings().setScheduleEnabled(id, enabled);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:create-school-mode-record', () => {
+  requireStudioSettings().ensureSharedRecord();
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:update-school-mode-label', (_event, label) => {
+  requireStudioSettings().updateSchoolModeLabel(label);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:save-school-mode-credential', (_event, input) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Unlock credential input is invalid.');
+  requireStudioSettings().ensureSharedRecord();
+  const status = requireSchoolModeVault();
+  if (status.configured) verifySchoolModeCredential(input.currentCredential);
+  const next = normalizeSchoolCredential(input.newCredential, 'New unlock password or PIN');
+  schoolModeVault.save(schoolModeCredentialKey, next);
+  return publishExperienceSettings();
+});
+ipcMain.handle('studio:set-school-mode', (_event, input) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || typeof input.enabled !== 'boolean') throw new Error('Shared mode input is invalid.');
+  const settings = requireStudioSettings();
+  if (input.enabled) {
+    const status = requireSchoolModeVault();
+    if (!status.configured) throw new Error('Create a shared unlock password or PIN before enabling the shared mode.');
+  } else {
+    verifySchoolModeCredential(input.credential);
+  }
+  settings.setSchoolModeEnabled(input.enabled);
+  return experienceSnapshot();
+});
 ipcMain.handle('studio:create-server', (_event, draft) => requireManager().createServer(draft));
 ipcMain.handle('studio:update-server', async (_event, id, patch) => {
   const safePatch = patch && typeof patch === 'object' ? { ...patch } : patch;
@@ -146,22 +559,48 @@ ipcMain.handle('studio:update-server', async (_event, id, patch) => {
   return requireManager().updateServer(id, safePatch);
 });
 ipcMain.handle('studio:paper-versions', () => requireManager().paperVersions());
-ipcMain.handle('studio:inspect-dependencies', () => requireManager().inspectDependencies());
+ipcMain.handle('studio:inspect-dependencies', (_event, serverId) => requireManager().inspectDependencies(serverId || null));
 ipcMain.handle('studio:install-dependencies', (_event, ids, serverId) => requireManager().installDependencies(ids, serverId));
 ipcMain.handle('studio:provision', (_event, id) => requireManager().provisionServer(id));
 ipcMain.handle('studio:start', (_event, id) => requireManager().startServer(id));
 ipcMain.handle('studio:stop', (_event, id) => requireManager().stopServer(id));
 ipcMain.handle('studio:console', (_event, id, command) => requireManager().sendConsoleCommand(id, command));
+ipcMain.handle('studio:apply-gamerules', async (_event, id, gameRules) => {
+  const manager = requireManager();
+  const server = await manager.getServer(id);
+  if (manager.isServerRunning(id)) return manager.applyGameRules(id, gameRules);
+  if (!server.settings?.['enable-rcon'] || server.settings['enable-rcon'] !== 'true' || !credentialVault) {
+    return manager.applyGameRules(id, gameRules);
+  }
+  const password = credentialVault.read(credentialVault.createKey('minecraft-server-studio', `rcon:${id}`));
+  if (!password) return manager.applyGameRules(id, gameRules);
+  return manager.applyGameRules(id, gameRules, {
+    transport: 'rcon',
+    sendCommand: async (command) => sendVaultBackedRconCommand({
+      host: '127.0.0.1',
+      port: Number(server.settings['rcon.port']),
+      password,
+      command
+    })
+  });
+});
 ipcMain.handle('studio:rcon', async (_event, id, command) => {
   const server = await requireManager().getServer(id);
   if (!server.settings?.['enable-rcon'] || server.settings['enable-rcon'] !== 'true') throw new Error('Enable RCON in the Network tab before using remote CLI commands.');
   if (!credentialVault) throw new Error('The protected credential vault is unavailable in this app build.');
   const password = credentialVault.read(credentialVault.createKey('minecraft-server-studio', `rcon:${id}`));
   if (!password) throw new Error('Save an RCON password in the Network tab before using remote CLI commands.');
-  return sendVaultBackedRconCommand({ host: '127.0.0.1', port: Number(server.settings['rcon.port']), password, command });
+  try {
+    const response = await sendVaultBackedRconCommand({ host: '127.0.0.1', port: Number(server.settings['rcon.port']), password, command });
+    return createSafeRconResponse(response, { secrets: [password] });
+  } catch (error) {
+    throw new Error(safeRconErrorMessage(error, { secrets: [password] }));
+  }
 });
 ipcMain.handle('studio:list-plugins', (_event, id) => requireManager().listPlugins(id));
+ipcMain.handle('studio:plan-plugin-install', (_event, id, sourcePath) => requireManager().planPluginInstallation(id, sourcePath));
 ipcMain.handle('studio:install-plugin', (_event, id, sourcePath) => requireManager().installPlugin(id, sourcePath));
+ipcMain.handle('studio:promote-staged-plugins', (_event, id) => requireManager().promoteStagedPlugins(id));
 ipcMain.handle('studio:pick-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
   return result.canceled ? null : result.filePaths[0];
@@ -173,15 +612,70 @@ ipcMain.handle('studio:pick-plugin', async () => {
   });
   return result.canceled ? null : result.filePaths[0];
 });
+ipcMain.handle('studio:converter-snapshot', () => requireFileConverter().snapshot());
+ipcMain.handle('studio:pick-converter-source', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile']
+  });
+  return result.canceled ? null : requireFileConverter().inspectSource(result.filePaths[0]);
+});
 ipcMain.handle('studio:open-folder', async (_event, folder) => {
   const error = await shell.openPath(folder);
   if (error) throw new Error(error);
 });
 ipcMain.handle('studio:data-directory', () => path.join(app.getPath('userData'), 'servers'));
-ipcMain.handle('studio:local-status', () => requireManager().localStatusSnapshot());
+ipcMain.handle('studio:offline-docs', () => requireOfflineDocumentation().list());
+ipcMain.handle('studio:offline-doc', (_event, id) => requireOfflineDocumentation().read(id));
+ipcMain.handle('studio:local-status', () => localStatusWithBridge());
+ipcMain.handle('studio:ollama-status', () => requireOllamaSuite().status());
+ipcMain.handle('studio:refresh-ollama', () => requireOllamaSuite().refresh());
+ipcMain.handle('studio:authenticator-status', () => requireAuthenticator().getStatus());
+ipcMain.handle('studio:authenticator-snapshot', () => requireAuthenticator().snapshot());
+ipcMain.handle('studio:create-authenticator-entry', (_event, input) => requireAuthenticator().createEntry(input));
+ipcMain.handle('studio:toy-lock-status', () => requireToyLocks().getStatus());
+ipcMain.handle('studio:list-toy-locks', () => requireToyLocks().listLocks());
+ipcMain.handle('studio:create-toy-lock', (_event, input) => requireToyLocks().createLock(input));
+ipcMain.handle('studio:unlock-toy-lock', (_event, lockId, credential) => requireToyLocks().unlock(lockId, credential));
+ipcMain.handle('studio:relock-toy-lock', (_event, lockId) => requireToyLocks().relock(lockId));
+ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
+  status: statusHubBridge.getStatus(),
+  configuration: statusHubBridge.getConfigurationForRenderer()
+} : {
+  status: unavailableBridgeStatus(),
+  configuration: { endpoint: '', allowInsecureLoopback: false }
+});
+ipcMain.handle('studio:configure-status-hub-bridge', (_event, configuration) => requireStatusHubBridge().configure(configuration));
+ipcMain.handle('studio:sync-status-hub-bridge', async () => {
+  const localStatus = await requireManager().localStatusSnapshot();
+  await requireStatusHubBridge().synchronize(localStatus.snapshot);
+  return localStatusWithBridge();
+});
 ipcMain.handle('studio:refresh-spigot-versions', () => requireManager().refreshSpigotVersionMetadata());
 ipcMain.handle('studio:buildtools-preflight', (_event, id, input) => requireManager().buildToolsPreflight(id, input));
 ipcMain.handle('studio:execute-buildtools-plan', (_event, id, confirmation) => requireManager().executeBuildToolsPlan(id, confirmation));
+ipcMain.handle('studio:paper-cli-preflight', (_event, id, profile) => requireManager().paperCliPreflight(id, profile));
+ipcMain.handle('studio:paper-cli-probe', (_event, id) => requireManager().collectPaperCliJarEvidence(id));
+ipcMain.handle('studio:pick-paper-cli-path', async (_event, kind) => {
+  const requestedKind = String(kind || '');
+  const definitions = {
+    'config-file': {
+      properties: ['openFile'],
+      filters: [{ name: 'Paper configuration', extensions: ['yml', 'yaml', 'properties', 'txt'] }]
+    },
+    'pid-file': {
+      properties: ['openFile'],
+      filters: [{ name: 'PID file', extensions: ['pid', 'txt'] }]
+    },
+    directory: {
+      properties: ['openDirectory', 'createDirectory']
+    }
+  };
+  const definition = definitions[requestedKind];
+  if (!definition) throw new Error('Choose a supported Paper CLI path type.');
+  const result = await dialog.showOpenDialog(mainWindow, definition);
+  return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('studio:plan-buildtools', (_event, id, input) => requireBuildToolsController().createPlan(id, input));
 ipcMain.handle('studio:pick-java', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
@@ -191,39 +685,77 @@ ipcMain.handle('studio:pick-java', async () => {
 });
 ipcMain.handle('studio:runtime-inventory', async (_event, id) => requireManager().runtimeInventory(id));
 ipcMain.handle('studio:configure-management', async (_event, id, configuration) => {
-  const token = String(configuration?.token || '');
+  const input = configuration && typeof configuration === 'object' ? configuration : {};
+  const server = await requireManager().getServer(id);
+  const endpoint = input.endpoint === undefined || input.endpoint === null || String(input.endpoint).trim() === ''
+    ? (server.management?.endpoint || '')
+    : String(input.endpoint).trim();
+  const allowInsecureLoopback = input.allowInsecureLoopback === undefined
+    ? Boolean(server.management?.allowInsecureLoopback)
+    : Boolean(input.allowInsecureLoopback);
+  if (endpoint) {
+    const client = new MinecraftManagementProtocolClient({ endpoint, allowInsecureLoopback });
+    client.validateEndpoint();
+  }
+
+  const token = String(input.token || '');
+  const clearCredential = input.clearCredential === true;
+  const existingCredential = Boolean(server.management?.credentialConfigured) || managementCredentialIsStored(id);
+  if (token && clearCredential) throw new Error('Save or clear the protected management credential, not both in the same request.');
   if (token) {
     if (!credentialVault) throw new Error('The protected credential vault is unavailable in this app build.');
     credentialVault.save(credentialVault.createKey('minecraft-server-studio', `management:${id}`), token);
   }
-  const server = await requireManager().getServer(id);
-  const client = configuration?.endpoint
-    ? new MinecraftManagementProtocolClient({ endpoint: configuration.endpoint, allowInsecureLoopback: Boolean(configuration.allowInsecureLoopback) })
-    : null;
-  if (client) client.validateEndpoint();
+  if (clearCredential) {
+    if (!credentialVault) throw new Error('The protected credential vault is unavailable in this app build.');
+    credentialVault.delete(credentialVault.createKey('minecraft-server-studio', `management:${id}`));
+  }
   return requireManager().updateServer(id, {
     management: {
-      endpoint: configuration?.endpoint || server.management?.endpoint || '',
-      allowInsecureLoopback: Boolean(configuration?.allowInsecureLoopback),
-      state: configuration?.endpoint ? 'configured' : 'not-configured'
+      endpoint,
+      allowInsecureLoopback,
+      credentialConfigured: token ? true : (clearCredential ? false : existingCredential)
     }
   });
 });
 ipcMain.handle('studio:discover-management', async (_event, id) => {
   const server = await requireManager().getServer(id);
-  const discovery = await (await managementClientFor(server)).discover();
+  const client = await managementClientFor(server, { serverId: id });
+  await client.discover();
+  const discovery = client.getDiscoverySnapshot();
   return requireManager().updateServer(id, {
     management: {
-      state: 'ready',
-      discoveredAt: new Date().toISOString(),
-      capabilities: discovery.methods
+      discovery
     }
   });
 });
 ipcMain.handle('studio:invoke-management', async (_event, id, method, params) => {
   const server = await requireManager().getServer(id);
-  if (!server.management?.capabilities?.includes(method)) throw new Error(`The selected server did not advertise '${method}'.`);
-  return (await managementClientFor(server)).invokeDiscovered(method, params || {});
+  const client = await managementClientFor(server, { serverId: id, restoreDiscovery: true });
+  if (!client.hasDiscoveredMethod(method)) throw new Error(`The selected server did not advertise '${method}'.`);
+  return client.invokeDiscovered(method, params || {});
 });
 ipcMain.handle('studio:command-catalog', async (_event, id) => requireManager().commandCatalog(id));
+ipcMain.handle('studio:refresh-command-discovery', async (_event, id, input) => requireManager().refreshCommandDiscovery(id, input));
 ipcMain.handle('studio:command-plan', async (_event, id, request) => requireManager().commandPlan(id, request));
+ipcMain.handle('studio:backup-overview', async (_event, id) => requireManager().backupOverview(id));
+ipcMain.handle('studio:backup-preflight', async (_event, id) => requireManager().prepareBackupPlan(id));
+ipcMain.handle('studio:create-backup', async (_event, id, confirmation) => requireManager().createBackup(id, confirmation));
+ipcMain.handle('studio:restore-preflight', async (_event, id, backupId) => requireManager().prepareRestorePlan(id, backupId));
+ipcMain.handle('studio:restore-backup', async (_event, id, confirmation) => requireManager().restoreBackup(id, confirmation));
+ipcMain.handle('studio:paper-update-preflight', async (_event, id) => requireManager().preparePaperUpdatePlan(id));
+ipcMain.handle('studio:apply-paper-update', async (_event, id, confirmation) => requireManager().applyPaperUpdate(id, confirmation));
+ipcMain.handle('studio:paper-rollback-preflight', async (_event, id) => requireManager().preparePaperRollbackPlan(id));
+ipcMain.handle('studio:apply-paper-rollback', async (_event, id, confirmation) => requireManager().applyPaperRollback(id, confirmation));
+ipcMain.handle('studio:update-status', () => requireUpdater().status());
+ipcMain.handle('studio:check-for-updates', () => requireUpdater().checkForUpdates({ reason: 'manual' }));
+ipcMain.handle('studio:set-updates-enabled', (_event, enabled) => requireUpdater().setEnabled(enabled));
+ipcMain.handle('studio:defer-update', () => requireUpdater().deferUpdate());
+ipcMain.handle('studio:restart-for-update', () => requireUpdater().restartForUpdate(queryRendererUnsavedWork));
+ipcMain.handle('studio:open-update-notes', async () => {
+  const releaseNotesUrl = requireUpdater().status().releaseNotesUrl;
+  const url = releaseNotesUrl ? new URL(releaseNotesUrl) : null;
+  const expectedPrefix = '/Ding-Ding-Projects/minecraft-server-studio/releases/';
+  if (!url || url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.startsWith(expectedPrefix)) throw new Error('No verified public release-notes link is available for this update state.');
+  await shell.openExternal(url.toString());
+});

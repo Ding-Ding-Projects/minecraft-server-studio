@@ -6,7 +6,7 @@
   }
 
   const STORAGE_KEY = "minecraft-server-studio.site.contract.v2";
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
   const LIMITS = Object.freeze({
     stateBytes: 1024 * 1024,
     notifications: 200,
@@ -30,9 +30,13 @@
     regexSampleCharacters: 16 * 1024,
     regexMatches: 200,
     vocabularyBytes: 64 * 1024,
+    vocabularyNestingDepth: 3,
     vocabularyEntries: 250,
     vocabularyKeyCharacters: 128,
-    vocabularyValueCharacters: 512
+    vocabularyValueCharacters: 512,
+    schoolModeCodeMinimum: 4,
+    schoolModeCodeMaximum: 64,
+    schoolModeCredentialSaltBytes: 16
   });
 
   const LANGUAGE_MODES = Object.freeze(["english", "cantonese", "bilingual"]);
@@ -44,6 +48,8 @@
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const SAFE_COLOR = /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/;
+  const BASE64_SALT = /^[A-Za-z0-9+/]{22}==$/;
+  const BASE64_SHA256 = /^[A-Za-z0-9+/]{43}=$/;
 
   const FILE_ADAPTERS = Object.freeze([
     { id: "documents-pdf", category: "Documents/PDF", label: "PDF tools", sourceFormats: ["application/pdf"], targetFormats: ["application/pdf"], bundled: false, enabled: false, reason: "No bundled offline PDF adapter is available in the static site." },
@@ -153,6 +159,7 @@
       tabs: { orientation: "vertical", activeId: null, groups: [], items: [] },
       collections: [],
       personalVocabulary: { status: "empty", payload: null },
+      schoolModeCredential: { algorithm: "", salt: "", verifier: "", configuredAt: null },
       locks: [],
       totp: [],
       schedules: [],
@@ -186,6 +193,9 @@
     if (version < 2 && isPlainObject(migrated.settings) && typeof migrated.settings.funnyLevel === "number") {
       const level = boundedInteger(migrated.settings.funnyLevel, 1, 5, 2);
       migrated.settings.funnyLevel = { english: level, cantonese: level };
+    }
+    if (version < 3) {
+      migrated.schoolModeCredential = { algorithm: "", salt: "", verifier: "", configuredAt: null };
     }
     migrated.version = SCHEMA_VERSION;
     return migrated;
@@ -382,7 +392,8 @@
   }
 
   function normalizeVocabularyPayload(raw) {
-    if (!isPlainObject(raw) || hasUnsafeKeys(raw) || raw.version !== 1 || !Array.isArray(raw.replacements)) {
+    const rootKeys = isPlainObject(raw) ? Object.keys(raw).sort() : [];
+    if (!isPlainObject(raw) || hasUnsafeKeys(raw) || rootKeys.length !== 2 || rootKeys[0] !== "replacements" || rootKeys[1] !== "version" || raw.version !== 1 || !Array.isArray(raw.replacements)) {
       return null;
     }
     if (raw.replacements.length > LIMITS.vocabularyEntries) {
@@ -398,9 +409,9 @@
       if (keys.length !== 2 || keys[0] !== "from" || keys[1] !== "to") {
         return null;
       }
-      const from = boundedText(replacement.from, LIMITS.vocabularyKeyCharacters, "");
-      const to = boundedText(replacement.to, LIMITS.vocabularyValueCharacters, "");
-      if (!from || from.length !== replacement.from.length || to.length !== replacement.to.length || seen.has(from)) {
+      const from = replacement.from;
+      const to = replacement.to;
+      if (typeof from !== "string" || typeof to !== "string" || Array.from(from).length === 0 || Array.from(from).length > LIMITS.vocabularyKeyCharacters || Array.from(to).length > LIMITS.vocabularyValueCharacters || seen.has(from)) {
         return null;
       }
       seen.add(from);
@@ -413,6 +424,21 @@
     const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
     const payload = normalizeVocabularyPayload(value.payload);
     return payload ? { status: "loaded", payload } : { status: "empty", payload: null };
+  }
+
+  function isConfiguredSchoolModeCredential(value) {
+    return Boolean(value && value.algorithm === "SHA-256" && BASE64_SALT.test(value.salt) && BASE64_SHA256.test(value.verifier));
+  }
+
+  function normalizeSchoolModeCredential(raw) {
+    const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
+    const candidate = {
+      algorithm: value.algorithm === "SHA-256" ? "SHA-256" : "",
+      salt: trimString(value.salt, 32, ""),
+      verifier: trimString(value.verifier, 64, ""),
+      configuredAt: trimString(value.configuredAt, 48, "") || null
+    };
+    return isConfiguredSchoolModeCredential(candidate) ? candidate : { algorithm: "", salt: "", verifier: "", configuredAt: null };
   }
 
   function normalizeLock(raw) {
@@ -754,6 +780,7 @@
       tabs: normalizeTabs(migrated.tabs, defaults.tabs),
       collections: [],
       personalVocabulary: normalizePersonalVocabulary(migrated.personalVocabulary),
+      schoolModeCredential: normalizeSchoolModeCredential(migrated.schoolModeCredential),
       locks: [],
       totp: [],
       schedules: [],
@@ -889,11 +916,14 @@
   }
 
   function getState() {
-    return clone(state);
+    const snapshot = clone(state);
+    snapshot.schoolModeCredential = getSchoolModeCredentialState();
+    return snapshot;
   }
 
   function getEffectiveSettings() {
     const settings = clone(state.settings);
+    settings.schoolMode.credentialConfigured = isConfiguredSchoolModeCredential(state.schoolModeCredential);
     if (settings.schoolMode.enabled) {
       settings.languageMode = "english";
       settings.personalVocabularyActive = false;
@@ -947,16 +977,71 @@
     const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
     const enabled = Boolean(request.enabled);
     const current = state.settings.schoolMode.enabled;
+    if (!current && enabled && !isConfiguredSchoolModeCredential(state.schoolModeCredential)) {
+      return { ok: false, error: "Set a browser-local unlock code before enabling this presentation mode." };
+    }
     if (current && !enabled && request.credentialAccepted !== true) {
-      return { ok: false, error: "Turning off School mode requires the host application's local credential check." };
+      return { ok: false, error: "Turning off this presentation mode requires a successful browser-local unlock-code check." };
     }
     state.settings.schoolMode.enabled = enabled;
     if (typeof request.name === "string") {
       state.settings.schoolMode.name = trimString(request.name, 80, "School mode") || "School mode";
     }
     state.settings = normalizeSettings(state.settings, createDefaultState().settings);
-    writeAudit(enabled ? "School mode enabled" : "School mode disabled", "School mode", "The site changed its local presentation state.");
+    writeAudit(enabled ? "Presentation mode enabled" : "Presentation mode disabled", state.settings.schoolMode.name, "The site changed its browser-local presentation state.");
     persist({ type: "school-mode" });
+    return { ok: true, settings: getEffectiveSettings() };
+  }
+
+  function setSchoolModeCredential(record) {
+    const candidate = normalizeSchoolModeCredential(record);
+    if (!isConfiguredSchoolModeCredential(candidate)) {
+      return { ok: false, error: "The browser-local unlock-code verifier is incomplete or unsupported." };
+    }
+    state.schoolModeCredential = Object.assign({}, candidate, { configuredAt: now() });
+    writeAudit("Presentation-mode unlock code configured", state.settings.schoolMode.name, "A local one-way verifier was stored without the unlock code.");
+    persist({ type: "school-mode-credential" });
+    return { ok: true, credential: getSchoolModeCredentialState() };
+  }
+
+  function getSchoolModeCredentialState() {
+    const credential = state.schoolModeCredential;
+    return {
+      configured: isConfiguredSchoolModeCredential(credential),
+      algorithm: isConfiguredSchoolModeCredential(credential) ? credential.algorithm : "",
+      configuredAt: isConfiguredSchoolModeCredential(credential) ? credential.configuredAt : null
+    };
+  }
+
+  function getSchoolModeCredentialSalt() {
+    return isConfiguredSchoolModeCredential(state.schoolModeCredential) ? state.schoolModeCredential.salt : "";
+  }
+
+  function timingSafeVerifierMatch(candidate) {
+    const expected = state.schoolModeCredential.verifier;
+    if (typeof candidate !== "string" || !BASE64_SHA256.test(candidate) || !isConfiguredSchoolModeCredential(state.schoolModeCredential) || candidate.length !== expected.length) {
+      return false;
+    }
+    let difference = 0;
+    for (let index = 0; index < expected.length; index += 1) {
+      difference |= expected.charCodeAt(index) ^ candidate.charCodeAt(index);
+    }
+    return difference === 0;
+  }
+
+  function verifySchoolModeCredential(verifier) {
+    return { ok: timingSafeVerifierMatch(verifier) };
+  }
+
+  function clearSchoolModeCredential(options) {
+    const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
+    if (request.credentialAccepted !== true) {
+      return { ok: false, error: "Verify the current browser-local unlock code before resetting it." };
+    }
+    state.settings.schoolMode.enabled = false;
+    state.schoolModeCredential = { algorithm: "", salt: "", verifier: "", configuredAt: null };
+    writeAudit("Presentation-mode unlock code reset", state.settings.schoolMode.name, "The browser-local mode and its one-way verifier were reset.");
+    persist({ type: "school-mode-credential-reset" });
     return { ok: true, settings: getEffectiveSettings() };
   }
 
@@ -964,7 +1049,7 @@
     return {
       storage: "browser local storage",
       key: STORAGE_KEY,
-      message: "This site keeps School mode only in this browser's local storage. Clearing this site's local storage resets the local setting and its local lock metadata; it does not change a desktop application's data."
+      message: "This site keeps its renamed presentation mode and one-way unlock-code verifier only in this browser's local storage. Clearing this site's local storage resets the local preferences, vocabulary cache, local lock metadata, and unlock-code verifier; it does not change desktop-application or server data."
     };
   }
 
@@ -1404,6 +1489,11 @@
     let cursor = 0;
     const source = String(text);
     function whitespace() { while (/\s/.test(source[cursor] || "")) cursor += 1; }
+    function assertNestingDepth(depth) {
+      if (depth > LIMITS.vocabularyNestingDepth) {
+        throw new Error(`Vocabulary JSON nesting exceeds the supported maximum of ${LIMITS.vocabularyNestingDepth} levels.`);
+      }
+    }
     function stringToken() {
       const start = cursor;
       if (source[cursor] !== '"') throw new Error("Expected a JSON string.");
@@ -1419,18 +1509,19 @@
       }
       throw new Error("Unterminated JSON string.");
     }
-    function value() {
+    function value(depth) {
       whitespace();
       const character = source[cursor];
-      if (character === "{") return object();
-      if (character === "[") return array();
+      if (character === "{") return object(depth + 1);
+      if (character === "[") return array(depth + 1);
       if (character === '"') return stringToken();
       const primitive = /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(source.slice(cursor));
       if (!primitive) throw new Error("Invalid JSON value.");
       cursor += primitive[0].length;
       return undefined;
     }
-    function object() {
+    function object(depth) {
+      assertNestingDepth(depth);
       const keys = new Set();
       cursor += 1;
       whitespace();
@@ -1443,7 +1534,7 @@
         whitespace();
         if (source[cursor] !== ":") throw new Error("Expected a colon after a JSON key.");
         cursor += 1;
-        value();
+        value(depth);
         whitespace();
         if (source[cursor] === "}") { cursor += 1; return {}; }
         if (source[cursor] !== ",") throw new Error("Expected a comma between JSON fields.");
@@ -1451,12 +1542,13 @@
       }
       throw new Error("Unterminated JSON object.");
     }
-    function array() {
+    function array(depth) {
+      assertNestingDepth(depth);
       cursor += 1;
       whitespace();
       if (source[cursor] === "]") { cursor += 1; return []; }
       while (cursor < source.length) {
-        value();
+        value(depth);
         whitespace();
         if (source[cursor] === "]") { cursor += 1; return []; }
         if (source[cursor] !== ",") throw new Error("Expected a comma between JSON values.");
@@ -1464,15 +1556,37 @@
       }
       throw new Error("Unterminated JSON array.");
     }
-    value();
+    value(0);
     whitespace();
     if (cursor !== source.length) throw new Error("Unexpected content after JSON data.");
     return JSON.parse(source);
   }
 
+  function utf8ByteLength(text) {
+    const source = String(text);
+    let bytes = 0;
+    for (let index = 0; index < source.length; index += 1) {
+      const code = source.charCodeAt(index);
+      if (code <= 0x7f) bytes += 1;
+      else if (code <= 0x7ff) bytes += 2;
+      else if (code >= 0xd800 && code <= 0xdbff && index + 1 < source.length) {
+        const next = source.charCodeAt(index + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) {
+          bytes += 4;
+          index += 1;
+        } else {
+          bytes += 3;
+        }
+      } else {
+        bytes += 3;
+      }
+    }
+    return bytes;
+  }
+
   function loadPersonalVocabulary(text) {
     if (typeof text !== "string") return { ok: false, error: "Choose a JSON file before loading vocabulary replacements." };
-    if (text.length > LIMITS.vocabularyBytes) return { ok: false, error: `Vocabulary files are limited to ${LIMITS.vocabularyBytes} bytes.` };
+    if (utf8ByteLength(text) > LIMITS.vocabularyBytes) return { ok: false, error: `Vocabulary files are limited to ${LIMITS.vocabularyBytes} bytes.` };
     let parsed;
     try {
       parsed = parseJsonWithDuplicateKeyGuard(text);
@@ -1719,6 +1833,7 @@
   function redactStateForExport() {
     const exported = getState();
     exported.personalVocabulary = { status: exported.personalVocabulary.status, omitted: true };
+    exported.schoolModeCredential = { configured: isConfiguredSchoolModeCredential(state.schoolModeCredential), omitted: true };
     exported.locks = exported.locks.map((lock) => ({ id: lock.id, target: lock.target, label: lock.label, method: lock.method, duration: lock.duration, minutes: lock.minutes, locked: lock.locked, createdAt: lock.createdAt, updatedAt: lock.updatedAt }));
     exported.totp = exported.totp.map((entry) => ({ id: entry.id, label: entry.label, issuer: entry.issuer, account: entry.account, algorithm: entry.algorithm, digits: entry.digits, period: entry.period, enrolled: entry.enrolled, updatedAt: entry.updatedAt }));
     return exported;
@@ -1771,6 +1886,11 @@
     isStorageAvailable: () => storageAvailable,
     updateSettings,
     setSchoolMode,
+    setSchoolModeCredential,
+    getSchoolModeCredentialState,
+    getSchoolModeCredentialSalt,
+    verifySchoolModeCredential,
+    clearSchoolModeCredential,
     getSchoolModeResetBoundary,
     resetLocalState,
     notify,

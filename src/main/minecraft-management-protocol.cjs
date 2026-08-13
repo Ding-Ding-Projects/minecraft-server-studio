@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const { TextDecoder } = require('node:util');
 
 const PROTOCOL_LIMITS = Object.freeze({
@@ -20,8 +21,12 @@ const PROTOCOL_LIMITS = Object.freeze({
   discoverMethods: 512,
   discoverCapabilities: 256,
   requiredCapabilities: 64,
-  ignoredWebSocketMessages: 32
+  ignoredWebSocketMessages: 32,
+  discoverySnapshotTtlMs: 15 * 60 * 1000,
+  discoveryClockSkewMs: 60 * 1000
 });
+
+const DISCOVERY_SNAPSHOT_VERSION = 1;
 
 const UNSAFE_JSON_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const METHOD_COLLECTION_FIELDS = Object.freeze([
@@ -451,6 +456,201 @@ function normalizeDiscoverResult(value) {
   };
 }
 
+function endpointFingerprint(endpoint, options = {}) {
+  const descriptor = typeof endpoint === 'string'
+    ? validateManagementEndpoint(endpoint, { allowInsecureLoopback: options.allowInsecureLoopback === true })
+    : endpoint;
+  if (!isPlainRecord(descriptor) || typeof descriptor.url !== 'string' || !descriptor.url) {
+    throw new Error('A validated Minecraft Server Management Protocol endpoint is required for discovery state.');
+  }
+  return crypto.createHash('sha256').update(descriptor.url, 'utf8').digest('hex');
+}
+
+function normalizeSnapshotTimestamp(value, label) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64) {
+    throw new Error(label + ' is invalid.');
+  }
+  const epochMs = Date.parse(value);
+  if (!Number.isFinite(epochMs)) throw new Error(label + ' is invalid.');
+  return { epochMs, value: new Date(epochMs).toISOString() };
+}
+
+function normalizeStoredMethodDescriptors(value) {
+  if (!Array.isArray(value) || value.length > PROTOCOL_LIMITS.discoverMethods) {
+    throw new Error('Saved Minecraft Server Management Protocol method metadata is outside supported safety bounds.');
+  }
+  const methods = [];
+  const seen = new Set();
+  for (const candidate of value) {
+    if (!isPlainRecord(candidate)) throw new Error('Saved Minecraft Server Management Protocol method metadata is invalid.');
+    const keys = Object.keys(candidate).sort();
+    const allowed = candidate.description === undefined ? ['name'] : ['description', 'name'];
+    if (keys.length !== allowed.length || keys.some((key, index) => key !== allowed[index])) {
+      throw new Error('Saved Minecraft Server Management Protocol method metadata has an unsupported shape.');
+    }
+    const name = validateMethodName(candidate.name);
+    if (seen.has(name)) throw new Error('Saved Minecraft Server Management Protocol method metadata contains duplicates.');
+    const method = { name };
+    if (candidate.description !== undefined) {
+      const description = optionalDescription(candidate.description);
+      if (!description) throw new Error('Saved Minecraft Server Management Protocol method metadata has an invalid description.');
+      method.description = description;
+    }
+    seen.add(name);
+    methods.push(method);
+  }
+  return methods;
+}
+
+function normalizeStoredCapabilities(value) {
+  if (!Array.isArray(value) || value.length > PROTOCOL_LIMITS.discoverCapabilities) {
+    throw new Error('Saved Minecraft Server Management Protocol capability metadata is outside supported safety bounds.');
+  }
+  const capabilities = [];
+  const seen = new Set();
+  for (const candidate of value) {
+    const capability = validateMethodName(candidate);
+    if (seen.has(capability)) throw new Error('Saved Minecraft Server Management Protocol capability metadata contains duplicates.');
+    seen.add(capability);
+    capabilities.push(capability);
+  }
+  return capabilities;
+}
+
+function normalizeDiscoverySnapshot(value) {
+  if (!isPlainRecord(value)) throw new Error('Saved Minecraft Server Management Protocol discovery metadata is invalid.');
+  const expectedKeys = [
+    'schemaVersion',
+    'endpointFingerprint',
+    'discoveredAt',
+    'expiresAt',
+    'protocol',
+    'version',
+    'methods',
+    'capabilities'
+  ];
+  const receivedKeys = Object.keys(value).sort();
+  const sortedExpected = [...expectedKeys].sort();
+  if (receivedKeys.length !== sortedExpected.length || receivedKeys.some((key, index) => key !== sortedExpected[index])) {
+    throw new Error('Saved Minecraft Server Management Protocol discovery metadata has an unsupported shape.');
+  }
+  if (value.schemaVersion !== DISCOVERY_SNAPSHOT_VERSION) {
+    throw new Error('Saved Minecraft Server Management Protocol discovery metadata uses an unsupported schema version.');
+  }
+  if (typeof value.endpointFingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(value.endpointFingerprint)) {
+    throw new Error('Saved Minecraft Server Management Protocol discovery metadata is not bound to a valid endpoint.');
+  }
+  const methods = normalizeStoredMethodDescriptors(value.methods);
+  const capabilities = normalizeStoredCapabilities(value.capabilities);
+
+  const discoveredAt = normalizeSnapshotTimestamp(value.discoveredAt, 'The discovery timestamp');
+  const expiresAt = normalizeSnapshotTimestamp(value.expiresAt, 'The discovery expiry timestamp');
+  const lifetime = expiresAt.epochMs - discoveredAt.epochMs;
+  if (lifetime <= 0 || lifetime > PROTOCOL_LIMITS.discoverySnapshotTtlMs) {
+    throw new Error('Saved Minecraft Server Management Protocol discovery metadata has an unsafe lifetime.');
+  }
+
+  const discovery = normalizeDiscoverResult({
+    protocolName: value.protocol,
+    protocolVersion: value.version,
+    methods,
+    capabilities
+  });
+  if (discovery.methods.length !== methods.length || discovery.capabilities.length !== capabilities.length) {
+    throw new Error('Saved Minecraft Server Management Protocol discovery metadata is not canonical.');
+  }
+  return Object.freeze({
+    schemaVersion: DISCOVERY_SNAPSHOT_VERSION,
+    endpointFingerprint: value.endpointFingerprint,
+    discoveredAt: discoveredAt.value,
+    expiresAt: expiresAt.value,
+    protocol: discovery.protocol,
+    version: discovery.version,
+    methods: discovery.methods.map(cloneMethodDescriptor),
+    capabilities: [...discovery.capabilities]
+  });
+}
+
+function createDiscoverySnapshot(endpoint, discovery, now = Date.now()) {
+  if (!Number.isFinite(now)) throw new Error('The discovery clock is invalid.');
+  const normalizedDiscovery = normalizeDiscoverResult(discovery);
+  const discoveredAt = new Date(now);
+  const expiresAt = new Date(now + PROTOCOL_LIMITS.discoverySnapshotTtlMs);
+  if (Number.isNaN(discoveredAt.getTime()) || Number.isNaN(expiresAt.getTime())) {
+    throw new Error('The discovery clock is outside the supported range.');
+  }
+  return Object.freeze({
+    schemaVersion: DISCOVERY_SNAPSHOT_VERSION,
+    endpointFingerprint: endpointFingerprint(endpoint),
+    discoveredAt: discoveredAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    protocol: normalizedDiscovery.protocol,
+    version: normalizedDiscovery.version,
+    methods: normalizedDiscovery.methods.map(cloneMethodDescriptor),
+    capabilities: [...normalizedDiscovery.capabilities]
+  });
+}
+
+function discoverySnapshotStatus(value, endpoint, options = {}) {
+  if (value === null || value === undefined) return { state: 'missing', snapshot: null };
+  const now = options.now === undefined ? Date.now() : options.now;
+  if (!Number.isFinite(now)) return { state: 'invalid', snapshot: null };
+
+  let snapshot;
+  let expectedFingerprint;
+  try {
+    snapshot = normalizeDiscoverySnapshot(value);
+    expectedFingerprint = endpointFingerprint(endpoint, { allowInsecureLoopback: options.allowInsecureLoopback === true });
+  } catch {
+    return { state: 'invalid', snapshot: null };
+  }
+  if (snapshot.endpointFingerprint !== expectedFingerprint) return { state: 'endpoint-mismatch', snapshot: null };
+
+  const discoveredAt = Date.parse(snapshot.discoveredAt);
+  const expiresAt = Date.parse(snapshot.expiresAt);
+  if (now + PROTOCOL_LIMITS.discoveryClockSkewMs < discoveredAt) return { state: 'invalid', snapshot: null };
+  if (now > expiresAt) {
+    return {
+      state: 'expired',
+      snapshot: Object.freeze({
+        ...snapshot,
+        methods: snapshot.methods.map(cloneMethodDescriptor),
+        capabilities: [...snapshot.capabilities]
+      })
+    };
+  }
+  return {
+    state: 'ready',
+    snapshot: Object.freeze({
+      ...snapshot,
+      methods: snapshot.methods.map(cloneMethodDescriptor),
+      capabilities: [...snapshot.capabilities]
+    })
+  };
+}
+
+function discoverySnapshotError(status) {
+  if (status === 'expired') {
+    return 'Saved Minecraft Server Management Protocol discovery expired. Run rpc.discover again before invoking a method.';
+  }
+  if (status === 'endpoint-mismatch') {
+    return 'Saved Minecraft Server Management Protocol discovery belongs to a different endpoint. Run rpc.discover again.';
+  }
+  if (status === 'missing') {
+    return 'Call discover() before invoking Minecraft Server Management Protocol methods.';
+  }
+  return 'Saved Minecraft Server Management Protocol discovery metadata is invalid. Run rpc.discover again.';
+}
+
+function discoveryFromSnapshot(snapshot) {
+  return normalizeDiscoverResult({
+    protocolName: snapshot.protocol,
+    protocolVersion: snapshot.version,
+    methods: snapshot.methods,
+    capabilities: snapshot.capabilities
+  });
+}
+
 function tokenizeMethodName(methodName) {
   return methodName
     .replace(/([a-z0-9])([A-Z])/g, '$1.$2')
@@ -771,7 +971,12 @@ class MinecraftManagementProtocolClient {
     });
     this._requestNumber = 0;
     this._discovery = null;
+    this._discoverySnapshot = null;
     this._discoveredMethodNames = new Set();
+  }
+
+  validateEndpoint() {
+    return Object.freeze({ ...this.endpoint });
   }
 
   getDiscovery() {
@@ -780,8 +985,19 @@ class MinecraftManagementProtocolClient {
       protocol: this._discovery.protocol,
       version: this._discovery.version,
       methods: this._discovery.methods.map(cloneMethodDescriptor),
-      capabilities: [...this._discovery.capabilities]
+      capabilities: [...this._discovery.capabilities],
+      discoveredAt: this._discoverySnapshot?.discoveredAt || null,
+      expiresAt: this._discoverySnapshot?.expiresAt || null
     };
+  }
+
+  getDiscoverySnapshot() {
+    if (!this._discoverySnapshot) return null;
+    return Object.freeze({
+      ...this._discoverySnapshot,
+      methods: this._discoverySnapshot.methods.map(cloneMethodDescriptor),
+      capabilities: [...this._discoverySnapshot.capabilities]
+    });
   }
 
   getDiscoveredMethods() {
@@ -809,14 +1025,21 @@ class MinecraftManagementProtocolClient {
 
   clearDiscovery() {
     this._discovery = null;
+    this._discoverySnapshot = null;
     this._discoveredMethodNames.clear();
   }
 
   async discover() {
     const result = await this._sendRpcRequest('rpc.discover', {});
     const discovery = normalizeDiscoverResult(result);
-    this._discovery = discovery;
-    this._discoveredMethodNames = new Set(discovery.methods.map((method) => method.name));
+    this._setDiscovery(discovery, createDiscoverySnapshot(this.endpoint, discovery));
+    return this.getDiscovery();
+  }
+
+  restoreDiscovery(snapshot) {
+    const status = discoverySnapshotStatus(snapshot, this.endpoint);
+    if (status.state !== 'ready') throw new Error(discoverySnapshotError(status.state));
+    this._setDiscovery(discoveryFromSnapshot(status.snapshot), status.snapshot);
     return this.getDiscovery();
   }
 
@@ -859,6 +1082,11 @@ class MinecraftManagementProtocolClient {
     if (!this._discovery) {
       throw new Error('Call discover() before invoking Minecraft Server Management Protocol methods.');
     }
+    const freshness = discoverySnapshotStatus(this._discoverySnapshot, this.endpoint);
+    if (freshness.state !== 'ready') {
+      this.clearDiscovery();
+      throw new Error(discoverySnapshotError(freshness.state));
+    }
     const compatibility = this.getCompatibility(requirements);
     if (!compatibility.versionSatisfied) {
       throw new Error('The discovered Minecraft Server Management Protocol version does not satisfy the requested compatibility floor.');
@@ -866,6 +1094,14 @@ class MinecraftManagementProtocolClient {
     if (compatibility.missingCapabilities.length > 0) {
       throw new Error('The discovered Minecraft Server Management Protocol capabilities do not satisfy this invocation.');
     }
+  }
+
+  _setDiscovery(discovery, snapshot) {
+    const normalizedDiscovery = normalizeDiscoverResult(discovery);
+    const normalizedSnapshot = normalizeDiscoverySnapshot(snapshot);
+    this._discovery = normalizedDiscovery;
+    this._discoverySnapshot = normalizedSnapshot;
+    this._discoveredMethodNames = new Set(normalizedDiscovery.methods.map((method) => method.name));
   }
 
   async _sendRpcRequest(methodName, params) {
@@ -887,13 +1123,17 @@ class MinecraftManagementProtocolClient {
 }
 
 module.exports = {
+  DISCOVERY_SNAPSHOT_VERSION,
   MinecraftManagementProtocolClient,
   OPERATION_HINT_DEFINITIONS,
   PROTOCOL_LIMITS,
   buildOperationHints,
   compareNumericVersions,
+  createDiscoverySnapshot,
+  discoverySnapshotStatus,
   evaluateProtocolCompatibility,
   isLoopbackDevelopmentHost,
+  normalizeDiscoverySnapshot,
   normalizeDiscoverResult,
   normalizeJsonParams,
   normalizeJsonValue,

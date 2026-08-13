@@ -2,6 +2,8 @@ name: Windows package and release
 
 on:
   push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -119,6 +121,7 @@ jobs:
 
           Add-Content -Path $env:GITHUB_ENV -Value "SQUIRREL_OUTPUT=$squirrelOutput"
           Add-Content -Path $env:GITHUB_ENV -Value "SETUP_PATH=$($setupFile.FullName)"
+          Add-Content -Path $env:GITHUB_ENV -Value "SETUP_NAME=$($setupFile.Name)"
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASES_PATH=$releasesFile"
           Add-Content -Path $env:GITHUB_ENV -Value "ARTIFACT_HASHES_PATH=$hashFile"
           Add-Content -Path $env:GITHUB_ENV -Value "ARTIFACT_HASHES_JSON_PATH=$hashRowsFile"
@@ -148,6 +151,13 @@ jobs:
             @($fullPackages | ForEach-Object { $_.FullName }) +
             @($deltaPackages | ForEach-Object { $_.FullName })
           $assets = @($assets | Select-Object -Unique)
+          $setupAssetName = [IO.Path]::GetFileName($env:SETUP_PATH)
+          if ([string]::IsNullOrWhiteSpace($setupAssetName)) {
+            throw 'The validated Setup.exe path does not contain a filename.'
+          }
+          if (-not [string]::Equals($setupAssetName, $env:SETUP_NAME, [StringComparison]::Ordinal)) {
+            throw "The validated Setup.exe filename $setupAssetName does not match SETUP_NAME $env:SETUP_NAME."
+          }
 
           $initialBodyPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\release-body-initial.md'
           @(
@@ -197,6 +207,7 @@ jobs:
             '## Validated artifacts',
             $hashMarkdown.TrimEnd(),
             '',
+            "- Setup executable (exact generated Squirrel asset name): $setupAssetName",
             'The package validation confirmed one Setup.exe artifact, RELEASES, at least one full Squirrel package referenced by RELEASES, and an unsigned Setup.exe status.',
             '',
             '## Source line count',
@@ -215,68 +226,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Unable to finalize the release notes for $tag."
           }
-          function Get-SetupAssetIdentity {
-            param([Parameter(Mandatory)][string] $Name)
-
-            $baseName = [IO.Path]::GetFileName($Name)
-            if (-not [string]::Equals($baseName, $Name, [StringComparison]::Ordinal)) {
-              return $null
-            }
-            $match = [regex]::Match(
-              $baseName,
-              '^(?<product>.+)-(?<version>[0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?)-(?<arch>x64|ia32|arm64)-(?<suffix>Setup)(?<extension>\.exe)$',
-              [Text.RegularExpressions.RegexOptions]::IgnoreCase
-            )
-            if (-not $match.Success) {
-              return $null
-            }
-            return [pscustomobject]@{
-              Name = $baseName
-              Product = $match.Groups['product'].Value
-              Version = $match.Groups['version'].Value
-              Architecture = $match.Groups['arch'].Value
-              Suffix = $match.Groups['suffix'].Value
-              Extension = $match.Groups['extension'].Value
-            }
-          }
-
-          function Test-SetupAssetNameEquivalent {
-            param(
-              [Parameter(Mandatory)][string] $ExpectedName,
-              [Parameter(Mandatory)][string] $PublishedName
-            )
-
-            $expected = Get-SetupAssetIdentity -Name $ExpectedName
-            $published = Get-SetupAssetIdentity -Name $PublishedName
-            if ($null -eq $expected -or $null -eq $published) {
-              return $false
-            }
-            $expectedProduct = $expected.Product -replace '[ .]+', '.'
-            $publishedProduct = $published.Product -replace '[ .]+', '.'
-
-            # GitHub may replace literal space runs in the product segment with dots.
-            # Version, architecture, Squirrel suffix, and extension remain exact checks.
-            return [string]::Equals($expectedProduct, $publishedProduct, [StringComparison]::OrdinalIgnoreCase) -and
-              [string]::Equals($expected.Version, $published.Version, [StringComparison]::Ordinal) -and
-              [string]::Equals($expected.Architecture, $published.Architecture, [StringComparison]::Ordinal) -and
-              [string]::Equals($expected.Suffix, $published.Suffix, [StringComparison]::Ordinal) -and
-              [string]::Equals($expected.Extension, $published.Extension, [StringComparison]::Ordinal)
-          }
-
           $expectedLocalAssets = @($assets | ForEach-Object {
             $assetName = [IO.Path]::GetFileName($_)
             [pscustomobject]@{
               Path = $_
               Name = $assetName
-              SetupIdentity = Get-SetupAssetIdentity -Name $assetName
             }
           })
-          $expectedSetupAssets = @($expectedLocalAssets | Where-Object { $null -ne $_.SetupIdentity })
-          if ($expectedSetupAssets.Count -ne 1) {
-            throw "Expected exactly one local Setup.exe asset, found $($expectedSetupAssets.Count)."
-          }
-          $expectedSetupAsset = $expectedSetupAssets[0]
-          $expectedExactAssets = @($expectedLocalAssets | Where-Object { $_.Path -ne $expectedSetupAsset.Path })
 
           function Resolve-ExpectedReleaseAssets {
             param([Parameter(Mandatory)] $PublishedAssets)
@@ -285,16 +241,7 @@ jobs:
             $unresolved = [System.Collections.Generic.List[string]]::new()
             $resolved = [System.Collections.Generic.List[object]]::new()
 
-            $publishedSetupMatches = @($publishedAssets | Where-Object {
-              Test-SetupAssetNameEquivalent -ExpectedName $expectedSetupAsset.Name -PublishedName ([string]$_.name)
-            })
-            if ($publishedSetupMatches.Count -ne 1) {
-              $unresolved.Add("$($expectedSetupAsset.Name) (expected exactly one normalized Setup.exe match; found $($publishedSetupMatches.Count))")
-            } else {
-              $resolved.Add($publishedSetupMatches[0])
-            }
-
-            foreach ($expectedAsset in $expectedExactAssets) {
+            foreach ($expectedAsset in $expectedLocalAssets) {
               $exactMatches = @($publishedAssets | Where-Object {
                 [string]::Equals([string]$_.name, $expectedAsset.Name, [StringComparison]::Ordinal)
               })
@@ -384,9 +331,15 @@ jobs:
             npm = (npm --version)
           }
           $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidenceRoot 'build-context.json') -Encoding utf8
-          $squirrelOutput = Join-Path $env:GITHUB_WORKSPACE 'dist\squirrel-windows'
+          $squirrelOutput = $env:SQUIRREL_OUTPUT
+          if ([string]::IsNullOrWhiteSpace($squirrelOutput)) {
+            $squirrelOutput = Join-Path $env:GITHUB_WORKSPACE 'dist\squirrel-windows'
+          }
           if (Test-Path -LiteralPath $squirrelOutput -PathType Container) {
-            Copy-Item -LiteralPath (Join-Path $squirrelOutput '*') -Destination $artifactRoot -Recurse -Force
+            $squirrelItems = @(Get-ChildItem -LiteralPath $squirrelOutput -Force)
+            if ($squirrelItems.Count -gt 0) {
+              Copy-Item -LiteralPath $squirrelItems.FullName -Destination $artifactRoot -Recurse -Force
+            }
           }
 
       - name: Upload package evidence

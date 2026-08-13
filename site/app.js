@@ -1,36 +1,109 @@
+import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
+
 (function () {
   "use strict";
 
   /*
    * Browser-local marketing interactions only.
-   * No fetch, server control, installer action, file upload, credential storage,
-   * runtime query, or conversion occurs in this file.
+   * No fetch, server control, installer action, credential storage, runtime query,
+   * or conversion occurs in this file. A user-selected personal-vocabulary JSON
+   * file is read locally only so the contract can validate and store its bounded
+   * payload in this browser's local storage.
    */
 
   var root = document.documentElement;
   var body = document.body;
   var main = document.getElementById("main-content") || document.querySelector("main");
   var contract = window.MinecraftServerStudioContract || null;
-  var session = null;
   var dialog = null;
   var generated = "data-mss-generated";
   var originals = new Map();
   var state = {
     notifications: [],
     history: [],
-    vocabulary: new Map(),
-    settings: {
-      language: "English",
-      englishTone: "3",
-      cantoneseTone: "3",
-      theme: "System default",
-      density: "comfortable",
-      emojis: true,
-      socialStyle: "balanced"
-    }
+    settings: defaultSettings()
   };
 
-  try { session = window.sessionStorage; } catch (_) { session = null; }
+  var LOCALIZED_COPY = Object.freeze({
+    "settings-eyebrow": { english: "Settings and appearance", cantonese: "設定與外觀" },
+    "settings-title": { english: "Personalize this public page", cantonese: "自訂呢個公開頁面" },
+    "settings-status": { english: "Browser-local preferences", cantonese: "瀏覽器本機設定" },
+    "settings-description": { english: "These visible controls persist bounded preferences for this public page in this browser only. They are not sent to a server or desktop application, and they do not change an installed app.", cantonese: "呢啲控制只會喺而家瀏覽器儲存呢個公開頁面嘅受限設定。佢哋唔會傳送去伺服器或者桌面程式，亦唔會改變已安裝程式。" },
+    "language-label": { english: "Language mode", cantonese: "語言模式" },
+    "language-help": { english: "Choose how this public page presents its browser-local controls.", cantonese: "揀選呢個公開頁面點樣顯示佢嘅瀏覽器本機控制。" },
+    "english-funny-label": { english: "English tone", cantonese: "英文語氣" },
+    "english-funny-help": { english: "1 is fully serious; 5 is maximum playfulness. Warnings stay factual at every level.", cantonese: "1 最認真，5 最玩味；無論邊個級別，警告內容都保持準確。" },
+    "cantonese-funny-label": { english: "Cantonese tone", cantonese: "廣東話語氣" },
+    "cantonese-funny-help": { english: "This independent setting changes Cantonese presentation only.", cantonese: "呢個獨立設定只會改變廣東話嘅呈現方式。" },
+    "emoji-label": { english: "Show emojis in browser-local notices", cantonese: "喺瀏覽器本機通知顯示表情符號" },
+    "emoji-help": { english: "Emojis decorate notices only; labels, actions, and factual messages stay unchanged.", cantonese: "表情符號只作裝飾；標籤、動作同事實訊息都唔會改變。" },
+    "vocabulary-label": { english: "Personal vocabulary JSON", cantonese: "個人詞彙 JSON" },
+    "vocabulary-help": { english: "Version 1 JSON is checked locally before a bounded cache can be applied. The source file name and path are not retained.", cantonese: "版本 1 JSON 會先喺本機檢查，通過後先會套用受限快取。來源檔名同路徑唔會保留。" },
+    "school-eyebrow": { english: "Browser-local presentation lock", cantonese: "瀏覽器本機顯示鎖" },
+    "school-name-label": { english: "Mode name", cantonese: "模式名稱" },
+    "school-name-help": { english: "This exact name replaces the shipped name after you save it.", cantonese: "儲存後，呢個名稱會取代原本嘅模式名稱。" },
+    "school-credential-label": { english: "Browser-local unlock code", cantonese: "瀏覽器本機解鎖碼" },
+    "school-credential-help": { english: "A one-way local verifier is stored only in this browser. The code itself is never stored or exported.", cantonese: "只會喺呢個瀏覽器儲存單向本機驗證資料；解鎖碼本身永遠唔會儲存或匯出。" }
+  });
+
+  function funnyCopy(key, language, value) {
+    var level = state.settings && state.settings.funnyLevel ? Number(state.settings.funnyLevel[language]) || 2 : 2;
+    if (level < 4) return value;
+    var playful = {
+      english: {
+        "settings-title": "Tune this public page your way — the creepers can wait.",
+        "settings-description": "These browser-local controls remember this public page's bounded preferences here, not on a server or desktop app. The settings are doing their job without wandering off on an adventure."
+      },
+      cantonese: {
+        "settings-title": "自己調校呢個公開頁面先，苦力怕等一等。",
+        "settings-description": "呢啲瀏覽器本機控制只會記住本頁面嘅受限設定，唔會走去伺服器或者桌面程式搗蛋。設定做返自己份內事，唔會去冒險。"
+      }
+    };
+    return (playful[language] && playful[language][key]) || value;
+  }
+
+  function localizedCopy(key) {
+    var entry = LOCALIZED_COPY[key];
+    if (!entry) return "";
+    var mode = state.settings && state.settings.languageMode || "english";
+    var english = funnyCopy(key, "english", entry.english);
+    var cantonese = funnyCopy(key, "cantonese", entry.cantonese);
+    if (mode === "cantonese") return cantonese;
+    if (mode === "bilingual") return english + " · " + cantonese;
+    return english;
+  }
+
+  function renderLocalizedCopy() {
+    all("[data-mss-copy]").forEach(function (element) {
+      var value = localizedCopy(element.getAttribute("data-mss-copy"));
+      if (value) element.textContent = value;
+    });
+  }
+
+  function defaultSettings() {
+    return {
+      languageMode: "english",
+      funnyLevel: { english: 2, cantonese: 2 },
+      showDialogEmoji: true,
+      appearance: {
+        theme: "system",
+        density: "comfortable",
+        accent: "#3f7cff",
+        font: { family: "system-ui", scale: 1, weight: 400 }
+      },
+      narrator: {
+        enabled: false,
+        language: "english",
+        englishVoice: "auto",
+        cantoneseVoice: "auto",
+        rate: 1,
+        pitch: 1
+      },
+      personalVocabularyActive: false,
+      dimSumEnabled: true,
+      schoolMode: { enabled: false, active: false, name: "School mode" }
+    };
+  }
 
   function one(selector, scope) {
     return (scope || document).querySelector(selector);
@@ -50,51 +123,18 @@
     try { return fn(); } catch (_) { return fallback; }
   }
 
-  function storageKey(key) {
-    return "minecraft-server-studio-marketing:" + key;
+  function hasContractMethod(name) {
+    return Boolean(contract && typeof contract[name] === "function");
   }
 
-  function contractRead(key) {
-    if (!contract) return undefined;
-    var reads = [
-      function () { return typeof contract.getSetting === "function" ? contract.getSetting(key) : undefined; },
-      function () { return contract.settings && typeof contract.settings.get === "function" ? contract.settings.get(key) : undefined; },
-      function () { return contract.settings && Object.prototype.hasOwnProperty.call(contract.settings, key) ? contract.settings[key] : undefined; }
-    ];
-    for (var index = 0; index < reads.length; index += 1) {
-      var result = safely(reads[index], undefined);
-      if (result !== undefined && !(result && typeof result.then === "function")) return result;
-    }
-    return undefined;
-  }
-
-  function saved(key, fallback) {
-    var fromContract = contractRead(key);
-    if (fromContract !== undefined) return fromContract;
-    if (!session) return fallback;
-    var raw = safely(function () { return session.getItem(storageKey(key)); }, null);
-    return raw ? safely(function () { return JSON.parse(raw); }, fallback) : fallback;
-  }
-
-  function persist(key, value) {
-    if (session) safely(function () { session.setItem(storageKey(key), JSON.stringify(value)); });
-    if (!contract) return;
-    safely(function () {
-      if (typeof contract.setSetting === "function") contract.setSetting(key, value);
-      else if (contract.settings && typeof contract.settings.set === "function") contract.settings.set(key, value);
-      else if (typeof contract.persistSetting === "function") contract.persistSetting(key, value);
-    });
-  }
-
-  function localize(key, fallback) {
-    if (!contract) return fallback;
-    var result = safely(function () {
-      if (typeof contract.localize === "function") return contract.localize(key, fallback);
-      if (typeof contract.t === "function") return contract.t(key, fallback);
-      if (contract.localization && typeof contract.localization.get === "function") return contract.localization.get(key, fallback);
-      return undefined;
-    }, undefined);
-    return typeof result === "string" && result ? result : fallback;
+  function hydrateContractState() {
+    if (!hasContractMethod("getState") || !hasContractMethod("getEffectiveSettings")) return;
+    var snapshot = safely(function () { return contract.getState(); }, null);
+    var settings = safely(function () { return contract.getEffectiveSettings(); }, null);
+    if (!snapshot || !settings) return;
+    state.settings = settings;
+    state.notifications = Array.isArray(snapshot.notifications) ? snapshot.notifications.slice() : [];
+    state.history = Array.isArray(snapshot.audit) ? snapshot.audit.slice() : [];
   }
 
   function emit(name, detail) {
@@ -117,8 +157,20 @@
   }
 
   function emoji(level) {
-    if (!state.settings.emojis) return "";
-    return { info: "ℹ ", success: "✓ ", warning: "⚠ ", demo: "◇ " }[level] || "ℹ ";
+    if (!state.settings.showDialogEmoji) return "";
+    return { info: "ℹ ", success: "✓ ", warning: "⚠ ", error: "⚠ ", progress: "◇ ", demo: "◇ " }[level] || "ℹ ";
+  }
+
+  function historyTime(entry) {
+    return entry.when || entry.createdAt || new Date().toISOString();
+  }
+
+  function notificationLevel(notice) {
+    return notice.level || notice.kind || "info";
+  }
+
+  function notificationMessage(notice) {
+    return notice.message || notice.body || notice.title || "Browser-local notification.";
   }
 
   function addHistory(action, detail) {
@@ -128,12 +180,13 @@
       detail: detail,
       when: new Date().toISOString()
     };
-    state.history.unshift(entry);
-    if (state.history.length > 30) state.history.length = 30;
-    if (contract) safely(function () {
-      if (typeof contract.recordHistory === "function") contract.recordHistory(entry);
-      else if (contract.history && typeof contract.history.record === "function") contract.history.record(entry);
-    });
+    if (hasContractMethod("recordAudit")) {
+      safely(function () { contract.recordAudit(action, "marketing-preview", detail); });
+      hydrateContractState();
+    } else {
+      state.history.unshift({ id: entry.id, action: entry.action, target: "marketing-preview", detail: entry.detail, createdAt: entry.when });
+      if (state.history.length > 30) state.history.length = 30;
+    }
     renderHistory();
     emit("history", entry);
   }
@@ -145,13 +198,22 @@
       message: message,
       when: new Date().toISOString()
     };
-    state.notifications.unshift(notice);
-    if (state.notifications.length > 12) state.notifications.length = 12;
-    if (contract) safely(function () {
-      if (typeof contract.notify === "function") contract.notify(notice);
-      else if (contract.notifications && typeof contract.notifications.add === "function") contract.notifications.add(notice);
-    });
+    if (hasContractMethod("notify")) {
+      safely(function () {
+        contract.notify({
+          id: notice.id,
+          kind: level === "demo" ? "info" : level,
+          title: "Browser-local preview",
+          body: message
+        });
+      });
+      hydrateContractState();
+    } else {
+      state.notifications.unshift({ id: notice.id, kind: level, title: "Browser-local preview", body: message, createdAt: notice.when, dismissed: false });
+      if (state.notifications.length > 12) state.notifications.length = 12;
+    }
     renderNotifications();
+    renderHistory();
     live(emoji(level) + message);
     emit("notification", notice);
   }
@@ -196,23 +258,81 @@
     if (reference && reference.parentNode) reference.parentNode.insertBefore(element, reference.nextSibling);
   }
 
-  function applySettingsPresentation() {
-    root.dataset.mssLanguageMode = state.settings.language;
-    root.dataset.mssTheme = state.settings.theme;
-    root.dataset.mssDensity = state.settings.density;
-    root.dataset.mssSocialStyle = state.settings.socialStyle;
-    root.dataset.mssEmojis = state.settings.emojis ? "on" : "off";
-    root.lang = state.settings.language === "Playful Hong Kong-style Cantonese" ? "zh-Hant" : "en";
-    var output = one("[data-mss-settings-status]");
-    if (output) output.textContent = "Browser-local preview: " + state.settings.language + ", " + state.settings.theme + " theme, " + state.settings.density + " density.";
-    emit("settings-changed", Object.assign({}, state.settings));
+  function languageLabel(mode) {
+    return { english: "English", cantonese: "Playful Hong Kong-style Cantonese", bilingual: "Bilingual" }[mode] || "English";
   }
 
-  function updateSetting(key, value, message) {
-    state.settings[key] = value;
-    persist("setting:" + key, value);
+  function languageMode(value) {
+    return {
+      english: "english",
+      cantonese: "cantonese",
+      bilingual: "bilingual",
+      "English": "english",
+      "Playful Hong Kong-style Cantonese": "cantonese",
+      "Bilingual": "bilingual"
+    }[value] || "english";
+  }
+
+  function themeLabel(theme) {
+    return { system: "System default", light: "Light", dark: "Dark" }[theme] || "System default";
+  }
+
+  function themeValue(label) {
+    return { "System default": "system", "Light": "light", "Dark": "dark" }[label] || "system";
+  }
+
+  function syncSettingsControls(surface) {
+    var scope = surface || one('[data-contract-surface="settings"]');
+    if (!scope) return;
+    var settings = state.settings;
+    var language = one('[data-contract-hook="language-mode"] select', scope);
+    var englishTone = one('[data-contract-hook="english-funny-level"] input[type="range"]', scope);
+    var cantoneseTone = one('[data-contract-hook="cantonese-funny-level"] input[type="range"]', scope);
+    var theme = one('[data-contract-hook="appearance-theme"] select', scope);
+    var density = one('[data-contract-hook="density"] select', scope);
+    var emojiToggle = one('[data-contract-hook="emoji-toggle"] input[type="checkbox"]', scope);
+    if (language) language.value = settings.languageMode;
+    if (englishTone) englishTone.value = String(settings.funnyLevel.english);
+    if (cantoneseTone) cantoneseTone.value = String(settings.funnyLevel.cantonese);
+    if (theme) theme.value = themeLabel(settings.appearance.theme);
+    if (density) density.value = settings.appearance.density;
+    if (emojiToggle) emojiToggle.checked = settings.showDialogEmoji;
+    [["english-funny-level", settings.funnyLevel.english], ["cantonese-funny-level", settings.funnyLevel.cantonese]].forEach(function (item) {
+      var output = one('[data-contract-hook="' + item[0] + '"] output', scope);
+      if (output) output.textContent = item[1] + " of 5";
+    });
+  }
+
+  function applySettingsPresentation() {
+    var settings = state.settings;
+    root.dataset.mssLanguageMode = settings.languageMode;
+    root.dataset.mssTheme = settings.appearance.theme;
+    root.dataset.mssDensity = settings.appearance.density;
+    root.dataset.mssEmojis = settings.showDialogEmoji ? "on" : "off";
+    root.dataset.mssSchoolMode = settings.schoolMode && settings.schoolMode.active ? "on" : "off";
+    root.lang = settings.languageMode === "cantonese" ? "zh-Hant" : "en";
+    renderLocalizedCopy();
+    renderSchoolModeControls();
+    var output = one("[data-mss-settings-status]");
+    if (output) output.textContent = "Browser-local preferences are stored in this browser's local storage: " + languageLabel(settings.languageMode) + ", " + themeLabel(settings.appearance.theme) + " theme, " + settings.appearance.density + " density. Nothing is sent to a server or desktop application.";
+    emit("settings-changed", settings);
+  }
+
+  function updateSettings(patch, target, message) {
+    if (!hasContractMethod("updateSettings")) {
+      notify("warning", "Browser-local settings are unavailable because the local contract did not load.");
+      return;
+    }
+    var result = safely(function () { return contract.updateSettings(patch, target); }, null);
+    if (!result || result.ok !== true) {
+      notify("warning", (result && result.error) || "The browser-local setting was not saved.");
+      return;
+    }
+    hydrateContractState();
+    syncSettingsControls();
     applySettingsPresentation();
-    addHistory("Settings changed", key + " set to " + value + ".");
+    renderHistory();
+    renderVocabularyStatus();
     if (message) notify("info", message);
   }
 
@@ -229,6 +349,8 @@
     var surface = one('[data-contract-surface="settings"]');
     if (!surface) return;
     var grid = one(".control-grid", surface) || surface;
+    var description = one(".panel-heading + p", surface);
+    if (description) description.textContent = "These visible controls persist bounded browser-local preferences through the page contract. They are not sent to a server or desktop application, and they do not change an installed app's settings.";
     var status = one("[data-mss-settings-status]", surface);
     if (!status) {
       status = made("p");
@@ -239,37 +361,32 @@
 
     var language = one('[data-contract-hook="language-mode"] select', surface);
     if (language) {
-      language.value = saved("setting:language", language.value || "English");
-      state.settings.language = language.value;
       language.addEventListener("change", function () {
-        updateSetting("language", language.value, "Language preference updated for this browser-local preview.");
+        updateSettings({ languageMode: languageMode(language.value) }, "language-mode", "Language preference updated for this browser-local preview.");
       });
     }
 
     [
-      ["english-funny-level", "englishTone", "English tone"],
-      ["cantonese-funny-level", "cantoneseTone", "Cantonese tone"]
+      ["english-funny-level", "english", "English tone"],
+      ["cantonese-funny-level", "cantonese", "Cantonese tone"]
     ].forEach(function (definition) {
       var input = one('[data-contract-hook="' + definition[0] + '"] input[type="range"]', surface);
       if (!input) return;
       var output = one('[data-contract-hook="' + definition[0] + '"] output', surface);
-      input.value = saved("setting:" + definition[1], input.value || "3");
-      state.settings[definition[1]] = input.value;
-      if (output) output.textContent = input.value + " of 5";
       input.addEventListener("input", function () {
         if (output) output.textContent = input.value + " of 5";
       });
       input.addEventListener("change", function () {
-        updateSetting(definition[1], input.value, definition[2] + " updated for this local demonstration.");
+        var patch = { funnyLevel: {} };
+        patch.funnyLevel[definition[1]] = Number(input.value);
+        updateSettings(patch, definition[0], definition[2] + " updated for this browser-local preview.");
       });
     });
 
     var theme = one('[data-contract-hook="appearance-theme"] select', surface);
     if (theme) {
-      theme.value = saved("setting:theme", theme.value || "System default");
-      state.settings.theme = theme.value;
       theme.addEventListener("change", function () {
-        updateSetting("theme", theme.value, "Theme preference updated for this browser-local preview.");
+        updateSettings({ appearance: { theme: themeValue(theme.value) } }, "appearance-theme", "Theme preference updated for this browser-local preview.");
       });
     }
 
@@ -281,40 +398,21 @@
         option.textContent = pair[1];
         density.appendChild(option);
       });
-      density.value = saved("setting:density", "comfortable");
-      state.settings.density = density.value;
       density.addEventListener("change", function () {
-        updateSetting("density", density.value, "Density preference updated for this browser-local preview.");
+        updateSettings({ appearance: { density: density.value } }, "density", "Density preference updated for this browser-local preview.");
       });
       grid.appendChild(generatedSetting("Density", density, "density"));
     }
 
-    if (!one('[data-contract-hook="emoji-toggle"]', surface)) {
+    var emojiToggle = one('[data-contract-hook="emoji-toggle"] input[type="checkbox"]', surface);
+    if (!emojiToggle) {
       var emojiToggle = made("input");
       emojiToggle.type = "checkbox";
-      emojiToggle.checked = saved("setting:emojis", true) !== false;
-      state.settings.emojis = emojiToggle.checked;
-      emojiToggle.addEventListener("change", function () {
-        updateSetting("emojis", emojiToggle.checked, "Emoji decoration updated. The factual status stays the same.");
-      });
       grid.appendChild(generatedSetting("Show emojis in browser-local notices", emojiToggle, "emoji-toggle"));
     }
-
-    if (!one('[data-contract-hook="social-style"]', surface)) {
-      var social = made("select");
-      [["balanced", "Balanced"], ["social", "Social"], ["quiet", "Quiet"]].forEach(function (pair) {
-        var option = document.createElement("option");
-        option.value = pair[0];
-        option.textContent = pair[1];
-        social.appendChild(option);
-      });
-      social.value = saved("setting:socialStyle", "balanced");
-      state.settings.socialStyle = social.value;
-      social.addEventListener("change", function () {
-        updateSetting("socialStyle", social.value, "Marketing preview style updated locally. Nothing was posted or shared.");
-      });
-      grid.appendChild(generatedSetting("Marketing preview style", social, "social-style"));
-    }
+    emojiToggle.addEventListener("change", function () {
+      updateSettings({ showDialogEmoji: emojiToggle.checked }, "dialog-emoji", "Emoji decoration updated. The factual status stays the same.");
+    });
 
     var logo = one('[data-contract-hook="app-logo-upload"] input[type="file"]', surface);
     if (logo) logo.addEventListener("change", function () {
@@ -326,107 +424,36 @@
 
     var vocabularyInput = one('[data-contract-hook="personal-vocabulary-upload"] input[type="file"]', surface);
     if (vocabularyInput) {
+      var vocabularyHint = one('[data-contract-hook="personal-vocabulary-upload"] small', surface);
+      if (vocabularyHint) vocabularyHint.textContent = "Version 1 JSON only: a bounded list of from/to replacement entries is validated and stored only in this browser until cleared.";
       vocabularyInput.addEventListener("change", function () {
         loadVocabulary(vocabularyInput.files && vocabularyInput.files[0], vocabularyInput);
       });
-      var clearer = button("Clear in-page vocabulary preview", function () {
-        clearVocabulary();
-        vocabularyInput.value = "";
-        notify("info", "The in-page vocabulary preview was cleared. No file or mapping was retained.");
-      });
       var owner = vocabularyInput.closest("label");
-      if (owner) owner.appendChild(clearer);
+      if (owner) {
+        var clearer = one("[data-mss-vocabulary-clear]", owner);
+        if (!clearer) {
+          clearer = button("Clear in-page vocabulary preview", function () {});
+          clearer.setAttribute("data-mss-vocabulary-clear", "true");
+          owner.appendChild(clearer);
+        }
+        clearer.addEventListener("click", function () {
+          clearVocabulary();
+          vocabularyInput.value = "";
+          notify("info", "The browser-local vocabulary cache was cleared. No source file name or path was retained.");
+        });
+        if (!one("[data-mss-vocabulary-status]", owner)) {
+          var vocabularyStatus = made("output");
+          vocabularyStatus.setAttribute("data-mss-vocabulary-status", "true");
+          vocabularyStatus.setAttribute("aria-live", "polite");
+          owner.appendChild(vocabularyStatus);
+        }
+      }
     }
 
+    syncSettingsControls(surface);
     applySettingsPresentation();
-  }
-
-  function parseJsonWithDuplicateCheck(source) {
-    var cursor = { index: 0 };
-    function spaces() {
-      while (cursor.index < source.length && /\s/.test(source.charAt(cursor.index))) cursor.index += 1;
-    }
-    function string() {
-      var start = cursor.index;
-      if (source.charAt(cursor.index) !== '"') throw new Error("Expected a JSON string.");
-      cursor.index += 1;
-      while (cursor.index < source.length) {
-        var character = source.charAt(cursor.index);
-        if (character === "\\") { cursor.index += 2; continue; }
-        cursor.index += 1;
-        if (character === '"') return JSON.parse(source.slice(start, cursor.index));
-      }
-      throw new Error("Unterminated JSON string.");
-    }
-    function value(depth) {
-      if (depth > 4) throw new Error("The vocabulary file is nested too deeply.");
-      spaces();
-      var character = source.charAt(cursor.index);
-      if (character === '"') return string();
-      if (character === "{") {
-        var object = {};
-        var keys = new Set();
-        cursor.index += 1;
-        spaces();
-        if (source.charAt(cursor.index) === "}") { cursor.index += 1; return object; }
-        while (cursor.index < source.length) {
-          spaces();
-          var key = string();
-          if (keys.has(key)) throw new Error("Duplicate JSON key: " + key + ".");
-          keys.add(key);
-          spaces();
-          if (source.charAt(cursor.index) !== ":") throw new Error("Expected a colon in the JSON object.");
-          cursor.index += 1;
-          object[key] = value(depth + 1);
-          spaces();
-          if (source.charAt(cursor.index) === "}") { cursor.index += 1; return object; }
-          if (source.charAt(cursor.index) !== ",") throw new Error("Expected a comma in the JSON object.");
-          cursor.index += 1;
-        }
-        throw new Error("Unterminated JSON object.");
-      }
-      if (character === "[") {
-        var array = [];
-        cursor.index += 1;
-        spaces();
-        if (source.charAt(cursor.index) === "]") { cursor.index += 1; return array; }
-        while (cursor.index < source.length) {
-          array.push(value(depth + 1));
-          spaces();
-          if (source.charAt(cursor.index) === "]") { cursor.index += 1; return array; }
-          if (source.charAt(cursor.index) !== ",") throw new Error("Expected a comma in the JSON array.");
-          cursor.index += 1;
-        }
-        throw new Error("Unterminated JSON array.");
-      }
-      var start = cursor.index;
-      while (cursor.index < source.length && !/[\s,\]\}]/.test(source.charAt(cursor.index))) cursor.index += 1;
-      var primitive = source.slice(start, cursor.index);
-      if (!primitive) throw new Error("Expected a JSON value.");
-      return JSON.parse(primitive);
-    }
-    var parsed = value(0);
-    spaces();
-    if (cursor.index !== source.length) throw new Error("Unexpected text after the JSON payload.");
-    return parsed;
-  }
-
-  function validateVocabulary(payload) {
-    if (!payload || Object.getPrototypeOf(payload) !== Object.prototype) throw new Error("The vocabulary file must contain a JSON object.");
-    if (payload.version !== 1) throw new Error("The vocabulary file must declare supported version 1.");
-    var fields = Object.keys(payload);
-    if (fields.some(function (key) { return key !== "version" && key !== "replacements"; })) throw new Error("The vocabulary file contains an unsupported field.");
-    var replacements = payload.replacements;
-    if (!replacements || Object.getPrototypeOf(replacements) !== Object.prototype) throw new Error("The replacements field must be a JSON object.");
-    var entries = Object.entries(replacements);
-    if (entries.length > 100) throw new Error("The vocabulary file may contain at most 100 replacements.");
-    entries.forEach(function (entry) {
-      var key = entry[0];
-      var value = entry[1];
-      if (key === "__proto__" || key === "prototype" || key === "constructor") throw new Error("The vocabulary file contains an unsafe replacement key.");
-      if (!key || key.length > 80 || typeof value !== "string" || value.length > 120) throw new Error("Vocabulary replacements must have a non-empty key up to 80 characters and a string value up to 120 characters.");
-    });
-    return new Map(entries);
+    renderVocabularyStatus();
   }
 
   function escapePattern(value) {
@@ -441,8 +468,19 @@
 
   function applyVocabulary() {
     restoreVocabulary();
-    if (!state.vocabulary.size) return;
-    var keys = Array.from(state.vocabulary.keys()).sort(function (a, b) { return b.length - a.length; });
+    if (!hasContractMethod("getState") || state.settings.schoolMode.active) return;
+    var snapshot = safely(function () { return contract.getState(); }, null);
+    var payload = snapshot && snapshot.personalVocabulary && snapshot.personalVocabulary.payload;
+    var validation = payload ? validatePersonalVocabularyPayload(JSON.stringify(payload)) : null;
+    if (payload && (!validation || validation.ok !== true)) {
+      if (hasContractMethod("clearPersonalVocabulary")) safely(function () { contract.clearPersonalVocabulary(); });
+      hydrateContractState();
+      return;
+    }
+    var replacements = validation && validation.ok ? validation.value.replacements : [];
+    if (!replacements.length) return;
+    var replacementMap = new Map(replacements.map(function (replacement) { return [replacement.from, replacement.to]; }));
+    var keys = Array.from(replacementMap.keys()).sort(function (a, b) { return b.length - a.length; });
     var matcher = new RegExp(keys.map(escapePattern).join("|"), "g");
     var walker = document.createTreeWalker(main || body, NodeFilter.SHOW_TEXT);
     var node;
@@ -451,43 +489,307 @@
       if (!parent || parent.closest("script, style, code, pre, textarea, select, option, button, [data-mss-generated]")) continue;
       if (!originals.has(node)) originals.set(node, node.nodeValue);
       node.nodeValue = originals.get(node).replace(matcher, function (match) {
-        return state.vocabulary.has(match) ? state.vocabulary.get(match) : match;
+        return replacementMap.has(match) ? replacementMap.get(match) : match;
       });
     }
   }
 
+  function renderVocabularyStatus() {
+    var surface = one('[data-contract-surface="settings"]');
+    var output = surface && one("[data-mss-vocabulary-status]", surface);
+    if (!output) return;
+    var snapshot = hasContractMethod("getState") ? safely(function () { return contract.getState(); }, null) : null;
+    var payload = snapshot && snapshot.personalVocabulary && snapshot.personalVocabulary.payload;
+    if (!hasContractMethod("loadPersonalVocabulary")) {
+      output.textContent = "The browser-local vocabulary control is unavailable because its local contract did not load.";
+      return;
+    }
+    if (!payload) {
+      output.textContent = "No validated vocabulary JSON is loaded in this browser. The selected source file name and path are never stored.";
+      return;
+    }
+    var validation = validatePersonalVocabularyPayload(JSON.stringify(payload));
+    if (!validation || validation.ok !== true) {
+      if (hasContractMethod("clearPersonalVocabulary")) safely(function () { contract.clearPersonalVocabulary(); });
+      hydrateContractState();
+      restoreVocabulary();
+      output.textContent = "The saved vocabulary cache did not pass local validation and was cleared. Nothing was applied.";
+      return;
+    }
+    if (state.settings.schoolMode.active) {
+      output.textContent = "A validated vocabulary cache is stored locally but is inactive while " + schoolModeName() + " is enabled.";
+      return;
+    }
+    output.textContent = validation.value.replacements.length + " validated replacement entries are stored only in this browser's local storage. Clear removes the local cache immediately.";
+  }
+
   function clearVocabulary() {
-    state.vocabulary = new Map();
+    if (hasContractMethod("clearPersonalVocabulary")) safely(function () { contract.clearPersonalVocabulary(); });
+    hydrateContractState();
     restoreVocabulary();
-    addHistory("Vocabulary preview cleared", "The in-page vocabulary preview was removed.");
+    renderVocabularyStatus();
+    renderHistory();
+  }
+
+  var schoolUnlockFailures = 0;
+  var nextSchoolUnlockAt = 0;
+
+  function schoolModeName() {
+    var name = state.settings && state.settings.schoolMode && state.settings.schoolMode.name;
+    return typeof name === "string" && name.trim() ? name.trim() : "School mode";
+  }
+
+  function schoolCodeLength(value) {
+    return typeof value === "string" ? Array.from(value).length : 0;
+  }
+
+  function schoolCryptoAvailable() {
+    return Boolean(window.crypto && window.crypto.subtle && typeof window.crypto.getRandomValues === "function" && typeof TextEncoder === "function" && typeof btoa === "function" && typeof atob === "function");
+  }
+
+  function bytesToBase64(bytes) {
+    var value = "";
+    for (var index = 0; index < bytes.length; index += 1) value += String.fromCharCode(bytes[index]);
+    return btoa(value);
+  }
+
+  function base64ToBytes(value) {
+    var binary = atob(value);
+    var bytes = new Uint8Array(binary.length);
+    for (var index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function schoolCodeVerifier(code, salt) {
+    var codeBytes = new TextEncoder().encode(code);
+    var source = new Uint8Array(salt.length + codeBytes.length);
+    source.set(salt, 0);
+    source.set(codeBytes, salt.length);
+    var digest = await window.crypto.subtle.digest("SHA-256", source);
+    return bytesToBase64(new Uint8Array(digest));
+  }
+
+  function schoolModeElements() {
+    var surface = one('[data-contract-surface="settings"]');
+    if (!surface) return {};
+    return {
+      surface: surface,
+      nameInput: one("[data-mss-school-name-input]", surface),
+      setupCode: one("[data-mss-school-credential-setup]", surface),
+      unlockCode: one("[data-mss-school-credential-unlock]", surface),
+      setup: one("[data-mss-school-setup]", surface),
+      saveName: one("[data-mss-school-save-name]", surface),
+      enable: one("[data-mss-school-enable]", surface),
+      unlock: one("[data-mss-school-unlock]", surface),
+      disable: one("[data-mss-school-disable]", surface),
+      reset: one("[data-mss-school-reset]", surface),
+      status: one("[data-mss-school-status]", surface),
+      boundary: one("[data-mss-school-boundary]", surface)
+    };
+  }
+
+  function renderSchoolModeControls() {
+    var elements = schoolModeElements();
+    if (!elements.surface) return;
+    var active = Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active);
+    var name = schoolModeName();
+    all("[data-mss-school-name]").forEach(function (element) { element.textContent = name; });
+    if (elements.nameInput && document.activeElement !== elements.nameInput) elements.nameInput.value = name;
+    if (elements.setup) elements.setup.hidden = active;
+    if (elements.saveName) {
+      elements.saveName.hidden = active;
+      elements.saveName.textContent = "Save " + name + " name";
+    }
+    if (elements.enable) {
+      elements.enable.hidden = active;
+      elements.enable.textContent = "Configure and enable " + name;
+    }
+    if (elements.unlock) elements.unlock.hidden = !active;
+    if (elements.disable) {
+      elements.disable.hidden = !active;
+      elements.disable.textContent = "Turn off " + name;
+    }
+    if (elements.reset) {
+      elements.reset.hidden = !active;
+      elements.reset.textContent = "Reset " + name + " lock";
+    }
+    all("[data-mss-suppressed-by-school]").forEach(function (element) { element.hidden = active; });
+    if (elements.boundary && hasContractMethod("getSchoolModeResetBoundary")) {
+      var boundary = safely(function () { return contract.getSchoolModeResetBoundary(); }, null);
+      if (boundary && boundary.message) elements.boundary.textContent = boundary.message;
+    }
+    if (elements.status) {
+      if (!schoolCryptoAvailable()) {
+        elements.status.textContent = "This browser does not provide the local cryptography needed to configure " + name + ".";
+      } else if (active) {
+        elements.status.textContent = name + " is active in this browser. English is forced and the language, tone, and vocabulary controls are hidden until a local unlock-code check succeeds.";
+      } else if (state.settings && state.settings.schoolMode && state.settings.schoolMode.credentialConfigured) {
+        elements.status.textContent = "A browser-local unlock-code verifier is ready. Configure and enable " + name + " when you are ready.";
+      } else {
+        elements.status.textContent = "Set a browser-local unlock code before enabling " + name + ".";
+      }
+    }
+  }
+
+  function refreshAfterSchoolModeChange() {
+    hydrateContractState();
+    syncSettingsControls();
+    applySettingsPresentation();
+    applyVocabulary();
+    renderVocabularyStatus();
+    renderHistory();
+  }
+
+  function requestedSchoolModeName(input) {
+    var value = input && typeof input.value === "string" ? input.value.trim() : "";
+    return value || schoolModeName();
+  }
+
+  async function configureAndEnableSchoolMode(elements) {
+    var name = requestedSchoolModeName(elements.nameInput);
+    var code = elements.setupCode && elements.setupCode.value || "";
+    if (!schoolCryptoAvailable()) {
+      notify("warning", "This browser cannot create the required local unlock-code verifier.");
+      return;
+    }
+    if (schoolCodeLength(code) < 4 || schoolCodeLength(code) > 64) {
+      notify("warning", "Use an unlock code between 4 and 64 characters. The code was not stored.");
+      return;
+    }
+    try {
+      var saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+      var verifier = await schoolCodeVerifier(code, saltBytes);
+      code = "";
+      if (elements.setupCode) elements.setupCode.value = "";
+      var credential = hasContractMethod("setSchoolModeCredential") ? safely(function () {
+        return contract.setSchoolModeCredential({ algorithm: "SHA-256", salt: bytesToBase64(saltBytes), verifier: verifier });
+      }, null) : null;
+      if (!credential || credential.ok !== true) {
+        notify("warning", (credential && credential.error) || "The browser-local unlock-code verifier could not be saved.");
+        return;
+      }
+      var enabled = hasContractMethod("setSchoolMode") ? safely(function () {
+        return contract.setSchoolMode({ enabled: true, name: name });
+      }, null) : null;
+      if (!enabled || enabled.ok !== true) {
+        notify("warning", (enabled && enabled.error) || "The presentation mode could not be enabled.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("success", name + " is now active in this browser. English is forced until the local unlock code is verified.");
+    } catch (_) {
+      if (elements.setupCode) elements.setupCode.value = "";
+      notify("warning", "The browser-local unlock-code verifier could not be created. Nothing was enabled.");
+    }
+  }
+
+  async function verifySchoolModeUnlock(elements) {
+    var code = elements.unlockCode && elements.unlockCode.value || "";
+    if (!schoolCryptoAvailable() || !hasContractMethod("getSchoolModeCredentialSalt") || !hasContractMethod("verifySchoolModeCredential")) {
+      return { ok: false, error: "This browser cannot verify the local unlock code." };
+    }
+    if (Date.now() < nextSchoolUnlockAt) {
+      return { ok: false, error: "Please wait briefly before another unlock-code attempt." };
+    }
+    try {
+      var salt = base64ToBytes(contract.getSchoolModeCredentialSalt());
+      var verifier = await schoolCodeVerifier(code, salt);
+      code = "";
+      if (elements.unlockCode) elements.unlockCode.value = "";
+      var verdict = contract.verifySchoolModeCredential(verifier);
+      if (!verdict || verdict.ok !== true) {
+        schoolUnlockFailures += 1;
+        nextSchoolUnlockAt = Date.now() + Math.min(30000, schoolUnlockFailures * 1000);
+        return { ok: false, error: "The unlock code did not match. This is a local presentation lock; clearing this site's storage is the recovery route if the code is forgotten." };
+      }
+      schoolUnlockFailures = 0;
+      nextSchoolUnlockAt = 0;
+      return { ok: true };
+    } catch (_) {
+      if (elements.unlockCode) elements.unlockCode.value = "";
+      return { ok: false, error: "The local unlock-code check could not finish." };
+    }
+  }
+
+  function installSchoolMode() {
+    var elements = schoolModeElements();
+    if (!elements.surface) return;
+    if (elements.saveName) elements.saveName.addEventListener("click", function () {
+      var result = hasContractMethod("setSchoolMode") ? safely(function () {
+        return contract.setSchoolMode({ enabled: false, name: requestedSchoolModeName(elements.nameInput) });
+      }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The browser-local mode name could not be saved.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("info", schoolModeName() + " is the browser-local mode name for this page.");
+    });
+    if (elements.enable) elements.enable.addEventListener("click", function () { configureAndEnableSchoolMode(elements); });
+    if (elements.disable) elements.disable.addEventListener("click", async function () {
+      var verification = await verifySchoolModeUnlock(elements);
+      if (!verification.ok) {
+        notify("warning", verification.error);
+        return;
+      }
+      var result = hasContractMethod("setSchoolMode") ? safely(function () { return contract.setSchoolMode({ enabled: false, credentialAccepted: true }); }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The browser-local presentation mode could not be turned off.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("success", schoolModeName() + " is off. Your previous browser-local preferences are available again.");
+    });
+    if (elements.reset) elements.reset.addEventListener("click", async function () {
+      var verification = await verifySchoolModeUnlock(elements);
+      if (!verification.ok) {
+        notify("warning", verification.error);
+        return;
+      }
+      var result = hasContractMethod("clearSchoolModeCredential") ? safely(function () { return contract.clearSchoolModeCredential({ credentialAccepted: true }); }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The browser-local presentation lock could not be reset.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("info", "The browser-local presentation lock and its one-way verifier were reset.");
+    });
+    renderSchoolModeControls();
   }
 
   function loadVocabulary(file, input) {
     if (!file) return;
-    if (file.size > 65536) {
-      input.value = "";
-      notify("warning", "The vocabulary file was not loaded because it exceeds the 64 KB local preview limit.");
-      return;
-    }
     var reader = new FileReader();
     reader.onerror = function () {
       input.value = "";
       notify("warning", "The vocabulary file could not be read locally. Nothing was applied.");
     };
     reader.onload = function () {
-      try {
-        state.vocabulary = validateVocabulary(parseJsonWithDuplicateCheck(String(reader.result || "")));
-        applyVocabulary();
-        addHistory("Vocabulary preview loaded", "A validated mapping was applied only to this open browser page.");
-        notify("success", "A validated personal vocabulary preview is active in this browser tab. The file was not uploaded or persisted.");
-      } catch (error) {
+      var validation = validatePersonalVocabularyPayload(reader.result);
+      if (!validation || validation.ok !== true) {
         input.value = "";
-        state.vocabulary = new Map();
         restoreVocabulary();
-        notify("warning", (error && error.message ? error.message : "The vocabulary file was invalid.") + " Nothing was applied.");
+        renderVocabularyStatus();
+        notify("warning", "The vocabulary file was invalid or exceeded the local bounds. Nothing was applied.");
+        return;
       }
+      var canonicalPayload = JSON.stringify(validation.value);
+      var result = hasContractMethod("loadPersonalVocabulary") ? safely(function () { return contract.loadPersonalVocabulary(canonicalPayload); }, null) : null;
+      if (!result || result.ok !== true) {
+        input.value = "";
+        restoreVocabulary();
+        hydrateContractState();
+        renderVocabularyStatus();
+        notify("warning", ((result && result.error) || "The vocabulary file was invalid.") + " Nothing was applied.");
+        return;
+      }
+      hydrateContractState();
+      applyVocabulary();
+      renderVocabularyStatus();
+      renderHistory();
+      notify("success", "A validated personal vocabulary preview is active in this browser. The file was not uploaded and its name or path was not retained.");
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   }
 
   function regexProblem(pattern) {
@@ -514,7 +816,10 @@
   }
 
   function textOf(element) {
-    return (element.textContent || "").replace(/\s+/g, " ").trim();
+    if (!element || element.hidden || element.closest("[hidden]")) return "";
+    var copy = element.cloneNode(true);
+    all("[hidden]", copy).forEach(function (hidden) { hidden.remove(); });
+    return (copy.textContent || "").replace(/\s+/g, " ").trim();
   }
 
   function makeRegexBuilder(input, options) {
@@ -635,11 +940,9 @@
           status.textContent += hit ? " Sample match: " + hit[0] + "." : " No sample match.";
         }
       }
-      if (contract) safely(function () {
-        var request = { pattern: pattern.value, flags: selectedFlags(), plainText: input.value, mode: mode.checked ? "regex" : "plain" };
-        if (contract.regex && typeof contract.regex.evaluate === "function") contract.regex.evaluate(request);
-        else if (typeof contract.evaluateRegex === "function") contract.evaluateRegex(request);
-      });
+      if (hasContractMethod("evaluateRegex") && mode.checked && pattern.value) {
+        safely(function () { contract.evaluateRegex({ pattern: pattern.value, flags: selectedFlags(), sample: sample.value }); });
+      }
     }
 
     opener.addEventListener("click", function () {
@@ -716,6 +1019,15 @@
   function installTabsAndArticles() {
     var tabList = one(".feature-tabs");
     var tabs = all(".feature-tab", tabList);
+    if (hasContractMethod("setTeleportHandler")) {
+      safely(function () {
+        contract.setTeleportHandler(function (command) {
+          if (!command || !command.elementId) return false;
+          activate(command.elementId);
+          return true;
+        });
+      });
+    }
     if (tabList && tabs.length) {
       tabList.setAttribute("role", "tablist");
       tabList.setAttribute("aria-label", "Feature previews");
@@ -739,6 +1051,18 @@
           next.focus();
           next.click();
         });
+        if (hasContractMethod("registerCommand")) {
+          safely(function () {
+            contract.registerCommand({
+              id: "destination-" + targetId,
+              title: (tab.textContent || targetId).trim(),
+              description: "Open this browser-local product preview.",
+              group: "Browser-local destinations",
+              elementId: targetId,
+              keywords: [targetId, "preview", "local"]
+            });
+          });
+        }
       });
     }
     all('[data-contract-hook="documentation-tabs"] a[href^="#"], .feature-card a[href^="#"]').forEach(function (link) {
@@ -1009,8 +1333,9 @@
     }
     state.notifications.forEach(function (notice) {
       var item = made("li");
-      item.dataset.level = notice.level;
-      item.textContent = emoji(notice.level) + notice.message + " Just now.";
+      var level = notificationLevel(notice);
+      item.dataset.level = level;
+      item.textContent = emoji(level) + notificationMessage(notice) + " Recorded locally at " + (notice.createdAt || notice.when || new Date().toISOString()) + ".";
       listHost.appendChild(item);
     });
   }
@@ -1037,7 +1362,7 @@
     var actionValue = action && action.value && action.value !== "All actions" ? action.value.toLocaleLowerCase() : "";
     var queryValue = query && query.value ? query.value.toLocaleLowerCase() : "";
     var entries = state.history.filter(function (entry) {
-      if (dateValue && entry.when.slice(0, 10) !== dateValue) return false;
+      if (dateValue && historyTime(entry).slice(0, 10) !== dateValue) return false;
       if (actionValue && entry.action.toLocaleLowerCase().indexOf(actionValue) === -1) return false;
       return !queryValue || (entry.action + " " + entry.detail).toLocaleLowerCase().indexOf(queryValue) !== -1;
     });
@@ -1051,7 +1376,7 @@
     }
     entries.forEach(function (entry) {
       var item = made("li");
-      item.textContent = entry.action + ": " + entry.detail + " Just now.";
+      item.textContent = entry.action + ": " + entry.detail + " Recorded locally at " + historyTime(entry) + ".";
       listHost.appendChild(item);
     });
   }
@@ -1081,7 +1406,7 @@
       settings: Object.assign({}, state.settings),
       notificationCount: state.notifications.length,
       history: state.history.map(function (entry) {
-        return { action: entry.action, detail: entry.detail, when: entry.when };
+        return { action: entry.action, detail: entry.detail, when: historyTime(entry) };
       })
     };
   }
@@ -1121,7 +1446,7 @@
     var label = made("label");
     label.textContent = "Format";
     var format = made("select");
-    [["json", "JSON"], ["csv", "CSV"], ["markdown", "Markdown"], ["html", "HTML"]].forEach(function (pair) {
+    [["json", "JSON"], ["jsonl", "JSON Lines"], ["csv", "CSV"], ["tsv", "TSV"], ["markdown", "Markdown"]].forEach(function (pair) {
       var option = document.createElement("option");
       option.value = pair[0];
       option.textContent = pair[1];
@@ -1132,12 +1457,14 @@
     output.setAttribute("aria-live", "polite");
     var prepare = button("Prepare browser-local export", function () {
       var record = exportRecord();
-      var data = serialize(format.value, record);
-      if (contract) safely(function () {
-        if (contract.exports && typeof contract.exports.create === "function") contract.exports.create({ format: format.value, data: record });
-        else if (typeof contract.export === "function") contract.export({ format: format.value, data: record });
-      });
-      var blob = new Blob([data.text], { type: data.type + ";charset=utf-8" });
+      var contractExport = hasContractMethod("createExport") ? safely(function () { return contract.createExport(format.value, [record]); }, null) : null;
+      var data = contractExport && contractExport.text ? {
+        text: contractExport.text,
+        type: contractExport.mime || "text/plain",
+        extension: contractExport.format === "markdown" ? "md" : contractExport.format
+      } : serialize(format.value, record);
+      var mime = data.type || "text/plain";
+      var blob = new Blob([data.text], { type: /(?:^|;)\s*charset=/i.test(mime) ? mime : mime + ";charset=utf-8" });
       var url = URL.createObjectURL(blob);
       var link = document.createElement("a");
       link.href = url;
@@ -1159,16 +1486,180 @@
     else main.appendChild(panel);
   }
 
-  function installUnavailableDownloadCtas() {
-    all(".download-button").forEach(function (cta) {
-      cta.disabled = true;
-      cta.setAttribute("aria-disabled", "true");
-      cta.setAttribute("title", "Unavailable: an installer link appears only after a verified public release.");
-      cta.dataset.mssUnavailable = "true";
+  function installVerifiedDownloadCtas() {
+    all("a[data-mss-verified-installer][href]").forEach(function (cta) {
+      cta.removeAttribute("aria-disabled");
+      cta.removeAttribute("disabled");
+      cta.removeAttribute("title");
+      delete cta.dataset.mssUnavailable;
+      cta.dataset.mssVerified = "true";
     });
     all('[data-contract-hook="download-states"]').forEach(function (grid) {
-      grid.dataset.mssUnavailable = "true";
+      delete grid.dataset.mssUnavailable;
+      grid.dataset.mssVerified = "true";
     });
+  }
+
+  function evidence(status, reference, detail, reason) {
+    return {
+      status: status,
+      reference: reference || "",
+      detail: detail || "",
+      reason: reason || ""
+    };
+  }
+
+  function inventoryFeature(id, label, stateValue, notes, statuses) {
+    var values = statuses || {};
+    return {
+      id: id,
+      label: label,
+      state: stateValue,
+      notes: notes,
+      evidence: {
+        implementation: evidence(values.implementation || "missing", values.implementationReference, values.implementationDetail, values.implementationReason),
+        documentation: evidence(values.documentation || "missing", values.documentationReference, values.documentationDetail, values.documentationReason),
+        localization: evidence(values.localization || "missing", values.localizationReference, values.localizationDetail, values.localizationReason),
+        persistence: evidence(values.persistence || "missing", values.persistenceReference, values.persistenceDetail, values.persistenceReason),
+        test: evidence(values.test || "missing", values.testReference, values.testDetail, values.testReason),
+        interaction: evidence(values.interaction || "missing", values.interactionReference, values.interactionDetail, values.interactionReason),
+        capture: evidence(values.capture || "missing", values.captureReference, values.captureDetail, values.captureReason)
+      }
+    };
+  }
+
+  function handWrittenInventory() {
+    var staticHook = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html data-contract-surface hook",
+      implementationDetail: "Static public preview and browser-local interaction only.",
+      documentation: "verified",
+      documentationReference: "site/README.md and site/CONTRACT.md",
+      persistence: "not-applicable",
+      persistenceReason: "This static preview does not own a desktop application record.",
+      test: "missing",
+      testDetail: "No test result is recorded by this browser-local inventory.",
+      interaction: "missing",
+      interactionDetail: "No real desktop-app interaction is evidenced by this public page.",
+      capture: "missing",
+      captureDetail: "No real built-artifact capture is recorded."
+    };
+    var localContract = {
+      implementation: "in-progress",
+      implementationReference: "site/contract.js and site/app.js",
+      implementationDetail: "Bounded browser-local contract and visible controls are wired together.",
+      documentation: "verified",
+      documentationReference: "site/CONTRACT.md",
+      localization: "missing",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2",
+      persistenceDetail: "Only this browser's contract state is persisted; no cross-app synchronization exists.",
+      test: "missing",
+      interaction: "missing",
+      capture: "missing"
+    };
+    var universalControlsCore = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, site/contract.js, and site/vocabulary-loader.js",
+      implementationDetail: "Real browser-local settings controls persist through the page contract; no desktop action is delegated from this core.",
+      documentation: "verified",
+      documentationReference: "site/README.md and site/CONTRACT.md",
+      localization: "in-progress",
+      localizationDetail: "The settings core supplies English, Cantonese, and bilingual copy; page-wide localization remains incomplete.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2",
+      persistenceDetail: "Validated values persist only for this page's origin in this browser.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-artifact interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-artifact capture is recorded."
+    };
+    var surfaces = [
+      { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
+        inventoryFeature("marketing-copy", "Marketing content and direct installer boundary", "in-progress", "The page exposes a static verified installer anchor and must not simulate a transfer.", staticHook),
+        inventoryFeature("marketing-status", "Browser-local status model", "in-progress", "The page stores its status model in browser local storage only; no chat or status-service bridge exists.", localContract)
+      ] },
+      { id: "settings", label: "Settings and appearance preview", route: "#settings-preview", features: [
+        inventoryFeature("settings-controls", "Visible browser-local language, independently persisted funny-level, and notice-emoji controls", "in-progress", "These controls operate this public page rather than delegating to the installed application.", universalControlsCore),
+        inventoryFeature("personal-vocabulary", "Personal vocabulary JSON loader", "in-progress", "Strict version-1 parser and revalidation protect the local cache; no file name, path, upload, or telemetry.", universalControlsCore),
+        inventoryFeature("renamed-presentation-mode", "Renamed browser-local presentation mode", "in-progress", "The local one-way verifier controls English-only presentation and suppression; it is a user-experience lock, not security protection.", universalControlsCore)
+      ] },
+      { id: "documentation", label: "Offline documentation preview", route: "#docs-preview", features: [inventoryFeature("documentation-preview", "Static documentation and search preview", "in-progress", "The page links static content but does not prove a packaged offline documentation browser.", staticHook)] },
+      { id: "converter", label: "File converter preview", route: "#converter-preview", features: [inventoryFeature("converter-boundary", "Unavailable browser conversion boundary", "in-progress", "The static page does not read bytes, select an adapter, or write output.", staticHook)] },
+      { id: "authenticator", label: "Authenticator and toy-lock preview", route: "#authenticator-preview", features: [inventoryFeature("authenticator-boundary", "Credential-free public preview", "in-progress", "No secret, password, QR, or recovery data is accepted by the public page.", staticHook)] },
+      { id: "ollama", label: "Local Ollama suite preview", route: "#ollama-preview", features: [inventoryFeature("ollama-boundary", "No runtime-query public preview", "in-progress", "The page does not call localhost or a model service.", staticHook)] },
+      { id: "history", label: "Local history preview", route: "#history-preview", features: [inventoryFeature("history-preview", "Browser-local audit preview", "in-progress", "The browser-local contract audit is not Git-backed desktop history.", localContract)] },
+      { id: "notifications", label: "Notification center preview", route: "#notifications-preview", features: [inventoryFeature("notification-preview", "Browser-local notification preview", "in-progress", "Notifications are browser-local and do not represent a server or installer outcome.", localContract)] },
+      { id: "downloads", label: "Download and release states", route: "#downloads-preview", features: [inventoryFeature("download-boundary", "Static verified installer anchor", "in-progress", "The browser owns transfer behavior; this page does not start, track, pause, resume, or confirm a transfer.", staticHook)] }
+    ];
+    return { surfaces: surfaces };
+  }
+
+  function renderCompletenessStatus() {
+    var surface = one('[data-contract-surface="status"]');
+    var host = surface && one('[data-contract-hook="status-local-evidence"]', surface);
+    if (!host || !hasContractMethod("getCompletenessSummary")) return;
+    var summary = safely(function () { return contract.getCompletenessSummary(); }, null);
+    if (!summary) return;
+    var output = one("[data-mss-completeness-summary]", host);
+    if (!output) {
+      output = made("span");
+      output.setAttribute("data-mss-completeness-summary", "true");
+      host.appendChild(output);
+    }
+    output.textContent = "Hand-written browser-local inventory: " + summary.surfaces + " surfaces, " + summary.features + " feature records, " + summary.incompleteFeatures + " incomplete. Missing proof remains visible rather than treated as shipped.";
+  }
+
+  function seedCompletenessInventory() {
+    if (!hasContractMethod("setCompletenessInventory")) return;
+    var current = safely(function () { return contract.getCompletenessInventory(); }, null);
+    var desired = handWrittenInventory();
+    var expectedIds = desired.surfaces.map(function (surface) { return surface.id; }).sort().join(",");
+    var currentIds = current && Array.isArray(current.surfaces) ? current.surfaces.map(function (surface) { return surface.id; }).sort().join(",") : "";
+    if (currentIds !== expectedIds) {
+      safely(function () { contract.setCompletenessInventory(desired); });
+    }
+    renderCompletenessStatus();
+  }
+
+  function renderStatusModel() {
+    var surface = one('[data-contract-surface="status"]');
+    if (!surface || !hasContractMethod("getStatusModel")) return;
+    var model = safely(function () { return contract.getStatusModel(); }, null);
+    if (!model) return;
+    var summary = one('[data-contract-hook="status-summary"]', surface);
+    var current = one('[data-contract-hook="status-current-state"] output', surface);
+    var lastUpdated = one('[data-contract-hook="status-last-updated"] span', surface);
+    var bridge = one('[data-contract-hook="status-no-bridge"] span', surface);
+    var evidenceHost = one('[data-contract-hook="status-local-evidence"] span', surface);
+    var interactions = one('[data-contract-hook="status-active-interactions"] span', surface);
+    var nextSteps = one('[data-contract-hook="status-next-steps"] span', surface);
+    if (summary) summary.textContent = model.summary;
+    if (current) current.textContent = "Browser-local state: " + model.currentState + ". This is not server, installer, release, or desktop-app health.";
+    if (lastUpdated) lastUpdated.textContent = model.lastUpdatedAt ? "Updated in this browser: " + model.lastUpdatedAt : "No browser-local status update has been recorded.";
+    if (bridge) bridge.textContent = model.chatBridge.message;
+    if (evidenceHost) evidenceHost.textContent = model.evidence.length ? model.evidence.map(function (item) { return item.label + ": " + item.state + "."; }).join(" ") : "No browser-local evidence has been recorded yet.";
+    if (interactions) interactions.textContent = model.activeInteractions.length ? model.activeInteractions.map(function (item) { return item.label + ": " + item.state + "."; }).join(" ") : "No browser-local interaction is active. The page does not run desktop actions.";
+    if (nextSteps) nextSteps.textContent = model.nextSteps.length ? model.nextSteps.map(function (item) { return item.label + ": " + item.detail; }).join(" ") : "Use the direct installer link only when you choose to hand transfer control to your browser.";
+  }
+
+  function seedStatusModel() {
+    if (!hasContractMethod("updateStatusModel")) return;
+    var current = safely(function () { return contract.getStatusModel(); }, null);
+    if (!current || current.currentState === "idle") {
+      safely(function () {
+        contract.updateStatusModel({
+          currentState: "waiting",
+          summary: "This status model is browser-local. It reports the static public preview only and is not connected to a server, installer, desktop application, release workflow, or chat service.",
+          evidence: [{ id: "marketing-source", label: "Static public preview source", state: "verified", detail: "The marketing surface and direct installer anchor are present in this page source.", reference: "site/index.html" }],
+          activeInteractions: [{ id: "browser-local", label: "Browser-local interaction boundary", state: "waiting", detail: "No desktop action or network transfer is active from this page." }],
+          nextSteps: [{ id: "installer-link", label: "Optional direct installer handoff", state: "waiting", detail: "The user may activate the verified link; browser transfer and installation are outside this page." }]
+        });
+      });
+    }
+    renderStatusModel();
   }
 
   function installPalette() {
@@ -1192,10 +1683,15 @@
     palette.append(heading, copy, label, results, button("Close palette", function () { closeDialog(palette); }));
     (body || document.documentElement).appendChild(palette);
     function commands() {
-      return all("[data-contract-surface], section[id]").map(function (element) {
+      var fallback = all("[data-contract-surface], section[id]").map(function (element) {
         var heading = one("h2, h3", element);
         return { id: element.id, label: (heading ? heading.textContent : element.id || "Feature preview").trim() };
       }).filter(function (entry) { return entry.id; });
+      if (!hasContractMethod("searchCommandPalette")) return fallback;
+      var registered = safely(function () { return contract.searchCommandPalette(""); }, []);
+      return Array.isArray(registered) && registered.length ? registered.map(function (entry) {
+        return { id: entry.elementId, label: entry.title, commandId: entry.id };
+      }).filter(function (entry) { return entry.id; }) : fallback;
     }
     function render() {
       var needle = input.value.toLocaleLowerCase();
@@ -1203,9 +1699,14 @@
       commands().filter(function (entry) {
         return !needle || entry.label.toLocaleLowerCase().indexOf(needle) !== -1 || entry.id.toLocaleLowerCase().indexOf(needle) !== -1;
       }).slice(0, 20).forEach(function (entry) {
-        var result = button(entry.label, function () {
+          var result = button(entry.label, function () {
           closeDialog(palette);
-          activate(entry.id, result);
+          if (entry.commandId && hasContractMethod("teleportTo")) {
+            var outcome = safely(function () { return contract.teleportTo(entry.commandId); }, null);
+            if (!outcome || outcome.ok !== true) activate(entry.id, result);
+          } else {
+            activate(entry.id, result);
+          }
         });
         result.setAttribute("role", "listitem");
         results.appendChild(result);
@@ -1216,10 +1717,6 @@
     document.addEventListener("keydown", function (event) {
       if (!(event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "f")) return;
       event.preventDefault();
-      if (contract) safely(function () {
-        if (contract.palette && typeof contract.palette.open === "function") contract.palette.open();
-        else if (typeof contract.openPalette === "function") contract.openPalette();
-      });
       render();
       if (typeof palette.showModal === "function") {
         if (!palette.open) palette.showModal();
@@ -1237,7 +1734,11 @@
     contract = window.MinecraftServerStudioContract || contract;
     if (!main || root.getAttribute("data-mss-interactions-ready") === "true") return;
     root.setAttribute("data-mss-interactions-ready", "true");
+    hydrateContractState();
+    seedStatusModel();
+    seedCompletenessInventory();
     installSettings();
+    installSchoolMode();
     installTabsAndArticles();
     installCollapsibleLists();
     installConverterPlanner();
@@ -1247,10 +1748,24 @@
     installDestructiveDemo();
     installHistoryFilters();
     installExports();
-    installUnavailableDownloadCtas();
+    installVerifiedDownloadCtas();
     installSearches();
     installPalette();
-    notify("info", localize("marketing.preview.ready", "Browser-local product preview ready. This page does not contact a server, installer, runtime, or file service."));
+    if (hasContractMethod("subscribe")) {
+      safely(function () {
+        contract.subscribe(function () {
+          hydrateContractState();
+          syncSettingsControls();
+          applySettingsPresentation();
+          renderVocabularyStatus();
+          renderNotifications();
+          renderHistory();
+          renderStatusModel();
+          renderCompletenessStatus();
+        });
+      });
+    }
+    notify("info", "Browser-local product preview ready. This page does not contact a server, installer, runtime, or file service.");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });

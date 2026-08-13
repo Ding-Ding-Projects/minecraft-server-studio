@@ -12,19 +12,22 @@
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true">MS</div>
           <div>
-            <p class="eyebrow">LOCAL CONTROL CENTER</p>
-            <h1>Minecraft Server Studio</h1>
+            <p class="eyebrow" id="brand-eyebrow" data-i18n="brand.eyebrow">LOCAL CONTROL CENTER</p>
+            <h1 id="brand-title">Minecraft Server Studio</h1>
           </div>
         </div>
 
-        <button class="primary-action" id="new-server-button" type="button">Create server</button>
+        <button class="primary-action" id="new-server-button" type="button" data-i18n="nav.createServer">Create server</button>
+        <button class="text-action" id="authenticator-destination-button" type="button" aria-controls="authenticator-destination">Authenticator and toy locks</button>
         <label class="field search-field" for="server-search">
-          <span>Find a server</span>
-          <input id="server-search" type="search" placeholder="Filter by name or software" autocomplete="off">
+          <span data-i18n="nav.findServer">Find a server</span>
+          <input id="server-search" type="search" placeholder="Filter by name or software" data-i18n-placeholder="nav.searchPlaceholder" autocomplete="off">
         </label>
         <div class="server-list" id="server-list" role="list" aria-live="polite"></div>
         <div class="sidebar-footer">
-          <button class="text-action" id="refresh-button" type="button">Refresh local data</button>
+          <button class="text-action" id="refresh-button" type="button" data-i18n="nav.refresh">Refresh local data</button>
+          <button class="text-action" id="open-documentation-button" type="button" aria-controls="documentation-destination">Offline documentation</button>
+          <button class="text-action" id="experience-settings-button" type="button" aria-haspopup="dialog" aria-controls="experience-settings-dialog" data-i18n="nav.preferences">Studio preferences</button>
           <p id="data-directory" class="muted">Loading local data location…</p>
         </div>
       </aside>
@@ -33,7 +36,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow" id="server-software">NO SERVER SELECTED</p>
-            <h2 id="server-title">Create your first Minecraft server</h2>
+          <h2 id="server-title">Create your first Minecraft server</h2>
           </div>
           <div class="topbar-actions">
             <span class="status-chip status-stopped" id="server-status">Stopped</span>
@@ -48,7 +51,7 @@
           <div>
             <p class="eyebrow">AUTOMATIC SETUP</p>
             <h3 id="dependency-title">Required tools</h3>
-            <p>Paper needs Java. Spigot setup also needs Git. Minecraft Server Studio detects both and can install missing tools using Windows package managers after you select the action.</p>
+            <p data-i18n-display-name="dependency.description">Paper needs Java. Spigot setup also needs Git. Minecraft Server Studio detects both and can install missing tools using Windows package managers after you select the action.</p>
           </div>
           <div class="dependency-actions">
             <div class="dependency-list" id="dependency-list" aria-live="polite"></div>
@@ -57,27 +60,287 @@
           </div>
         </section>
 
+        <section class="application-update-card" id="application-update-card" data-state="unconfigured" aria-labelledby="application-update-title">
+          <div>
+            <p class="eyebrow">UNSIGNED SQUIRREL.WINDOWS UPDATES</p>
+            <h3 id="application-update-title">Application updates</h3>
+            <p id="application-update-copy">Loading the application-update state…</p>
+            <p id="application-update-version" class="muted">Installed version: loading</p>
+            <p id="application-update-integrity" class="muted">Squirrel RELEASES metadata has not been checked during this session.</p>
+            <p id="application-update-warning" class="update-warning">Updates are unsigned and can trigger an unknown-publisher or SmartScreen warning.</p>
+          </div>
+          <div class="application-update-actions">
+            <span id="application-update-state" class="status-chip">Loading</span>
+            <label class="switch-field update-toggle"><input id="updates-enabled" type="checkbox" checked><span><strong>Automatically check for updates</strong><small>Checks only the approved public HTTPS Squirrel.Windows feed. You can disable or re-enable checks at any time.</small></span></label>
+            <div class="update-action-row">
+              <button class="outlined-action" id="check-updates-button" type="button">Check for updates</button>
+              <button class="outlined-action" id="open-update-notes-button" type="button">Open release notes</button>
+            </div>
+            <div class="update-action-row">
+              <button class="primary-action" id="restart-update-button" type="button" disabled>Restart to install update</button>
+              <button class="outlined-action" id="later-update-button" type="button" disabled>Later</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="ollama-suite-card" id="ollama-suite-card" data-state="not-checked" aria-labelledby="ollama-suite-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LOCAL OLLAMA RUNTIME</p>
+              <h3 id="ollama-suite-title">Local Ollama suite</h3>
+              <p class="muted">This foundation reads only the documented local loopback API at <code>http://127.0.0.1:11434</code>. It never sends a cloud request, token, model prompt, or shell command.</p>
+            </div>
+            <div class="live-connection-actions">
+              <span id="ollama-state" class="status-chip">Not checked</span>
+              <button id="refresh-ollama-button" class="outlined-action" type="button">Refresh local Ollama</button>
+            </div>
+          </div>
+
+          <div class="ollama-suite-tabs" role="tablist" aria-label="Local Ollama suite sections">
+            <button id="ollama-runtime-tab" class="ollama-tab active" type="button" role="tab" aria-selected="true" aria-controls="ollama-panel-runtime" data-ollama-tab="runtime">Local runtime</button>
+            <button id="ollama-capabilities-tab" class="ollama-tab" type="button" role="tab" aria-selected="false" aria-controls="ollama-panel-capabilities" data-ollama-tab="capabilities" tabindex="-1">Feature map</button>
+          </div>
+
+          <section id="ollama-panel-runtime" class="ollama-panel active" role="tabpanel" aria-labelledby="ollama-runtime-tab" data-ollama-panel="runtime">
+            <div class="ollama-summary-grid" aria-live="polite">
+              <article><span>Runtime state</span><strong id="ollama-runtime-state">Not checked</strong></article>
+              <article><span>Ollama version</span><strong id="ollama-version">Not observed</strong></article>
+              <article><span>Last successful inventory</span><strong id="ollama-last-success">None this session</strong></article>
+            </div>
+            <p id="ollama-detail" class="muted" aria-live="polite">Refresh the fixed local endpoint to inspect the installed and running model inventory.</p>
+
+            <section class="ollama-search-card" aria-labelledby="ollama-model-search-title">
+              <div>
+                <h4 id="ollama-model-search-title">Find observed local models</h4>
+                <p class="muted">Plain-text filtering is the default. The adjacent regex builder evaluates only the bounded local inventory currently in this window.</p>
+              </div>
+              <div class="ollama-search-anchor">
+                <label class="field" for="ollama-model-search"><span>Installed or running model name</span><input id="ollama-model-search" type="search" maxlength="128" autocomplete="off" placeholder="Filter the observed local inventory"></label>
+                <button id="ollama-model-regex-toggle" class="outlined-action" type="button" aria-expanded="false" aria-controls="ollama-model-regex-builder">Open regex builder</button>
+                <section id="ollama-model-regex-builder" class="ollama-regex-builder" aria-label="Model search regex builder" hidden>
+                  <div class="settings-grid">
+                    <label class="field"><span>Raw pattern</span><input id="ollama-model-pattern" type="text" maxlength="128" autocomplete="off" placeholder="Example: ^family:tag$"></label>
+                    <label class="field"><span>Flags</span><input id="ollama-model-flags" type="text" maxlength="3" value="i" inputmode="text" autocomplete="off"><small>Only <code>i</code>, <code>m</code>, and <code>u</code> are accepted.</small></label>
+                  </div>
+                  <div class="regex-token-row" aria-label="Regex construction helpers">
+                    <button type="button" class="outlined-action" data-ollama-regex-token="^">Start ^</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="$">End $</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="[]">Class []</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="()">Group ()</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="|">Or |</button>
+                    <button type="button" class="outlined-action" data-ollama-regex-token="+">Quantifier +</button>
+                    <button id="ollama-copy-pattern" type="button" class="outlined-action">Copy pattern</button>
+                  </div>
+                  <p id="ollama-model-regex-feedback" class="muted" aria-live="polite">Regex mode is inactive.</p>
+                  <p id="ollama-model-regex-matches" class="muted" aria-live="polite">No local model names have been evaluated.</p>
+                </section>
+              </div>
+            </section>
+
+            <div class="ollama-inventory-grid">
+              <section class="ollama-inventory-card" aria-labelledby="ollama-installed-title">
+                <div><h4 id="ollama-installed-title">Installed models</h4><p class="muted">Only records returned by <code>GET /api/tags</code> appear here.</p></div>
+                <div id="ollama-installed-models" class="ollama-model-list" aria-live="polite"></div>
+              </section>
+              <section class="ollama-inventory-card" aria-labelledby="ollama-running-title">
+                <div><h4 id="ollama-running-title">Running models</h4><p class="muted">Only records returned by <code>GET /api/ps</code> appear here.</p></div>
+                <div id="ollama-running-models" class="ollama-model-list" aria-live="polite"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="ollama-panel-capabilities" class="ollama-panel" role="tabpanel" aria-labelledby="ollama-capabilities-tab" data-ollama-panel="capabilities" hidden>
+            <p class="muted">This is a capability map, not a product catalog. Disabled items name the exact missing implementation rather than looking available.</p>
+            <div id="ollama-capability-list" class="ollama-capability-list" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <section class="file-converter-card" id="file-converter-destination" aria-labelledby="file-converter-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LOCAL-ONLY CONVERTER FOUNDATION</p>
+              <h3 id="file-converter-title">Local file converter</h3>
+              <p class="muted">Choose a local file for a bounded byte inspection. This build keeps every known adapter visible, but only enables an adapter after a verified bundled offline engine exists. No source file leaves this device or changes during inspection.</p>
+            </div>
+            <button id="refresh-converter-button" type="button" class="outlined-action">Refresh converter</button>
+          </div>
+          <div class="converter-source-row">
+            <label class="field wide"><span>Source file</span><div class="browse-row"><input id="converter-source-path" type="text" readonly placeholder="Choose a local file to inspect"><button id="browse-converter-source-button" type="button" class="primary-action">Choose file</button></div><small>The file picker is the only source-selection route. The app reads at most 64 KiB to classify it and does not inspect by filename extension alone.</small></label>
+            <section id="converter-source-summary" class="status-record" data-state="idle" aria-live="polite"><strong>No local source file selected</strong><span>Choose a file to record an inspection-only queue item. No conversion can start until a future verified bundled adapter is available.</span></section>
+          </div>
+          <div class="converter-search-row">
+            <label class="field"><span>Find an adapter</span><input id="converter-adapter-search" type="search" maxlength="128" placeholder="Search name, source, or target" autocomplete="off"></label>
+            <label class="switch-field converter-regex-switch"><input id="converter-regex-mode" type="checkbox"><span><strong>Use regular expression</strong><small>Plain-text search is the default.</small></span></label>
+            <button id="converter-regex-builder-button" type="button" class="outlined-action" aria-controls="converter-regex-builder" aria-expanded="false">Build pattern</button>
+          </div>
+          <section id="converter-regex-builder" class="converter-regex-builder" aria-labelledby="converter-regex-builder-title" hidden>
+            <div>
+              <p class="eyebrow">ADJACENT REGEX BUILDER</p>
+              <h4 id="converter-regex-builder-title">ECMAScript pattern helper</h4>
+              <p class="muted">Patterns and samples stay local. This bounded helper accepts a maximum 128-character pattern and evaluates only the visible catalog records.</p>
+            </div>
+            <div class="regex-token-row" aria-label="Regex construction tokens">
+              <button type="button" class="outlined-action" data-converter-regex-token="[A-Za-z]">Character class</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="^">Anchor</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="()">Group</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="|">Alternation</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="*">Quantifier</button>
+            </div>
+            <div class="settings-grid">
+              <label class="field wide"><span>Raw pattern</span><input id="converter-regex-pattern" type="text" maxlength="128" placeholder="Pattern mirrors the adapter search field"></label>
+              <label class="switch-field"><input id="converter-regex-flag-ignore-case" type="checkbox" checked><span><strong>Ignore case</strong><small>Uses the ECMAScript <code>i</code> flag.</small></span></label>
+              <label class="switch-field"><input id="converter-regex-flag-multiline" type="checkbox"><span><strong>Multiline anchors</strong><small>Uses the ECMAScript <code>m</code> flag.</small></span></label>
+              <label class="field wide"><span>Sample text</span><input id="converter-regex-sample" type="text" maxlength="512" placeholder="Optional local sample for pattern feedback"></label>
+              <p id="converter-regex-feedback" class="wide muted" aria-live="polite">Plain-text search is active. Enable regular-expression mode to apply a pattern.</p>
+            </div>
+          </section>
+          <section class="converter-catalog-section" aria-labelledby="converter-catalog-title">
+            <div><h4 id="converter-catalog-title">Adapter catalog</h4><p id="converter-catalog-summary" class="muted">Loading the local adapter registry…</p></div>
+            <div id="converter-adapter-catalog" class="converter-adapter-catalog" aria-live="polite"></div>
+          </section>
+          <section class="converter-queue-section" aria-labelledby="converter-queue-title">
+            <div><h4 id="converter-queue-title">Persistent inspection queue</h4><p class="muted">The queue is app-private and records inspection-only items. It does not copy, upload, convert, or alter the selected source.</p></div>
+            <div id="converter-queue" class="converter-queue" aria-live="polite"></div>
+          </section>
+        </section>
+
         <section class="empty-state" id="empty-state">
           <div class="empty-glyph" aria-hidden="true">▦</div>
-          <h3>Build a local server, not a pile of terminal commands.</h3>
-          <p>Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.</p>
-          <button class="primary-action" id="empty-create-button" type="button">Create server</button>
+          <h3 data-i18n="empty.title">Build a local server, not a pile of terminal commands.</h3>
+          <p data-i18n="empty.description">Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.</p>
+          <button class="primary-action" id="empty-create-button" type="button" data-i18n="nav.createServer">Create server</button>
+        </section>
+
+        <section class="documentation-destination hidden" id="documentation-destination" aria-labelledby="documentation-title">
+          <header class="panel-heading documentation-heading">
+            <div>
+              <p class="eyebrow">BUNDLED FEATURE DOCUMENTATION</p>
+              <h3 id="documentation-title">Offline documentation</h3>
+              <p class="muted">Articles are read only from this installed app. The browser never downloads a replacement from the network.</p>
+            </div>
+            <button class="outlined-action" id="close-documentation-button" type="button">Back to server workspace</button>
+          </header>
+          <div class="documentation-layout">
+            <aside class="documentation-browser" aria-label="Documentation article list">
+              <label class="field documentation-search" for="documentation-search">
+                <span>Find documentation</span>
+                <span class="documentation-search-row"><input id="documentation-search" type="search" maxlength="256" autocomplete="off" placeholder="Search titles and summaries"><button id="open-documentation-regex-button" type="button" class="icon-action" aria-label="Open the documentation search regex builder" aria-expanded="false" aria-controls="documentation-regex-builder">.*</button></span>
+              </label>
+              <section class="documentation-regex-builder hidden" id="documentation-regex-builder" aria-label="Documentation search regex builder">
+                <div class="panel-heading"><div><h4>Regex builder</h4><p class="muted">Plain-text search remains the default. Patterns stay local and are bounded before matching article metadata.</p></div><button id="close-documentation-regex-button" type="button" class="icon-action" aria-label="Close the documentation search regex builder">×</button></div>
+                <label class="field"><span>Raw pattern</span><input id="documentation-regex-pattern" type="text" maxlength="256" autocomplete="off" placeholder="Example: ^Server|Java$"></label>
+                <fieldset class="documentation-regex-flags"><legend>Flags</legend><label><input id="documentation-regex-flag-i" type="checkbox"> Case-insensitive</label><label><input id="documentation-regex-flag-m" type="checkbox"> Multiline</label><label><input id="documentation-regex-flag-s" type="checkbox"> Dot matches newlines</label></fieldset>
+                <div class="documentation-regex-tools" aria-label="Guided pattern tokens"><button type="button" class="outlined-action" data-documentation-regex-token="literal">Literal</button><button type="button" class="outlined-action" data-documentation-regex-token="class">Character class</button><button type="button" class="outlined-action" data-documentation-regex-token="anchor">Anchor</button><button type="button" class="outlined-action" data-documentation-regex-token="group">Group</button><button type="button" class="outlined-action" data-documentation-regex-token="alternation">Alternation</button><button type="button" class="outlined-action" data-documentation-regex-token="quantifier">Quantifier</button></div>
+                <label class="field"><span>Sample text</span><textarea id="documentation-regex-sample" rows="3" maxlength="4096" placeholder="Try the pattern against local sample text"></textarea></label>
+                <p id="documentation-regex-status" class="documentation-regex-status" role="status">Regex mode is off. Plain-text search is active.</p>
+                <div class="documentation-regex-actions"><button id="apply-documentation-regex-button" type="button" class="primary-action">Apply regex to documentation</button><button id="reset-documentation-regex-button" type="button" class="outlined-action">Return to plain text</button></div>
+              </section>
+              <p id="documentation-bundle-boundary" class="muted">Loading bundled documentation inventory…</p>
+              <div id="documentation-article-list" class="documentation-article-list" role="list" aria-live="polite"></div>
+            </aside>
+            <article class="documentation-reader" aria-labelledby="documentation-article-title">
+              <header>
+                <p class="eyebrow" id="documentation-article-source">BUNDLED ARTICLE</p>
+                <h3 id="documentation-article-title">Choose an article</h3>
+                <p id="documentation-article-summary" class="muted">Select a listed article to read its local documentation.</p>
+              </header>
+              <div id="documentation-markdown" class="documentation-markdown" tabindex="-1" aria-live="polite"><p class="muted">No article is selected.</p></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="authenticator-destination" class="authenticator-destination hidden" aria-labelledby="authenticator-destination-title">
+          <div class="panel-heading authenticator-heading">
+            <div>
+              <p class="eyebrow">LOCAL AUTHENTICATOR FOUNDATION</p>
+              <h3 id="authenticator-destination-title">Authenticator and toy locks</h3>
+              <p class="muted">Codes are calculated locally in the main process. Secrets never appear in this list, the local metadata file, the console, or an ordinary export.</p>
+            </div>
+            <button id="return-to-servers-button" class="outlined-action" type="button">Return to servers</button>
+          </div>
+
+          <div class="tab-strip authenticator-tab-strip" role="tablist" aria-label="Authenticator destination tabs">
+            <button id="authenticator-codes-tab" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="authenticator-panel-codes" data-authenticator-tab="codes">Authenticator</button>
+            <button id="authenticator-locks-tab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="authenticator-panel-locks" data-authenticator-tab="locks">Toy locks</button>
+          </div>
+
+          <section id="authenticator-panel-codes" class="authenticator-panel" role="tabpanel" aria-labelledby="authenticator-codes-tab" data-authenticator-panel="codes">
+            <div id="authenticator-status" class="authenticator-status" aria-live="polite">Loading local authenticator status…</div>
+            <section class="authenticator-card" aria-labelledby="authenticator-add-title">
+              <div>
+                <h4 id="authenticator-add-title">Add a local TOTP entry</h4>
+                <p class="muted">Use either a manual Base32 secret or a standard <code>otpauth://totp/</code> URI. The secret is sent directly to protected local storage and is cleared from this form after a successful save.</p>
+              </div>
+              <form id="authenticator-entry-form" class="settings-grid" novalidate>
+                <label class="field"><span>Issuer</span><input id="authenticator-issuer" type="text" maxlength="96" autocomplete="off" placeholder="Example service"></label>
+                <label class="field"><span>Account</span><input id="authenticator-account" type="text" maxlength="160" autocomplete="off" placeholder="name@example.com"></label>
+                <label class="field"><span>Display label</span><input id="authenticator-label" type="text" maxlength="160" autocomplete="off" placeholder="Optional local label"></label>
+                <label class="field"><span>Group</span><input id="authenticator-group" type="text" maxlength="80" autocomplete="off" value="Ungrouped"></label>
+                <label class="field wide"><span>Manual Base32 secret</span><input id="authenticator-manual-secret" type="password" maxlength="4096" autocomplete="new-password" spellcheck="false" placeholder="Use this or the URI field, never both"><small>The visible code is computed in the main process; the original secret is not returned to this page.</small></label>
+                <label class="field wide"><span>Standard authenticator URI</span><input id="authenticator-uri" type="password" maxlength="8192" autocomplete="off" spellcheck="false" placeholder="otpauth://totp/Issuer:Account?secret=…"><small>URI import is local-only. It accepts only bounded standard TOTP fields.</small></label>
+                <label class="field"><span>Algorithm</span><select id="authenticator-algorithm"><option value="SHA-1">SHA-1</option><option value="SHA-256">SHA-256</option><option value="SHA-512">SHA-512</option></select></label>
+                <label class="field"><span>Digits</span><select id="authenticator-digits"><option value="6">6 digits</option><option value="7">7 digits</option><option value="8">8 digits</option></select></label>
+                <label class="field"><span>Period</span><input id="authenticator-period" type="number" min="1" max="86400" step="1" value="30"></label>
+                <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Save local authenticator entry</button><button id="authenticator-qr-unavailable" class="outlined-action" type="button" disabled aria-describedby="authenticator-qr-boundary">QR pairing/import unavailable</button><p id="authenticator-qr-boundary" class="muted">A bundled in-process QR renderer and decoder are not registered in this foundation, so no QR image, clipboard, or camera path is simulated.</p></div>
+              </form>
+            </section>
+
+            <section class="authenticator-card" aria-labelledby="authenticator-list-title">
+              <div class="panel-heading">
+                <div><h4 id="authenticator-list-title">Local code list</h4><p class="muted">The copy action copies a currently displayed code only after you choose it.</p></div>
+                <button id="authenticator-refresh-button" class="outlined-action" type="button">Refresh codes</button>
+              </div>
+              <div class="authenticator-search-row">
+                <label class="field" for="authenticator-search"><span>Find an authenticator entry</span><input id="authenticator-search" type="search" maxlength="160" autocomplete="off" placeholder="Filter issuer, account, label, or group"></label>
+                <button id="authenticator-regex-toggle" class="outlined-action" type="button" aria-expanded="false" aria-controls="authenticator-regex-builder">Regex builder</button>
+              </div>
+              <section id="authenticator-regex-builder" class="regex-builder" hidden aria-labelledby="authenticator-regex-title">
+                <div><h5 id="authenticator-regex-title">Authenticator list regex builder</h5><p class="muted">Plain text is the default. Regex evaluates only the bounded local labels shown here.</p></div>
+                <label class="switch-field"><input id="authenticator-regex-enabled" type="checkbox"><span><strong>Use regex for this list search</strong><small>Invalid patterns show an honest no-match state and do not change stored entries.</small></span></label>
+                <label class="field"><span>Pattern</span><input id="authenticator-regex-pattern" type="text" maxlength="128" autocomplete="off" placeholder="For example: ^Example"></label>
+                <label class="field"><span>Flags</span><input id="authenticator-regex-flags" type="text" maxlength="3" autocomplete="off" value="i" placeholder="i, m, or u"></label>
+                <div class="regex-token-row" aria-label="Guided regex construction"><button type="button" data-authenticator-regex-token="^">Start anchor</button><button type="button" data-authenticator-regex-token="$">End anchor</button><button type="button" data-authenticator-regex-token="\\d">Digit</button><button type="button" data-authenticator-regex-token="[abc]">Character class</button><button type="button" data-authenticator-regex-token="(group)">Group</button><button type="button" data-authenticator-regex-token="|">Alternation</button><button type="button" data-authenticator-regex-token="+">Quantifier</button></div>
+                <p id="authenticator-regex-status" class="muted" aria-live="polite">Plain-text search is active.</p>
+              </section>
+              <div id="authenticator-entry-list" class="authenticator-entry-list" aria-live="polite"></div>
+            </section>
+          </section>
+
+          <section id="authenticator-panel-locks" class="authenticator-panel" role="tabpanel" aria-labelledby="authenticator-locks-tab" data-authenticator-panel="locks" hidden>
+            <div id="toy-lock-status" class="authenticator-status" aria-live="polite">Loading toy-lock status…</div>
+            <section class="authenticator-card" aria-labelledby="toy-lock-create-title">
+              <div><h4 id="toy-lock-create-title">Create a per-target toy lock</h4><p class="muted">Each lock has its own protected credential. This is a for-fun user-experience speed bump, not security or encryption.</p></div>
+              <form id="toy-lock-create-form" class="settings-grid" novalidate>
+                <label class="field"><span>Target type</span><select id="toy-lock-target-type"><option value="tab">Tab</option><option value="element">Element</option></select></label>
+                <label class="field"><span>Target identifier</span><input id="toy-lock-target-id" type="text" maxlength="160" value="authenticator" autocomplete="off"><small>Use an exact app-owned identifier. The built-in authenticator tab is <code>authenticator</code>.</small></label>
+                <label class="field wide"><span>Target label</span><input id="toy-lock-target-label" type="text" maxlength="160" value="Authenticator destination" autocomplete="off"></label>
+                <label class="field"><span>Credential method</span><select id="toy-lock-method"><option value="password">Password</option><option value="totp">TOTP</option></select></label>
+                <label class="field"><span>Unlock duration</span><select id="toy-lock-duration"><option value="session">Until app closes</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">60 minutes</option></select></label>
+                <div id="toy-lock-password-fields" class="settings-grid wide"><label class="field"><span>New password</span><input id="toy-lock-password" type="password" maxlength="256" autocomplete="new-password"></label><label class="field"><span>Confirm password</span><input id="toy-lock-password-confirmation" type="password" maxlength="256" autocomplete="new-password"></label></div>
+                <div id="toy-lock-totp-fields" class="settings-grid wide" hidden><label class="field"><span>Manual Base32 TOTP secret</span><input id="toy-lock-totp-secret" type="password" maxlength="4096" autocomplete="new-password" spellcheck="false"><small>QR pairing is not available in this foundation. Use a manually supplied secret only if you understand it is a toy lock.</small></label></div>
+                <div class="authenticator-action-stack wide"><button class="primary-action" type="submit">Create toy lock</button><p class="muted">Recovery: delete the application-data folder shown below yourself. No ticket is sent, no network request is made, and nobody is reading it.</p><code id="toy-lock-recovery-directory">Loading local recovery folder…</code></div>
+              </form>
+            </section>
+            <section class="authenticator-card" aria-labelledby="toy-lock-list-title"><div><h4 id="toy-lock-list-title">Configured toy locks</h4><p class="muted">Only the authenticator tab is actively guarded by this foundation. Other recorded targets remain inventory-only until their own context-menu and keyboard routes are wired.</p></div><div id="toy-lock-list" class="toy-lock-list" aria-live="polite"></div></section>
+          </section>
         </section>
 
         <section class="server-editor hidden" id="server-editor" aria-label="Server configuration">
           <div class="tab-strip" role="tablist" aria-label="Server settings tabs">
-            <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-general" data-tab="general">General</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world">World</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay">Gameplay</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network">Network</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime">Runtime</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools">BuildTools</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live">Live management</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands">Command Center</button>
-            <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status">Local status</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced">Advanced</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins">Plugins</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console">Console</button>
+            <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-general" data-tab="general" data-i18n="tab.general">General</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" data-i18n="tab.world">World</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay" data-i18n="tab.gameplay">Gameplay</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network" data-i18n="tab.network">Network</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime" data-i18n="tab.runtime">Runtime</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-paper-cli" data-tab="paper-cli">Paper JAR CLI</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools" data-i18n="tab.buildtools">BuildTools</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-backups" data-tab="backups">Backups + updates</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live" data-i18n="tab.live">Live management</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands" data-i18n="tab.commands">Command Center</button>
+            <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status" data-i18n="tab.status">Local status</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced" data-i18n="tab.advanced">Advanced</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins" data-i18n="tab.plugins">Plugins</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console" data-i18n="tab.console">Console</button>
           </div>
 
           <form id="settings-form">
@@ -129,7 +392,9 @@
                 <label class="switch-field"><input id="gamerule-allowEnteringNetherUsingPortals" type="checkbox"><span><strong>Allow Nether portal travel</strong><small>Current Minecraft versions expose this as the allowEnteringNetherUsingPortals gamerule.</small></span></label>
                 <label class="switch-field"><input id="gamerule-spawnMonsters" type="checkbox"><span><strong>Spawn monsters</strong><small>Current Minecraft versions expose this as the spawnMonsters gamerule.</small></span></label>
                 <label class="switch-field"><input id="gamerule-commandBlocksEnabled" type="checkbox"><span><strong>Enable command blocks</strong><small>Current Minecraft versions expose this as the commandBlocksEnabled gamerule.</small></span></label>
+                <label class="switch-field"><input id="gamerule-spawnerBlocksEnabled" type="checkbox"><span><strong>Enable spawner blocks</strong><small>Minecraft 1.21.9 and later expose this as the spawnerBlocksEnabled gamerule.</small></span></label>
                 <label class="switch-field"><input id="force-gamemode" type="checkbox"><span><strong>Force the default game mode</strong><small>Apply the selected default game mode when players join.</small></span></label>
+                <p id="gamerule-application-state" class="wide muted">These controls are Minecraft 1.21.9+ game rules. They are never written as obsolete server.properties keys. The generic management protocol remains unavailable here until discovery provides its exact parameter schema.</p>
               </div>
             </section>
 
@@ -168,20 +433,160 @@
               </div>
             </section>
 
-            <section id="panel-buildtools" class="settings-panel" role="tabpanel" data-panel="buildtools" hidden>
-              <div class="panel-heading"><div><p class="eyebrow">SPIGOT BUILD WORKSPACE</p><h3>Safe BuildTools plan</h3><p class="muted">This tab is active for Spigot. It keeps BuildTools sources, caches, and staging output separate from the server folder.</p></div><button id="refresh-spigot-versions-button" type="button" class="outlined-action">Refresh official versions</button></div>
+            <section id="panel-paper-cli" class="settings-panel" role="tabpanel" data-panel="paper-cli" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">PAPER DIRECT JAR ARGUMENTS</p>
+                  <h3>Paper JAR CLI profile</h3>
+                  <p id="paper-cli-boundary" class="muted">Typed Paper options appear after <code>-jar server.jar</code>. JVM controls stay in Runtime; this surface never accepts a shell command, raw argument file, Java agent, native agent, or plugin command.</p>
+                </div>
+                <button id="prepare-paper-cli-button" type="button" class="primary-action" data-paper-cli-control>Prepare read-only argv preview</button>
+              </div>
               <div class="settings-grid">
-                <label class="field"><span>Official BuildTools revision</span><select id="buildtools-revision"><option value="">Refresh official versions first</option></select><small id="buildtools-java-state">The BuildTools preflight makes the final Java compatibility decision.</small></label>
-                <label class="field"><span>Build target</span><select id="buildtools-target"><option value="spigot">Spigot server JAR</option><option value="craftbukkit">CraftBukkit server JAR</option><option value="both">Spigot and CraftBukkit</option></select></label>
-                <label class="field wide"><span>Dedicated BuildTools workspace</span><div class="browse-row"><input id="buildtools-workspace" type="text" placeholder="Choose a local folder outside the server and repository"><button id="browse-buildtools-workspace" type="button" class="outlined-action">Browse</button></div><small>Unsafe, synced, temporary, repository, and server-home locations are rejected before BuildTools can run.</small></label>
-                <label class="field wide"><span>Calculated staged output folder</span><div class="browse-row"><input id="buildtools-output" type="text" readonly placeholder="Prepared from the safe workspace after preflight"></div><small>The app derives this folder inside the verified BuildTools workspace. Generated JARs are staged and inspected before a controlled swap with rollback.</small></label>
-                <label class="switch-field"><input id="buildtools-compile" type="checkbox"><span><strong>Compile requested artifacts</strong><small>Build the selected target rather than reusing an existing staged artifact.</small></span></label>
-                <label class="switch-field"><input id="buildtools-reuse" type="checkbox"><span><strong>Reuse supported caches</strong><small>Reuse only the dedicated workspace cache, never files inside a server home.</small></span></label>
-                <label class="switch-field"><input id="buildtools-update" type="checkbox"><span><strong>Refresh BuildTools workspace</strong><small>Fetch the latest official BuildTools material before the staged run.</small></span></label>
-                <label class="switch-field"><input id="buildtools-pr" type="checkbox"><span><strong>Enable advanced pull-request flags</strong><small>Requires explicit risk confirmation because an upstream change may alter the resulting server binary.</small></span></label>
-                <label class="field wide"><span>Advanced BuildTools tokens</span><input id="buildtools-expert-tokens" type="text" maxlength="2048" placeholder="Optional tokenized flags; shell operators and control characters are rejected"><small>Use documented BuildTools arguments only. This remains a tokenized fallback, not a shell command field.</small></label>
-                <div class="wide guarded-action-card"><div><h4>Stage, inspect, swap, and retain rollback</h4><p>BuildTools output is never copied directly over a live server JAR. The release path stages the JAR, validates it, backs up the current server JAR, swaps atomically, and preserves rollback evidence.</p></div><button id="plan-buildtools-button" type="button" class="primary-action">Prepare BuildTools plan</button></div>
-                <div class="wide guarded-action-card"><div><h4>Run the confirmed BuildTools plan</h4><p>After reviewing the generated workspace, arguments, and rollback plan, start the build explicitly. This action never uses a shell and does not overwrite a running server.</p></div><button id="execute-buildtools-button" type="button" class="danger-action" disabled>Build and promote staged JAR</button></div>
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Bounded JAR help and version evidence</h4>
+                    <p id="paper-cli-probe-copy" class="muted">Choose this explicitly to run only <code>java -jar server.jar --help</code> and <code>java -jar server.jar --version</code> with the existing bounded direct-probe adapter. It never starts a server lifecycle.</p>
+                  </div>
+                  <button id="paper-cli-probe-button" type="button" class="outlined-action" data-paper-cli-control>Collect --help and --version</button>
+                </section>
+                <label class="switch-field wide"><input id="paper-cli-no-gui" type="checkbox" checked disabled><span><strong>Run without the Paper graphical interface</strong><small>This managed desktop profile always emits <code>--nogui</code>; the local app console remains the normal observation surface.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-disable-console" type="checkbox" data-paper-cli-control><span><strong>Disable Paper console input</strong><small>Adds <code>--noconsole</code>. Leave off to retain the app-managed local console.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-vanilla-console" type="checkbox" data-paper-cli-control><span><strong>Use vanilla-style console input</strong><small>Adds <code>--nojline</code> without changing the Java or process boundary.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-init-settings" type="checkbox" data-paper-cli-control><span><strong>Initialize settings only</strong><small>Adds <code>--initSettings</code>, then Paper stops before it creates worlds.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-demo" type="checkbox" data-paper-cli-control><span><strong>Create a demo world</strong><small>Adds <code>--demo</code> for Paper’s documented demo mode.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-bonus-chest" type="checkbox" data-paper-cli-control><span><strong>Create a bonus chest</strong><small>Adds <code>--bonusChest</code> only for initial world creation.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-safe-mode" type="checkbox" data-paper-cli-control><span><strong>Load Vanilla datapacks only</strong><small>Adds <code>--safeMode</code>. This is a startup choice, not a claim that installed datapacks are compatible.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-jfr" type="checkbox" data-paper-cli-control><span><strong>Enable Paper JFR profile</strong><small>Adds Paper’s post-JAR <code>--jfrProfile</code>. It is separate from the Runtime tab’s JVM recording option.</small></span></label>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Configuration and plugin paths</h4>
+                    <p class="muted">Every entered path must remain inside this server folder. Paper receives only a plugin directory; individual plugin JARs stay in the separately inspected Plugins flow.</p>
+                  </div>
+                  <button id="paper-cli-open-plugins-button" type="button" class="outlined-action" data-paper-cli-control>Open Plugins tab</button>
+                </section>
+                <label class="field wide"><span>Server properties path (<code>-c</code>)</span><div class="browse-row"><input id="paper-cli-server-properties" type="text" maxlength="1024" placeholder="Leave empty for server.properties" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="config-file" data-paper-cli-target="paper-cli-server-properties" data-paper-cli-control>Browse file</button></div><small>Typed paths and selected files follow the same inside-server validation.</small></label>
+                <label class="field wide"><span>Bukkit settings path (<code>-b</code>)</span><div class="browse-row"><input id="paper-cli-bukkit-settings" type="text" maxlength="1024" placeholder="Leave empty for bukkit.yml" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="config-file" data-paper-cli-target="paper-cli-bukkit-settings" data-paper-cli-control>Browse file</button></div></label>
+                <label class="field wide"><span>Commands settings path (<code>-C</code>)</span><div class="browse-row"><input id="paper-cli-commands-settings" type="text" maxlength="1024" placeholder="Leave empty for commands.yml" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="config-file" data-paper-cli-target="paper-cli-commands-settings" data-paper-cli-control>Browse file</button></div></label>
+                <label class="field wide"><span>Paper settings directory (<code>--paper-dir</code>)</span><div class="browse-row"><input id="paper-cli-paper-directory" type="text" maxlength="1024" placeholder="Leave empty for config" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="directory" data-paper-cli-target="paper-cli-paper-directory" data-paper-cli-control>Browse folder</button></div></label>
+                <label class="field wide"><span>Plugin directory (<code>-P</code>)</span><div class="browse-row"><input id="paper-cli-plugins-directory" type="text" maxlength="1024" placeholder="Leave empty for plugins" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="directory" data-paper-cli-target="paper-cli-plugins-directory" data-paper-cli-control>Browse folder</button></div></label>
+                <label class="field wide"><span>PID file path (<code>--pidFile</code>)</span><div class="browse-row"><input id="paper-cli-pid-file" type="text" maxlength="1024" placeholder="Optional existing or planned PID file inside this server" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="pid-file" data-paper-cli-target="paper-cli-pid-file" data-paper-cli-control>Browse file</button></div></label>
+
+                <label class="field"><span>World name (<code>-w</code>)</span><input id="paper-cli-world-name" type="text" maxlength="64" placeholder="Leave empty for server.properties" data-paper-cli-control><small>Names only, not paths. Slashes and path traversal are rejected.</small></label>
+                <label class="field"><span>World folder preview</span><input id="paper-cli-world-path" type="text" readonly placeholder="Set a world name to preview its folder"></label>
+                <label class="field"><span>Server display name (<code>--server-name</code>)</span><input id="paper-cli-server-name" type="text" maxlength="80" placeholder="Optional Paper server name" data-paper-cli-control></label>
+                <label class="field"><span>Server identifier (<code>--serverId</code>)</span><input id="paper-cli-server-id" type="text" maxlength="128" placeholder="Optional crash-file identifier" data-paper-cli-control></label>
+                <label class="field"><span>Host override (<code>-h</code>)</span><input id="paper-cli-host" type="text" maxlength="253" placeholder="Optional hostname or IP literal" data-paper-cli-control></label>
+                <label class="field"><span>Port override (<code>-p</code>)</span><input id="paper-cli-port" type="number" min="1" max="65535" step="1" placeholder="Optional 1–65535" data-paper-cli-control></label>
+                <label class="field"><span>Maximum players (<code>-s</code>)</span><input id="paper-cli-max-players" type="number" min="1" max="2147483647" step="1" placeholder="Optional positive integer" data-paper-cli-control></label>
+                <label class="field"><span>Online mode (<code>-o</code>)</span><select id="paper-cli-online-mode" data-paper-cli-control><option value="">Use server.properties</option><option value="true">Require authenticated accounts</option><option value="false">Disable online-mode authentication</option></select></label>
+
+                <section class="wide guarded-action-card">
+                  <div>
+                    <h4>Upgrade and cache operations are disabled</h4>
+                    <p>Paper’s <code>--forceUpgrade</code>, <code>--eraseCache</code>, and <code>--recreateRegionFiles</code> can change world data. This foundation deliberately does not add them until the existing two-key destructive confirmation can authorize an exact stored launch preflight.</p>
+                  </div>
+                  <div class="paper-cli-disabled-flags" aria-label="Destructive Paper CLI options disabled pending confirmation wiring">
+                    <label class="switch-field"><input id="paper-cli-force-upgrade" type="checkbox" disabled><span><strong>Force world upgrade</strong><small>Disabled: no authorized destructive preflight exists.</small></span></label>
+                    <label class="switch-field"><input id="paper-cli-erase-cache" type="checkbox" disabled><span><strong>Erase upgrade cache</strong><small>Disabled: no authorized destructive preflight exists.</small></span></label>
+                    <label class="switch-field"><input id="paper-cli-recreate-region-files" type="checkbox" disabled><span><strong>Recreate region files</strong><small>Disabled: no authorized destructive preflight exists.</small></span></label>
+                  </div>
+                </section>
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Read-only direct argv preview</h4>
+                    <p id="paper-cli-preview-state" class="muted">Prepare the profile to validate its typed direct argument vector. Java/JVM tokens appear before <code>-jar</code>; Paper tokens appear after the JAR.</p>
+                  </div>
+                  <pre id="paper-cli-argv-preview" class="console-output" aria-live="polite">No Paper CLI preflight has been prepared.</pre>
+                </section>
+              </div>
+            </section>
+
+            <section id="panel-buildtools" class="settings-panel" role="tabpanel" data-panel="buildtools" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">SPIGOT BUILD WORKSPACE</p><h3>Typed BuildTools plan</h3><p class="muted">This plan-only surface keeps a future BuildTools workspace and output directory separate from the server folder. It previews direct arguments only; it does not download, run, or promote anything.</p></div><button id="refresh-spigot-versions-button" type="button" class="outlined-action">Refresh official versions</button></div>
+              <div class="settings-grid">
+                <label class="field"><span>Official BuildTools revision</span><select id="buildtools-revision"><option value="">Refresh official versions first</option></select><small id="buildtools-java-state">The planning matrix will show the documented Java requirement and current Java/Git readiness.</small></label>
+                <label class="field"><span>Compile selection</span><select id="buildtools-target"><option value="spigot">Spigot server JAR</option><option value="craftbukkit">CraftBukkit server JAR</option><option value="both">Spigot and CraftBukkit</option></select><small>The preview always emits a typed <code>--compile</code> value; no raw argument field is available.</small></label>
+                <label class="field wide"><span>Dedicated BuildTools workspace</span><div class="browse-row"><input id="buildtools-workspace" type="text" placeholder="Choose a local folder outside the server and repository"><button id="browse-buildtools-workspace" type="button" class="outlined-action">Browse</button></div><small>Roots, home folders, server homes, repository paths, dependency folders, temporary locations, and common synced locations are rejected before a plan is returned.</small></label>
+                <label class="field"><span>Output directory name</span><input id="buildtools-output-name" type="text" maxlength="96" value="buildtools-output" pattern="[A-Za-z0-9][A-Za-z0-9._-]*"><small>The planner derives this child directory inside the verified workspace.</small></label>
+                <label class="field"><span>Final artifact name</span><input id="buildtools-final-name" type="text" maxlength="96" placeholder="spigot-1.21.4" pattern="[A-Za-z0-9][A-Za-z0-9._-]*"><small>This is a typed <code>--final-name</code> value, not a path or command fragment.</small></label>
+                <label class="field wide"><span>Calculated output directory</span><div class="browse-row"><input id="buildtools-output" type="text" readonly placeholder="Derived only after a safe workspace plan"></div><small>The planner does not create this directory or write any JAR.</small></label>
+                <label class="switch-field"><input id="buildtools-compile-if-changed" type="checkbox"><span><strong>Compile only if BuildTools reports changed inputs</strong><small>Emits <code>--compile-if-changed</code>; existing output is never trusted by this app.</small></span></label>
+                <label class="switch-field"><input id="buildtools-dont-update" type="checkbox"><span><strong>Do not update the BuildTools checkout</strong><small>Emits <code>--dont-update</code> and makes a future build potentially stale.</small></span></label>
+                <label class="switch-field"><input id="buildtools-remapped" type="checkbox"><span><strong>Request remapped artifacts</strong><small>Emits <code>--remapped</code> in the direct-argument preview.</small></span></label>
+                <label class="switch-field"><input id="buildtools-source" type="checkbox"><span><strong>Generate sources</strong><small>Emits <code>--generate-source</code>.</small></span></label>
+                <label class="switch-field"><input id="buildtools-docs" type="checkbox"><span><strong>Generate documentation</strong><small>Emits <code>--generate-docs</code>.</small></span></label>
+                <label class="switch-field"><input id="buildtools-experimental" type="checkbox"><span><strong>Request experimental BuildTools behavior</strong><small>Emits <code>--experimental</code>; review its effect before any future executor exists.</small></span></label>
+                <label class="switch-field"><input id="buildtools-dev" type="checkbox"><span><strong>Request a development build</strong><small>Emits <code>--dev</code>; it does not make the output supported or stable.</small></span></label>
+                <label class="field"><span>Upstream pull-request number</span><input id="buildtools-pull-request" type="number" min="1" max="100000000" step="1" inputmode="numeric" placeholder="Optional"><small>When supplied, the preview emits <code>--pull-request</code> followed by this exact whole number.</small></label>
+                <article class="wide status-record" data-state="idle"><strong id="buildtools-plan-state">No BuildTools plan has been prepared.</strong><span id="buildtools-plan-detail">Java and Git readiness will be read through the existing desktop dependency APIs. This surface does not install, download, execute, or distribute a server JAR.</span></article>
+                <section class="wide" aria-labelledby="buildtools-matrix-title"><h4 id="buildtools-matrix-title">Java and Git requirement matrix</h4><div id="buildtools-requirement-matrix" class="status-record-list" aria-live="polite"></div></section>
+                <section class="wide" aria-labelledby="buildtools-argv-title"><h4 id="buildtools-argv-title">Direct-argument preview</h4><pre id="buildtools-argv-preview" class="command-preview" aria-live="polite">Prepare a typed plan to preview executable, working directory, and one direct argument per line. Shell text is never accepted.</pre></section>
+                <div class="wide guarded-action-card"><div><h4>Prepare a plan-only preview</h4><p>Review controlled workspace and output paths, Java/Git readiness, and typed arguments. BuildTools download, execution, JAR promotion, rollback, and plugin acquisition remain unavailable in this surface.</p></div><button id="plan-buildtools-button" type="button" class="primary-action">Preview direct BuildTools arguments</button></div>
+                <div class="wide guarded-action-card"><div><h4>Build execution is unavailable</h4><p>No process executor is registered for this plan-only foundation. Bypass flags such as <code>--disable-certificate-check</code> and <code>--disable-java-check</code> are refused rather than offered.</p></div><button id="execute-buildtools-button" type="button" class="danger-action" disabled title="This build exposes a plan-only BuildTools surface.">Build execution unavailable</button></div>
+              </div>
+            </section>
+
+            <section id="panel-backups" class="settings-panel" role="tabpanel" data-panel="backups" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">LOCAL SNAPSHOTS AND PAPER LIFECYCLE</p>
+                  <h3>Backups and Paper updates</h3>
+                  <p class="muted">Backups are bounded local directory snapshots with a manifest and per-file SHA-256 values. The app never reads or serializes its credential vault into a snapshot. Paper replacement is explicit, stopped-server-only, backup-first, checksum-validated, and limited to <code>server.jar</code>.</p>
+                </div>
+                <span id="backup-server-state" class="status-chip">No server selected</span>
+              </div>
+              <div class="settings-grid">
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Snapshot readiness</h4>
+                    <p id="backup-consistency-copy" class="muted">Choose a local server to inspect its backup and update lifecycle.</p>
+                    <p id="backup-storage-copy" class="muted">No local backup storage is selected.</p>
+                    <p id="backup-latest-copy" class="muted">No complete local backup is available yet.</p>
+                  </div>
+                  <div class="live-connection-actions">
+                    <button id="backup-refresh-button" class="outlined-action" type="button">Refresh backup state</button>
+                    <button id="backup-preflight-button" class="primary-action" type="button">Prepare backup preview</button>
+                    <button id="backup-create-button" class="danger-action" type="button" disabled>Create bounded backup</button>
+                  </div>
+                </section>
+
+                <section class="wide guarded-action-card">
+                  <div>
+                    <h4>Backup preview</h4>
+                    <p id="backup-plan-copy">Prepare a bounded backup preview to inventory world, configuration, plugin, log, and server JAR state before copying.</p>
+                    <p id="backup-plan-detail" class="muted">The app never reads or serializes the credential vault into a backup snapshot.</p>
+                  </div>
+                </section>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Restore a local snapshot</h4>
+                    <p id="restore-plan-copy" class="muted">Choose a complete local snapshot, then prepare a stopped-server restore preview.</p>
+                    <p id="restore-plan-detail" class="muted">No restore preview has been prepared.</p>
+                  </div>
+                  <label class="field wide"><span>Complete local backup</span><select id="restore-backup-select"><option value="">No complete local backups available</option></select><small>Restore creates a new safety backup first, then requires both independent confirmations and the full authorization slider before replacing the reviewed roots.</small></label>
+                  <div class="live-connection-actions"><button id="restore-preflight-button" class="outlined-action" type="button" disabled>Prepare restore preview</button><button id="restore-backup-button" class="danger-action" type="button" disabled>Restore reviewed snapshot</button></div>
+                </section>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Official stable Paper update</h4>
+                    <p id="paper-update-plan-copy" class="muted">Check the official Paper Downloads Service for a stable JAR and a SHA-256-verified replacement preview.</p>
+                    <p id="paper-update-plan-detail" class="muted">Only a stopped Paper server can receive a reviewed server.jar replacement. Plugins are never auto-updated.</p>
+                  </div>
+                  <div class="live-connection-actions"><button id="paper-update-preflight-button" class="outlined-action" type="button">Check official stable Paper build</button><button id="paper-update-apply-button" class="danger-action" type="button" disabled>Back up and replace server JAR</button></div>
+                </section>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Retained Paper JAR rollback</h4>
+                    <p id="paper-rollback-copy" class="muted">No Paper JAR rollback record is available.</p>
+                    <p id="paper-rollback-plan-copy" class="muted">A Paper rollback also requires a fresh pre-replacement backup and destructive confirmation.</p>
+                  </div>
+                  <div class="live-connection-actions"><button id="paper-rollback-preflight-button" class="outlined-action" type="button" disabled>Prepare rollback preview</button><button id="paper-rollback-apply-button" class="danger-action" type="button" disabled>Back up and restore retained JAR</button></div>
+                </section>
               </div>
             </section>
 
@@ -190,9 +595,9 @@
               <div class="settings-grid">
                 <label class="field wide"><span>Management endpoint</span><input id="management-endpoint" type="url" inputmode="url" placeholder="https://server.example:port/rpc"><small>HTTPS is required by default. HTTP is allowed only for an explicitly selected loopback development endpoint.</small></label>
                 <label class="switch-field"><input id="management-insecure-loopback" type="checkbox"><span><strong>Allow HTTP only for localhost development</strong><small>This never permits HTTP for a remote host.</small></span></label>
-                <label class="field"><span>Optional bearer credential reference</span><input id="management-token" type="password" autocomplete="new-password" placeholder="Stored with Windows protection"><small>The token is cleared from this field after use and never enters server settings, exports, or console logs. The generic WebSocket transport does not invent a nonstandard bearer handshake; use this reference only with a compatible authenticated provider.</small></label>
-                <div class="live-connection-actions"><button id="save-management-token-button" type="button" class="outlined-action">Save protected credential reference</button><button id="discover-management-button" type="button" class="primary-action">Discover live capabilities</button></div>
-                <section class="wide capability-card"><div><h4>Advertised live capabilities</h4><p id="management-capability-copy" class="muted">No capability discovery result is stored yet.</p></div><div id="management-capability-list" class="capability-list" aria-live="polite"></div></section>
+                <label class="field"><span>Protected provider credential (adapter required)</span><input id="management-token" type="password" autocomplete="new-password" placeholder="Stored with Windows protection"><small>The credential is cleared from this field after save and never enters server settings, exports, or console logs. This build has no documented provider-specific authentication adapter, so the generic WebSocket transport never sends it.</small></label>
+                <div class="live-connection-actions"><button id="save-management-token-button" type="button" class="outlined-action">Save protected credential</button><button id="clear-management-token-button" type="button" class="outlined-action">Clear protected credential</button><button id="discover-management-button" type="button" class="primary-action">Discover live capabilities</button></div>
+                <section class="wide capability-card"><div><h4>Advertised live capabilities</h4><p id="management-capability-copy" class="muted">No capability discovery result is stored yet.</p><p id="management-authentication-copy" class="muted">Endpoints that require authentication remain unavailable until a documented provider adapter exists.</p></div><div id="management-capability-list" class="capability-list" aria-live="polite"></div></section>
                 <section class="wide live-resource-grid">
                   <article><h4>Players</h4><p>Live player list and targeted actions appear only when advertised.</p><button type="button" class="outlined-action live-operation" data-live-operation="players.list">Refresh players</button></article>
                   <article><h4>Allowlist and operators</h4><p>Manage access with typed player identifiers and an affected-player preview.</p><button type="button" class="outlined-action live-operation" data-live-operation="allowlist.list">Refresh access lists</button></article>
@@ -203,12 +608,14 @@
             </section>
 
             <section id="panel-commands" class="settings-panel" role="tabpanel" data-panel="commands" hidden>
-              <div class="panel-heading"><div><p class="eyebrow">VERSION · FLAVOR · CAPABILITY COMMAND CENTER</p><h3>Structured commands with a raw fallback</h3><p class="muted">Known command families provide typed controls. The selected transport displays its source badge: live protocol, Paper runtime usage, Spigot JAR help, plugin metadata, local console, or RCON.</p></div><button id="refresh-command-center-button" type="button" class="outlined-action">Refresh command sources</button></div>
+              <div class="panel-heading"><div><p class="eyebrow">VERSION · FLAVOR · CAPABILITY COMMAND CENTER</p><h3>Structured commands with a raw fallback</h3><p class="muted">Known command families provide typed controls. The selected transport displays its source badge: live protocol, selected-JAR help, Paper runtime usage, Spigot JAR help, plugin metadata, local console, or RCON.</p></div><button id="refresh-command-center-button" type="button" class="outlined-action">Collect selected evidence</button></div>
               <div class="settings-grid command-center-grid">
+                <fieldset class="wide command-discovery-sources" aria-describedby="command-discovery-copy"><legend>Explicit runtime evidence sources</legend><label class="switch-field"><input id="command-discovery-jar" type="checkbox"><span><strong>Selected JAR —help and —version</strong><small>Runs only bounded direct Java help/version probes against the selected stopped server JAR; it never sends a lifecycle command.</small></span></label><label class="switch-field"><input id="command-discovery-local" type="checkbox"><span><strong>Running local console</strong><small>Send only the selected fixed help query to the app-managed local process, then retain the bounded observed response.</small></span></label><label class="switch-field"><input id="command-discovery-rcon" type="checkbox"><span><strong>Loopback RCON</strong><small>Send only the selected fixed help query through the protected local RCON route.</small></span></label><fieldset class="command-discovery-query-list"><legend>Fixed runtime queries</legend><label class="switch-field"><input id="command-discovery-help" type="checkbox"><span><strong>/help</strong><small>Observed registered-command help from the selected running route.</small></span></label><label class="switch-field"><input id="command-discovery-plugins" type="checkbox"><span><strong>/plugins</strong><small>Observed loaded-plugin listing from the selected running route.</small></span></label><label class="switch-field"><input id="command-discovery-paper" type="checkbox"><span><strong>/paper</strong><small>Paper-only observed usage evidence for current Paper subcommands.</small></span></label></fieldset><small id="command-discovery-copy">No source or query is sent until you select it and choose Collect selected evidence. Plugin descriptors remain non-executable until live runtime evidence confirms them.</small></fieldset>
                 <label class="field"><span>Command family</span><select id="command-family"></select></label>
                 <label class="field"><span>Structured action</span><select id="command-action"></select></label>
                 <label class="field"><span>Transport</span><select id="command-transport"><option value="protocol">Management protocol (advertised only)</option><option value="local">Local process console</option><option value="rcon">RCON fallback</option></select></label>
-                <div class="command-source-card"><span>Source badge</span><strong id="command-source-badge">Registry seed</strong><small id="command-capability-state">Choose an action to see availability and risk.</small></div>
+                <div class="command-source-card"><span>Source badge</span><strong id="command-source-badge">Registry seed</strong><small id="command-capability-state">Choose an action to see availability and risk.</small><small id="command-origin-copy">Origin and runtime evidence appear after selecting an action.</small></div>
+                <details class="wide command-evidence-log"><summary>Captured runtime evidence</summary><div id="command-evidence-list"><p class="muted">No selected-JAR, local-console, or RCON discovery evidence has been recorded for this server.</p></div></details>
                 <div id="command-field-editor" class="wide command-field-editor" aria-live="polite"></div>
                 <label class="field wide"><span>Tokenized raw composer</span><input id="command-raw-tokens" type="text" maxlength="4096" placeholder="A bounded token fallback; shell operators and control characters are rejected"><small>This is a Minecraft command token fallback, not an operating-system command shell.</small></label>
                 <pre id="command-preview" class="command-preview" aria-live="polite">Select a structured action to compose a command.</pre>
@@ -230,6 +637,18 @@
                 <article class="status-summary-card"><span>Last updated</span><strong id="local-status-updated">Not loaded</strong></article>
                 <article class="status-summary-card"><span>Completeness inventory</span><strong id="local-status-completeness">Not loaded</strong></article>
               </div>
+              <section class="wide status-detail-card">
+                <div>
+                  <h4>Optional Shared Status Hub bridge</h4>
+                  <p class="muted">Local status stays available whether this bridge is unconfigured, unavailable, or disconnected. This page never accepts an enrollment token or session key.</p>
+                </div>
+                <div class="settings-grid">
+                  <label class="field wide"><span>Bridge endpoint</span><input id="status-hub-endpoint" type="url" maxlength="1024" autocomplete="off" placeholder="https://status.example.invalid/"><small>Use HTTPS. HTTP is accepted only for explicitly enabled numeric loopback development endpoints.</small></label>
+                  <label class="switch-field wide"><input id="status-hub-allow-loopback" type="checkbox"><span><strong>Allow local HTTP development</strong><small>Only `127.0.0.1` or `::1` is accepted when this is enabled. It does not enable LAN or public HTTP.</small></span></label>
+                  <div class="wide live-connection-actions"><button id="save-status-hub-bridge-button" type="button" class="outlined-action">Save bridge settings</button><button id="sync-status-hub-bridge-button" type="button" class="primary-action">Connect and refresh status</button><button id="clear-status-hub-bridge-button" type="button" class="outlined-action">Remove bridge settings</button></div>
+                  <div class="wide status-record" data-state="idle"><strong id="status-hub-bridge-state">Bridge state: not loaded</strong><span id="status-hub-bridge-detail">The local status destination remains active. A privileged protected-storage provisioning route must already provide an enrollment credential before any external request can start.</span><span id="status-hub-bridge-activity">No accepted external registration, update, inbox poll, or reply delivery has been observed.</span></div>
+                </div>
+              </section>
               <section class="wide status-detail-card">
                 <div><h4>Active operations</h4><p class="muted">Install, setup, start, stop, and discovery work reports here when the app has observed it.</p></div>
                 <div id="local-status-operations" class="status-record-list" aria-live="polite"></div>
@@ -254,9 +673,11 @@
             <section id="panel-plugins" class="settings-panel" role="tabpanel" data-panel="plugins" hidden>
               <div class="panel-heading"><div><p class="eyebrow">PAPER AND SPIGOT EXTENSIONS</p><h3>Plugin folder</h3></div></div>
               <div class="plugin-install-card">
-                <div><h4>Install a plugin JAR</h4><p>Select a local plugin JAR. Minecraft Server Studio copies it into the selected server's plugins folder without opening a shell.</p></div>
+                <div><h4>Inspect and stage a local plugin JAR</h4><p data-i18n-display-name="plugins.description">Select a local plugin JAR. The app inspects its bounded ZIP/JAR signature, manifest, descriptor, SHA-256, declared dependencies, duplicate names, and load-order cycles. It never downloads a third-party plugin.</p></div>
                 <div class="plugin-actions"><input id="plugin-path" type="text" readonly placeholder="No plugin selected"><button id="browse-plugin-button" class="outlined-action" type="button">Choose JAR</button><button id="install-plugin-button" class="primary-action" type="button">Install plugin</button></div>
               </div>
+              <section id="plugin-plan" class="plugin-plan" aria-live="polite">Choose a local JAR to inspect its ZIP signature, SHA-256, descriptor, dependencies, and compatibility plan before staging.</section>
+              <div class="plugin-promotion-row"><p class="muted">When the server is running, a reviewed JAR is staged outside <code>plugins</code>. Promotion is atomic and occurs only after the server stops.</p><button id="promote-staged-plugins-button" class="outlined-action" type="button" disabled>Promote staged plugins</button></div>
               <div class="plugin-list" id="plugin-list" aria-live="polite"></div>
             </section>
 
@@ -273,8 +694,8 @@
 
     <dialog id="create-dialog" aria-labelledby="create-title">
       <form id="create-form" method="dialog">
-        <div class="dialog-heading"><div><p class="eyebrow">NEW LOCAL SERVER</p><h2 id="create-title">Create a Minecraft server</h2></div><button class="icon-action" type="button" id="close-create-dialog" aria-label="Close create server dialog">×</button></div>
-        <p>Choose the server software, version, folder, and initial capacity. All other settings remain editable after creation.</p>
+        <div class="dialog-heading"><div><p class="eyebrow" data-i18n="dialog.createEyebrow">NEW LOCAL SERVER</p><h2 id="create-title" data-i18n="dialog.createTitle">Create a Minecraft server</h2></div><span class="dialog-emoji" aria-hidden="true">⛏️</span><button class="icon-action" type="button" id="close-create-dialog" aria-label="Close create server dialog">×</button></div>
+        <p data-i18n="dialog.createDescription">Choose the server software, version, folder, and initial capacity. All other settings remain editable after creation.</p>
         <div class="settings-grid">
           <label class="field"><span>Server name</span><input id="create-name" type="text" maxlength="80" required placeholder="Weekend Paper"></label>
           <label class="field"><span>Folder name</span><input id="create-directory" type="text" maxlength="64" required placeholder="weekend-paper"></label>
@@ -285,13 +706,129 @@
           <label class="field"><span>Initial memory: <output id="create-memory-output">4</output> GB</span><input id="create-memory" type="range" min="1" max="32" value="4"></label>
           <label class="switch-field wide"><input id="create-eula" type="checkbox"><span><strong>I have read and accept the Minecraft EULA for this server</strong><small>The server cannot be started until this is selected. Your acceptance is written to the server's eula.txt file.</small></span></label>
         </div>
-        <div class="dialog-actions"><button type="button" id="cancel-create-button" class="outlined-action">Cancel</button><button type="submit" class="primary-action">Create server</button></div>
+        <div class="dialog-actions"><button type="button" id="cancel-create-button" class="outlined-action" data-i18n="dialog.cancel">Cancel</button><button type="submit" class="primary-action" data-i18n="dialog.create">Create server</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="experience-settings-dialog" aria-labelledby="experience-settings-title">
+      <form id="experience-settings-form" method="dialog" class="experience-settings-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow" data-i18n="settings.subtitle">Personal presentation controls</p>
+            <h2 id="experience-settings-title" data-i18n="settings.title">Studio preferences</h2>
+          </div>
+          <span class="dialog-emoji" aria-hidden="true">⚙️</span>
+          <button class="icon-action" type="button" id="close-experience-settings-dialog" aria-label="Close preferences">×</button>
+        </div>
+
+        <section class="settings-search-shell" aria-label="Search Studio preferences">
+          <label class="field" for="experience-settings-search"><span>Search these preferences</span><div class="settings-search-row"><input id="experience-settings-search" type="search" autocomplete="off" placeholder="Find narrator or schedule settings"><button id="experience-settings-regex-toggle" type="button" class="outlined-action" aria-expanded="false" aria-controls="experience-settings-regex-builder">Regex builder</button></div></label>
+          <section id="experience-settings-regex-builder" class="regex-builder" hidden aria-label="Preferences search regex builder">
+            <div class="settings-grid"><label class="field"><span>Pattern</span><input id="experience-settings-regex-pattern" type="text" maxlength="256" autocomplete="off" placeholder="Use plain search unless you enable regex"></label><label class="field"><span>Flags</span><input id="experience-settings-regex-flags" type="text" maxlength="8" value="i" autocomplete="off" placeholder="i, m, or u"></label><label class="field wide"><span>Sample text</span><input id="experience-settings-regex-sample" type="text" maxlength="512" autocomplete="off" placeholder="Try the pattern against this local sample"></label></div>
+            <div class="regex-builder-actions"><button type="button" class="outlined-action" data-regex-insert="literal">Literal</button><button type="button" class="outlined-action" data-regex-insert="anchor">Anchor</button><button type="button" class="outlined-action" data-regex-insert="class">Character class</button><button type="button" class="outlined-action" data-regex-insert="group">Group</button><button type="button" class="outlined-action" data-regex-insert="alternation">Alternation</button><button type="button" class="outlined-action" data-regex-insert="quantifier">Quantifier</button><button id="experience-settings-regex-use" type="button" class="primary-action">Use regex</button><button id="experience-settings-regex-clear" type="button" class="outlined-action">Return to plain search</button></div>
+            <p id="experience-settings-regex-status" class="experience-status" aria-live="polite">Plain-text search is active.</p>
+          </section>
+          <p id="experience-settings-search-status" class="muted" aria-live="polite">All preference sections are visible.</p>
+        </section>
+
+        <section class="experience-card" data-school-hidden data-settings-card data-settings-search="language message style English Cantonese bilingual funny playfulness">
+          <div>
+            <h3 data-i18n="settings.languageTitle">Language and message style</h3>
+            <p class="muted" data-i18n="settings.languageDescription">Choose how app-owned navigation, headings, dialog framing, and notification framing are presented. Dynamic server facts and external error text stay exact.</p>
+          </div>
+          <fieldset id="language-mode-group" class="language-mode-group">
+            <legend class="sr-only" data-i18n="settings.languageMode">Language mode</legend>
+            <label><input type="radio" name="language-mode" value="english"><span data-i18n="settings.languageEnglish">English</span></label>
+            <label><input type="radio" name="language-mode" value="cantonese"><span data-i18n="settings.languageCantonese">Playful Hong Kong-style Cantonese</span></label>
+            <label><input type="radio" name="language-mode" value="bilingual"><span data-i18n="settings.languageBilingual">Bilingual</span></label>
+          </fieldset>
+          <div class="settings-grid">
+            <label class="field"><span data-i18n="settings.englishFunny">English message playfulness</span><output id="funny-english-output" class="range-output">Friendly</output><input id="funny-english" type="range" min="1" max="5" step="1" value="2"></label>
+            <label class="field"><span data-i18n="settings.cantoneseFunny">Cantonese message playfulness</span><output id="funny-cantonese-output" class="range-output">醒神</output><input id="funny-cantonese" type="range" min="1" max="5" step="1" value="3"></label>
+          </div>
+          <p class="muted" data-i18n="settings.funnyDescription">This styles all app-owned messages, including errors and warnings, without changing facts. You can reset it at any time.</p>
+        </section>
+
+        <section class="experience-card" data-settings-card data-settings-search="dialog emoji display name title">
+          <div class="settings-grid">
+            <label class="switch-field"><input id="dialog-emoji" type="checkbox"><span><strong data-i18n="settings.dialogEmoji">Show emoji decorations in dialogs and message boxes</strong><small data-i18n="settings.dialogEmojiDescription">Decorative emoji never replace the factual message or control labels.</small></span></label>
+            <label class="field"><span data-i18n="settings.displayName">Display name</span><input id="experience-display-name" type="text" maxlength="80" required><small data-i18n="settings.displayNameDescription">Changes only what this app shows in its title and app-owned copy. Package identity, data location, installer identity, and update identity do not change.</small></label>
+          </div>
+        </section>
+
+        <section class="experience-card narrator-card" data-school-hidden data-settings-card data-settings-search="narrator speech voice English Cantonese rate pitch accessibility screen reader">
+          <div>
+            <p class="eyebrow">SPOKEN APP EVENTS</p>
+            <h3>Event narrator</h3>
+            <p class="muted">The narrator is off by default. It uses only platform voices exposed by this Electron runtime, speaks one queued event at a time, and yields when Electron reports an active accessibility client.</p>
+          </div>
+          <p id="narrator-status" class="experience-status" aria-live="polite">Checking platform narrator availability…</p>
+          <label class="switch-field"><input id="narrator-enabled" type="checkbox"><span><strong>Enable spoken event narration</strong><small>Narration is optional and does not replace visible notifications, labels, or assistive names.</small></span></label>
+          <div class="settings-grid">
+            <label class="field"><span>Narrated language</span><select id="narrator-language"><option value="english">English</option><option value="cantonese">Cantonese</option><option value="both">Both — English then Cantonese</option></select><small>Both queues English before Cantonese; the tracks never overlap.</small></label>
+            <div class="narrator-actions"><button id="narrator-preview" type="button" class="outlined-action">Speak a short preview</button><button id="save-narrator-settings-button" type="button" class="primary-action">Save narrator settings</button></div>
+          </div>
+          <div class="settings-grid narrator-voice-grid">
+            <section class="credential-card" aria-labelledby="narrator-english-title"><div><h4 id="narrator-english-title">English voice</h4><p id="narrator-english-status" class="muted" aria-live="polite">Loading available English voices…</p></div><label class="field"><span>Voice</span><select id="narrator-english-voice"><option value="automatic">Choose automatically</option></select></label><label class="field"><span>Rate <output id="narrator-english-rate-output" class="range-output">1</output></span><input id="narrator-english-rate" type="range" min="0.5" max="2" step="0.1" value="1"></label><label class="field"><span>Pitch <output id="narrator-english-pitch-output" class="range-output">1</output></span><input id="narrator-english-pitch" type="range" min="0" max="2" step="0.1" value="1"></label></section>
+            <section class="credential-card" aria-labelledby="narrator-cantonese-title"><div><h4 id="narrator-cantonese-title">Cantonese voice</h4><p id="narrator-cantonese-status" class="muted" aria-live="polite">Loading available Cantonese voices…</p></div><label class="field"><span>Voice</span><select id="narrator-cantonese-voice"><option value="automatic">Choose automatically</option></select></label><label class="field"><span>Rate <output id="narrator-cantonese-rate-output" class="range-output">1</output></span><input id="narrator-cantonese-rate" type="range" min="0.5" max="2" step="0.1" value="1"></label><label class="field"><span>Pitch <output id="narrator-cantonese-pitch-output" class="range-output">1</output></span><input id="narrator-cantonese-pitch" type="range" min="0" max="2" step="0.1" value="1"></label></section>
+          </div>
+        </section>
+
+        <section class="experience-card schedule-card" data-school-hidden data-settings-card data-settings-search="scheduled setting local time language weekday date timezone source Home Assistant HTTPS API">
+          <div>
+            <p class="eyebrow">LOCAL-TIME RULES</p>
+            <h3>Scheduled language settings</h3>
+            <p class="muted">This foundation schedules the saved language mode only. Rules use this computer’s local timezone. Higher priority wins; matching equal-priority rules resolve by stable schedule identifier. Cross-midnight windows belong to the day on which they start.</p>
+          </div>
+          <p id="schedule-effective-status" class="experience-status" aria-live="polite">Loading local schedule state…</p>
+          <div class="settings-grid">
+            <label class="field"><span>Rule source</span><select id="schedule-source"><option value="local">Local schedule</option><option value="https-api" disabled>Validated HTTPS API — unavailable in this build</option><option value="home-assistant" disabled>Home Assistant boolean entity — unavailable in this build</option></select><small id="schedule-source-detail">Only the local source is active. No schedule-source network request is made.</small></label>
+            <label class="field"><span>Rule label</span><input id="schedule-label" type="text" maxlength="80" value="Scheduled language"></label>
+            <label class="field"><span>Scheduled language</span><select id="schedule-language"><option value="english">English</option><option value="cantonese">Playful Hong Kong-style Cantonese</option><option value="bilingual">Bilingual</option></select></label>
+            <label class="field"><span>Priority</span><input id="schedule-priority" type="number" min="0" max="999" step="1" value="100"><small>Higher number wins. A stable identifier breaks exact ties.</small></label>
+            <label class="field"><span>Optional start date</span><input id="schedule-date-start" type="date"></label>
+            <label class="field"><span>Optional end date</span><input id="schedule-date-end" type="date"></label>
+            <label class="field"><span>Start time</span><input id="schedule-time-start" type="time" value="09:00" required></label>
+            <label class="field"><span>End time</span><input id="schedule-time-end" type="time" value="17:00" required><small>Equal times are rejected. A later start than end is a cross-midnight window.</small></label>
+          </div>
+          <fieldset class="schedule-weekdays"><legend>Active local weekdays</legend><label class="switch-field"><input id="schedule-every-day" type="checkbox" checked><span><strong>Every day</strong><small>Every day selects all local weekdays instead of creating seven duplicate rules.</small></span></label><div id="schedule-weekday-options" class="weekday-options"><label><input type="checkbox" value="0" checked>Sun</label><label><input type="checkbox" value="1" checked>Mon</label><label><input type="checkbox" value="2" checked>Tue</label><label><input type="checkbox" value="3" checked>Wed</label><label><input type="checkbox" value="4" checked>Thu</label><label><input type="checkbox" value="5" checked>Fri</label><label><input type="checkbox" value="6" checked>Sat</label></div></fieldset>
+          <div class="narrator-actions"><button id="add-scheduled-setting-button" type="button" class="primary-action">Add local language rule</button></div>
+          <section class="schedule-list-section" aria-labelledby="scheduled-settings-list-title"><div class="schedule-list-heading"><div><h4 id="scheduled-settings-list-title">Saved local language rules</h4><p class="muted">Disable a rule to retain it without applying it. This source-only foundation does not delete rules automatically.</p></div><label class="field schedule-search-field"><span>Search scheduled rules</span><div class="settings-search-row"><input id="schedule-search" type="search" autocomplete="off" placeholder="Find a label or language"><button id="schedule-regex-toggle" type="button" class="outlined-action" aria-expanded="false" aria-controls="schedule-regex-builder">Regex builder</button></div></label></div>
+            <section id="schedule-regex-builder" class="regex-builder" hidden aria-label="Scheduled rule search regex builder"><div class="settings-grid"><label class="field"><span>Pattern</span><input id="schedule-regex-pattern" type="text" maxlength="256" autocomplete="off"></label><label class="field"><span>Flags</span><input id="schedule-regex-flags" type="text" maxlength="8" value="i" autocomplete="off"></label><label class="field wide"><span>Sample text</span><input id="schedule-regex-sample" type="text" maxlength="512" autocomplete="off"></label></div><div class="regex-builder-actions"><button type="button" class="outlined-action" data-schedule-regex-insert="literal">Literal</button><button type="button" class="outlined-action" data-schedule-regex-insert="anchor">Anchor</button><button type="button" class="outlined-action" data-schedule-regex-insert="class">Character class</button><button type="button" class="outlined-action" data-schedule-regex-insert="group">Group</button><button type="button" class="outlined-action" data-schedule-regex-insert="alternation">Alternation</button><button type="button" class="outlined-action" data-schedule-regex-insert="quantifier">Quantifier</button><button id="schedule-regex-use" type="button" class="primary-action">Use regex</button><button id="schedule-regex-clear" type="button" class="outlined-action">Return to plain search</button></div><p id="schedule-regex-status" class="experience-status" aria-live="polite">Plain-text search is active.</p></section>
+            <p id="schedule-search-status" class="muted" aria-live="polite">Loading saved local language rules…</p><div id="scheduled-settings-list" class="scheduled-settings-list" role="list" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <section class="experience-card school-mode-card" data-settings-card data-settings-search="School mode shared local credential password PIN recovery">
+          <div>
+            <p class="eyebrow" id="school-mode-eyebrow" data-i18n="settings.schoolEyebrow">SHARED LOCAL EXPERIENCE CONTROL</p>
+            <h3 id="school-mode-title">Shared local mode control</h3>
+            <p class="muted" data-i18n-school-label="settings.schoolDescription">This is a shared local user-experience control, not a security boundary. It forces English while active and hides language and message-playfulness controls. It does not encrypt data or prevent a local reset.</p>
+          </div>
+          <p id="school-mode-status" class="experience-status" aria-live="polite">Loading shared local mode status…</p>
+          <div class="settings-grid">
+            <label class="field"><span data-i18n="settings.schoolLabel">Mode label</span><input id="school-mode-label" type="text" maxlength="80" required></label>
+            <div class="school-mode-actions"><button id="save-school-mode-label-button" type="button" class="outlined-action" data-i18n="settings.saveSchoolLabel">Save mode label</button><button id="create-school-mode-record-button" type="button" class="outlined-action" data-i18n="settings.createSchoolRecord">Create shared local record</button></div>
+          </div>
+          <label class="switch-field"><input id="school-mode-enabled" type="checkbox"><span><strong id="school-mode-toggle-label">Enable shared mode</strong><small data-i18n="settings.schoolToggleDescription">Turning it off requires the shared unlock password or PIN. While the shared record is unavailable, English safety presentation remains active.</small></span></label>
+          <section class="credential-card" aria-labelledby="school-mode-credential-title">
+            <div><h4 id="school-mode-credential-title" data-i18n="settings.unlockTitle">Shared unlock password or PIN</h4><p class="muted" data-i18n="settings.unlockDescription">The credential is stored through operating-system protection, never in the shared record. To reset after losing it, delete the shared local application-data record yourself; this is a user-experience recovery route, not account support.</p><p class="muted"><span data-i18n="settings.recoveryFolder">Recovery folder:</span> <code id="school-mode-recovery-path">Loading local application-data location…</code></p></div>
+            <div class="settings-grid">
+              <label class="field"><span data-i18n="settings.currentCredential">Current password or PIN</span><input id="school-mode-current-credential" type="password" autocomplete="current-password" maxlength="256"></label>
+              <label class="field"><span data-i18n="settings.newCredential">New password or PIN</span><input id="school-mode-new-credential" type="password" autocomplete="new-password" maxlength="256"></label>
+              <label class="field"><span data-i18n="settings.confirmCredential">Confirm new password or PIN</span><input id="school-mode-confirm-credential" type="password" autocomplete="new-password" maxlength="256"></label>
+              <div class="school-mode-actions"><button id="save-school-mode-credential-button" type="button" class="outlined-action" data-i18n="settings.saveCredential">Save unlock credential</button></div>
+            </div>
+          </section>
+        </section>
+
+        <div class="dialog-actions"><button id="close-experience-settings-button" type="button" class="outlined-action" data-i18n="settings.close">Close preferences</button><button id="save-experience-settings-button" type="submit" class="primary-action" data-i18n="settings.savePresentation">Save presentation settings</button></div>
       </form>
     </dialog>
 
     <dialog id="command-confirmation-dialog" aria-labelledby="command-confirmation-title">
       <section class="confirmation-dialog">
-        <div class="dialog-heading"><div><p class="eyebrow">CONSEQUENTIAL SERVER ACTION</p><h2 id="command-confirmation-title">Confirm operation</h2></div></div>
+        <div class="dialog-heading"><div><p class="eyebrow">CONSEQUENTIAL SERVER ACTION</p><h2 id="command-confirmation-title">Confirm operation</h2></div><span class="dialog-emoji" aria-hidden="true">⚠️</span></div>
         <p id="command-confirmation-copy">Review this operation before it is sent.</p>
         <p id="command-confirmation-target" class="confirmation-target"></p>
         <label class="switch-field"><input id="command-confirmation-first" type="checkbox"><span><strong>First independent confirmation</strong><small>I reviewed the affected local server and the action's impact.</small></span></label>
@@ -301,7 +838,21 @@
       </section>
     </dialog>
 
+    <dialog id="toy-lock-unlock-dialog" aria-labelledby="toy-lock-unlock-title">
+      <form id="toy-lock-unlock-form" method="dialog" class="toy-lock-unlock-form">
+        <div class="dialog-heading"><div><p class="eyebrow">TOY LOCK</p><h2 id="toy-lock-unlock-title">Unlock target</h2></div><button id="close-toy-lock-unlock-dialog" class="icon-action" type="button" aria-label="Close toy-lock unlock dialog">×</button></div>
+        <p id="toy-lock-unlock-copy">Enter this lock's own credential. This is a user-experience lock, not a security boundary.</p>
+        <label class="field"><span id="toy-lock-unlock-credential-label">Credential</span><input id="toy-lock-unlock-credential" type="password" maxlength="4096" autocomplete="one-time-code"></label>
+        <p id="toy-lock-unlock-recovery" class="muted">Recovery: delete the application's local data folder yourself. No ticket is sent anywhere.</p>
+        <div class="dialog-actions"><button id="toy-lock-unlock-cancel" class="outlined-action" type="button">Cancel</button><button class="primary-action" type="submit">Unlock</button></div>
+      </form>
+    </dialog>
+
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="experience-copy.js"></script>
+    <script src="rcon-response-safety.js"></script>
+    <script src="markdown-renderer.js"></script>
+    <script src="narrator.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

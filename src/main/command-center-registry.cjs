@@ -18,6 +18,8 @@ const MAX_TOKEN_LENGTH = 512;
 const MAX_RICH_TEXT_LENGTH = 1024;
 const MAX_DISCOVERED_ACTIONS = 512;
 const MAX_DISCOVERED_PERMISSIONS = 2048;
+const MAX_DISCOVERY_EVIDENCE = 48;
+const MAX_DISCOVERY_EVIDENCE_TEXT = 64 * 1024;
 
 const ROUTES = Object.freeze({
   LOCAL_CONSOLE: 'local-console',
@@ -95,6 +97,18 @@ const CAPABILITY_BADGE_RULES = Object.freeze({
     id: 'spigot-jar-help',
     source: 'spigot-jar-help',
     label: 'Spigot JAR --help evidence',
+    whenMissing: 'unknown'
+  },
+  LOCAL_JAR_PROBE: {
+    id: 'local-jar-probe',
+    source: 'local-jar-probe',
+    label: 'Selected JAR evidence',
+    whenMissing: 'unknown'
+  },
+  LIVE_RUNTIME: {
+    id: 'live-runtime-command',
+    source: 'live-runtime',
+    label: 'Live runtime command evidence',
     whenMissing: 'unknown'
   },
   PLUGIN_YAML: {
@@ -370,6 +384,8 @@ function commandAction(spec) {
     confirmationRequirement: spec.confirmationRequirement || CONFIRMATION_REQUIREMENTS.NONE,
     deprecated: Boolean(spec.deprecated),
     warning: spec.warning || '',
+    origin: spec.origin || { source: 'schema', label: 'Built-in command schema' },
+    runtimeEvidenceRequired: spec.runtimeEvidenceRequired || null,
     rawFallback: rawFallback(spec.rawFallback),
     transport: {
       localConsole: spec.localConsole !== false,
@@ -1386,6 +1402,8 @@ function emptyRegistry() {
     discovered: {
       pluginCommands: [],
       permissions: [],
+      jarProbes: [],
+      liveResponses: [],
       sources: []
     }
   };
@@ -1509,11 +1527,16 @@ function resolveActionExecution(registry, actionId, preferences = {}) {
   const action = typeof actionId === 'string' ? getAction(registry, actionId) : actionId;
   if (!action) throw new Error('The requested Command Center action does not exist.');
   const requestedRoute = preferences.route || 'auto';
+  const requiredEvidence = action.runtimeEvidenceRequired;
+  const missingRuntimeEvidence = requiredEvidence?.capability && !hasCapability(registry, requiredEvidence.capability);
+  const evidenceFallback = missingRuntimeEvidence
+    ? (requiredEvidence.explanation || 'This command is declared by metadata but has not been confirmed by a live runtime response.')
+    : null;
   const protocolMethod = protocolMethodForAction(registry, action);
   const protocol = protocolMethod
     ? {
-      state: PROTOCOL_REQUIREMENT_STATES.ADVERTISED.id,
-      executable: true,
+      state: missingRuntimeEvidence ? 'runtime-evidence-required' : PROTOCOL_REQUIREMENT_STATES.ADVERTISED.id,
+      executable: !missingRuntimeEvidence,
       method: protocolMethod,
       route: ROUTES.PROTOCOL
     }
@@ -1527,16 +1550,16 @@ function resolveActionExecution(registry, actionId, preferences = {}) {
     };
   const localConsole = {
     route: ROUTES.LOCAL_CONSOLE,
-    executable: Boolean(action.transport.localConsole && registry.runtime.consoleAvailable),
+    executable: Boolean(action.transport.localConsole && registry.runtime.consoleAvailable && !missingRuntimeEvidence),
     state: action.transport.localConsole
-      ? (registry.runtime.consoleAvailable ? 'available' : 'not-connected')
+      ? (missingRuntimeEvidence ? 'runtime-evidence-required' : (registry.runtime.consoleAvailable ? 'available' : 'not-connected'))
       : 'not-applicable'
   };
   const rcon = {
     route: ROUTES.RCON,
-    executable: Boolean(action.transport.rcon && registry.runtime.rconAvailable),
+    executable: Boolean(action.transport.rcon && registry.runtime.rconAvailable && !missingRuntimeEvidence),
     state: action.transport.rcon
-      ? (registry.runtime.rconAvailable ? 'available' : 'not-connected')
+      ? (missingRuntimeEvidence ? 'runtime-evidence-required' : (registry.runtime.rconAvailable ? 'available' : 'not-connected'))
       : 'not-applicable'
   };
   const hostLifecycle = {
@@ -1561,8 +1584,13 @@ function resolveActionExecution(registry, actionId, preferences = {}) {
     canExecute: Boolean(requested?.executable),
     fallback: requested?.executable
       ? null
-      : 'Use an explicitly available local console or RCON route. Do not invoke an unadvertised runtime protocol method.'
+      : (evidenceFallback || 'Use an explicitly available local console or RCON route. Do not invoke an unadvertised runtime protocol method.')
   };
+}
+
+function normalizedCommandName(value) {
+  const command = normalizedString(value).replace(/^\//, '').toLowerCase();
+  return safeIdentifier(command, 128) ? command : null;
 }
 
 function actionView(registry, family, action) {
@@ -1638,7 +1666,10 @@ function mergeRpcDiscover(registry, discover = {}) {
   const candidate = discover.result || discover;
   const commands = candidate?.commands || candidate?.commandNames || [];
   for (const command of asStringList(commands, MAX_DISCOVERED_ACTIONS)) {
-    addCapability(registry, 'command:' + command.replace(/^\//, ''), 'rpc.discover', { command });
+    const normalized = normalizedCommandName(command);
+    if (!normalized) continue;
+    addCapability(registry, 'command:' + normalized, 'rpc.discover', { command });
+    addCapability(registry, 'runtime.command:' + normalized, 'rpc.discover', { command });
   }
   if (candidate?.consoleAvailable === true) registry.runtime.consoleAvailable = true;
   if (candidate?.rconAvailable === true) registry.runtime.rconAvailable = true;
@@ -1711,6 +1742,234 @@ function mergeSpigotJarHelpDiscovery(registry, help = {}) {
   return registry;
 }
 
+function boundedDiscoveryText(value) {
+  const text = value === undefined || value === null ? '' : String(value);
+  return {
+    text: text.slice(0, MAX_DISCOVERY_EVIDENCE_TEXT),
+    truncated: text.length > MAX_DISCOVERY_EVIDENCE_TEXT
+  };
+}
+
+function normalizedDiscoveryEvidence(entry, kind) {
+  const output = boundedDiscoveryText(entry?.text ?? entry?.response ?? entry?.output ?? '');
+  const requestSource = typeof entry?.request === 'string' ? entry.request : entry?.probe;
+  return {
+    kind,
+    source: normalizedString(entry?.source || entry?.provenance?.source || 'local-runtime') || 'local-runtime',
+    route: normalizedString(entry?.route || entry?.provenance?.route || '') || null,
+    request: normalizedString(requestSource || '') || null,
+    capturedAt: normalizedString(entry?.capturedAt || entry?.finishedAt || entry?.at || '') || null,
+    state: normalizedString(entry?.state || '') || 'captured',
+    exitCode: Number.isInteger(entry?.exitCode) ? entry.exitCode : null,
+    timedOut: Boolean(entry?.timedOut),
+    truncated: Boolean(entry?.truncated || output.truncated),
+    text: output.text,
+    flags: asStringList(entry?.flags || [], 128),
+    provenance: (entry?.provenance || entry?.metadata?.provenance) && typeof (entry?.provenance || entry?.metadata?.provenance) === 'object'
+      ? plainClone(entry.provenance || entry.metadata.provenance)
+      : null
+  };
+}
+
+function appendDiscoveryEvidence(collection, evidence) {
+  if (!Array.isArray(collection) || collection.length >= MAX_DISCOVERY_EVIDENCE) return;
+  const serialized = JSON.stringify(evidence);
+  if (!collection.some((candidate) => JSON.stringify(candidate) === serialized)) collection.push(evidence);
+}
+
+function liveHelpCommandNames(text) {
+  const commands = [];
+  for (const line of String(text || '').split(/\r?\n/).slice(0, 2048)) {
+    for (const match of line.matchAll(/(?:^|[\s,;:])\/([A-Za-z][A-Za-z0-9_.:-]{0,127})(?=$|[\s,;:[(<])/g)) {
+      const command = normalizedCommandName(match[1]);
+      if (command) appendUnique(commands, command, MAX_DISCOVERED_ACTIONS);
+    }
+  }
+  return commands;
+}
+
+function paperUsageEntriesFromResponse(text) {
+  const entries = [];
+  for (const line of String(text || '').split(/\r?\n/).slice(0, 2048)) {
+    const matches = line.match(/\/?paper(?:\s+[A-Za-z][A-Za-z0-9_-]{0,127}){1,4}/gi) || [];
+    for (const match of matches) {
+      try {
+        const tokens = tokenizeRawCommand(match.replace(/^\//, ''), { maxTokens: 5, maxTokenLength: 128 }).tokens;
+        if (tokens[0]?.toLowerCase() === 'paper' && tokens.length > 1) appendUnique(entries, { tokens }, 64);
+      } catch {
+        // Only a bounded, tokenizable usage fragment can become evidence.
+      }
+    }
+  }
+  return entries;
+}
+
+function loadedPluginNamesFromResponse(text) {
+  const names = [];
+  for (const line of String(text || '').split(/\r?\n/).slice(0, 2048)) {
+    const match = line.match(/^\s*(?:plugins?|paper plugins?)\s*(?:\(\d+\))?\s*:\s*(.+)$/i);
+    if (!match) continue;
+    for (const rawName of match[1].split(',')) {
+      const name = normalizedString(rawName.replace(/§[0-9A-FK-OR]/gi, ''));
+      if (name && name.length <= 256 && isControlFree(name)) appendUnique(names, name, MAX_DISCOVERED_ACTIONS);
+    }
+  }
+  return names;
+}
+
+function runtimeCommandAction(command, evidence) {
+  const commandId = command.replace(/[^A-Za-z0-9_.-]+/g, '-').slice(0, 96);
+  const capability = 'runtime.command:' + command;
+  return commandAction({
+    id: 'runtime.' + commandId,
+    title: '/' + command,
+    command,
+    summary: 'Command name observed in an explicitly requested live server help response. Arguments remain tokenized and require the selected runtime route.',
+    fields: [FIELDS.RAW_ARGUMENTS],
+    template: [{ field: 'arguments', tokenList: true }],
+    dynamic: true,
+    origin: {
+      source: evidence.source,
+      route: evidence.route,
+      request: evidence.request,
+      capturedAt: evidence.capturedAt
+    },
+    runtimeEvidenceRequired: {
+      capability,
+      explanation: 'This command may be composed only while its live runtime evidence is present.'
+    },
+    sourceRules: [
+      sourceRule('live-runtime-command', 'Live runtime command', 'live-runtime', {
+        required: true,
+        capability,
+        note: 'The command name was observed in a real local console or RCON help response that the user explicitly requested.'
+      })
+    ],
+    capabilityBadgeRules: [{
+      ...CAPABILITY_BADGE_RULES.LIVE_RUNTIME,
+      capability,
+      label: 'Live runtime command'
+    }],
+    risk: RISK_CATEGORIES.OPERATIONAL,
+    backupRequirement: BACKUP_REQUIREMENTS.RECOMMENDED,
+    confirmationRequirement: CONFIRMATION_REQUIREMENTS.REVIEW
+  });
+}
+
+function runtimeDiscoveryFamily(registry) {
+  let family = findFamily(registry, 'runtime-discovered');
+  if (family) return family;
+  family = {
+    id: 'runtime-discovered',
+    title: 'Runtime-discovered commands',
+    description: 'Commands observed in explicit local console or RCON help responses. They are not scraped or guessed.',
+    sourceRules: [sourceRule('live-runtime', 'Live runtime evidence', 'live-runtime', { required: true })],
+    capabilityBadgeRules: [CAPABILITY_BADGE_RULES.LIVE_RUNTIME],
+    risk: RISK_CATEGORIES.OPERATIONAL,
+    backupRequirement: BACKUP_REQUIREMENTS.RECOMMENDED,
+    confirmationRequirement: CONFIRMATION_REQUIREMENTS.REVIEW,
+    rawFallback: rawFallback({ reason: 'Use tokenized Minecraft arguments only; this catalog never runs an operating-system shell.' }),
+    actions: []
+  };
+  registry.families.push(family);
+  return family;
+}
+
+function jarProbeMetadataHints(metadata) {
+  const hints = metadata?.hints || {};
+  const flavor = Array.isArray(hints.flavorHints) && hints.flavorHints.length === 1
+    ? normalizeFlavor(hints.flavorHints[0])
+    : 'unknown';
+  const minecraftVersion = Array.isArray(hints.minecraftVersionHints) && hints.minecraftVersionHints.length === 1
+    ? normalizeMinecraftVersion(hints.minecraftVersionHints[0])
+    : null;
+  return { flavor, minecraftVersion };
+}
+
+function mergeLocalJarProbeDiscovery(registry, probes = []) {
+  const entries = Array.isArray(probes) ? probes : [probes];
+  let merged = 0;
+  for (const rawProbe of entries.slice(0, MAX_DISCOVERY_EVIDENCE)) {
+    if (!rawProbe || typeof rawProbe !== 'object') continue;
+    const evidence = normalizedDiscoveryEvidence(rawProbe, 'selected-jar');
+    appendDiscoveryEvidence(registry.discovered.jarProbes, evidence);
+    const hints = jarProbeMetadataHints(rawProbe.metadata);
+    if (registry.runtime.flavor === 'unknown' && hints.flavor !== 'unknown') registry.runtime.flavor = hints.flavor;
+    if (!registry.runtime.minecraftVersion && hints.minecraftVersion) registry.runtime.minecraftVersion = hints.minecraftVersion;
+    const probe = normalizedString(rawProbe.probe || (typeof rawProbe.request === 'string' ? rawProbe.request : '')).toLowerCase();
+    if (evidence.state === 'captured' && (probe === '--help' || probe === 'help')) {
+      addCapability(registry, 'jar.help', 'local-jar-probe', {
+        capturedAt: evidence.capturedAt,
+        state: evidence.state,
+        truncated: evidence.truncated
+      });
+      if (registry.runtime.flavor === 'spigot') {
+        mergeSpigotJarHelpDiscovery(registry, {
+          text: evidence.text,
+          flags: rawProbe.flags || []
+        });
+      }
+    }
+    if (evidence.state === 'captured' && (probe === '--version' || probe === 'version')) {
+      addCapability(registry, 'jar.version', 'local-jar-probe', {
+        capturedAt: evidence.capturedAt,
+        state: evidence.state,
+        truncated: evidence.truncated
+      });
+    }
+    merged += 1;
+  }
+  if (merged) registry.runtime.discoveryLog.push({ source: 'local-jar-probe', probes: merged });
+  return registry;
+}
+
+function mergeLiveRuntimeDiscovery(registry, responses = []) {
+  const entries = Array.isArray(responses) ? responses : [responses];
+  let family = findFamily(registry, 'runtime-discovered');
+  let merged = 0;
+  for (const rawResponse of entries.slice(0, MAX_DISCOVERY_EVIDENCE)) {
+    if (!rawResponse || typeof rawResponse !== 'object') continue;
+    const evidence = normalizedDiscoveryEvidence(rawResponse, 'live-runtime');
+    const request = normalizedCommandName(evidence.request);
+    if (!['help', 'plugins', 'paper'].includes(request)) continue;
+    appendDiscoveryEvidence(registry.discovered.liveResponses, evidence);
+    if (rawResponse.metadata && typeof rawResponse.metadata === 'object') normalizeVersionMetadata(registry, rawResponse.metadata);
+    if (evidence.state !== 'captured' || !evidence.text) {
+      merged += 1;
+      continue;
+    }
+    if (request === 'plugins') {
+      for (const plugin of loadedPluginNamesFromResponse(evidence.text)) appendUnique(registry.runtime.discoveredPlugins, plugin, MAX_DISCOVERED_ACTIONS);
+    }
+    if (request === 'paper') {
+      const usage = paperUsageEntriesFromResponse(evidence.text);
+      if (usage.length) mergePaperUsageDiscovery(registry, { commands: usage });
+    }
+    if (request === 'help' || request === 'paper') {
+      for (const command of liveHelpCommandNames(evidence.text)) {
+        addCapability(registry, 'command:' + command, 'live-runtime', {
+          route: evidence.route,
+          request,
+          capturedAt: evidence.capturedAt
+        });
+        addCapability(registry, 'runtime.command:' + command, 'live-runtime', {
+          route: evidence.route,
+          request,
+          capturedAt: evidence.capturedAt
+        });
+        const existing = allActions(registry).some((candidate) => normalizedCommandName(candidate.command) === command);
+        if (!existing) {
+          family = family || runtimeDiscoveryFamily(registry);
+          if (family.actions.length < MAX_DISCOVERED_ACTIONS) family.actions.push(runtimeCommandAction(command, evidence));
+        }
+      }
+    }
+    merged += 1;
+  }
+  if (merged) registry.runtime.discoveryLog.push({ source: 'live-runtime', responses: merged });
+  return registry;
+}
+
 function asStringList(value, max = MAX_DISCOVERED_ACTIONS) {
   const input = Array.isArray(value) ? value : value ? [value] : [];
   const result = [];
@@ -1733,6 +1992,7 @@ function pluginDescriptorEntries(value) {
 function pluginCommandAction(plugin, commandName, descriptor) {
   const pluginId = normalizedString(plugin.name || plugin.plugin || plugin.id || 'plugin').replace(/[^A-Za-z0-9_.-]+/g, '-').slice(0, 96);
   const commandId = normalizedString(commandName).replace(/[^A-Za-z0-9_.-]+/g, '-').slice(0, 96);
+  const runtimeCommand = normalizedCommandName(commandName) || commandName;
   return commandAction({
     id: 'plugin.' + pluginId + '.' + commandId,
     title: '/' + commandName,
@@ -1741,17 +2001,36 @@ function pluginCommandAction(plugin, commandName, descriptor) {
     fields: [FIELDS.RAW_ARGUMENTS],
     template: [{ field: 'arguments', tokenList: true }],
     dynamic: true,
+    origin: {
+      source: 'plugin.yml',
+      plugin: normalizedString(plugin.name || plugin.plugin || plugin.id || 'plugin'),
+      command: commandName,
+      permission: normalizedString(descriptor?.permission) || null
+    },
+    runtimeEvidenceRequired: {
+      capability: 'runtime.command:' + runtimeCommand,
+      explanation: 'plugin.yml declares this command, but the current runtime has not confirmed it through an advertised method or explicit live help response.'
+    },
     sourceRules: [
       sourceRule('plugin-yml-command', 'Plugin descriptor command', 'plugin.yml', {
         required: true,
         capability: 'plugin.command:' + pluginId + ':' + commandId,
         note: 'This command was read from plugin.yml and must still be authorized by the server at execution.'
+      }),
+      sourceRule('live-runtime-command', 'Live runtime command confirmation', 'live-runtime', {
+        required: true,
+        capability: 'runtime.command:' + runtimeCommand,
+        note: 'A plugin descriptor alone does not make a command executable. The selected runtime must advertise or return it through an explicitly requested live help response.'
       })
     ],
     capabilityBadgeRules: [{
       ...CAPABILITY_BADGE_RULES.PLUGIN_YAML,
       capability: 'plugin.command:' + pluginId + ':' + commandId,
       label: 'plugin.yml command'
+    }, {
+      ...CAPABILITY_BADGE_RULES.LIVE_RUNTIME,
+      capability: 'runtime.command:' + runtimeCommand,
+      label: 'Live runtime confirmation'
     }],
     risk: RISK_CATEGORIES.OPERATIONAL,
     backupRequirement: BACKUP_REQUIREMENTS.RECOMMENDED,
@@ -1823,6 +2102,8 @@ function mergeDiscovery(registry, discovery = {}) {
   const working = registry ? plainClone(registry) : emptyRegistry();
   if (!working.runtime) working.runtime = emptyRuntime();
   if (!working.discovered) working.discovered = { pluginCommands: [], permissions: [], sources: [] };
+  if (!Array.isArray(working.discovered.jarProbes)) working.discovered.jarProbes = [];
+  if (!Array.isArray(working.discovered.liveResponses)) working.discovered.liveResponses = [];
   if (discovery.version || discovery.versionMetadata || discovery.runtime) {
     normalizeVersionMetadata(working, discovery.version || discovery.versionMetadata || discovery.runtime);
   }
@@ -1834,6 +2115,12 @@ function mergeDiscovery(registry, discovery = {}) {
   }
   if (discovery.spigot?.jarHelp || discovery.spigotJarHelp || discovery.jarHelp) {
     mergeSpigotJarHelpDiscovery(working, discovery.spigot?.jarHelp || discovery.spigotJarHelp || discovery.jarHelp);
+  }
+  if (discovery.jarProbes || discovery.jarProbe || discovery.selectedJar) {
+    mergeLocalJarProbeDiscovery(working, discovery.jarProbes || discovery.jarProbe || discovery.selectedJar);
+  }
+  if (discovery.liveResponses || discovery.liveRuntime || discovery.consoleResponses) {
+    mergeLiveRuntimeDiscovery(working, discovery.liveResponses || discovery.liveRuntime || discovery.consoleResponses);
   }
   if (discovery.plugins || discovery.pluginYamls || discovery.pluginYaml) {
     mergePluginYamlDiscovery(working, discovery.plugins || discovery.pluginYamls || discovery.pluginYaml);
@@ -2158,6 +2445,8 @@ module.exports = {
   CONFIRMATION_REQUIREMENTS,
   FIELDS,
   MAX_RAW_COMMAND_LENGTH,
+  MAX_DISCOVERY_EVIDENCE,
+  MAX_DISCOVERY_EVIDENCE_TEXT,
   MAX_RAW_TOKENS,
   MAX_TOKEN_LENGTH,
   PROTOCOL_REQUIREMENT_STATES,
@@ -2171,6 +2460,8 @@ module.exports = {
   createCommandCenterRegistry,
   getAction,
   mergeDiscovery,
+  mergeLiveRuntimeDiscovery,
+  mergeLocalJarProbeDiscovery,
   mergePaperUsageDiscovery,
   mergePluginYamlDiscovery,
   mergeRpcDiscover,
