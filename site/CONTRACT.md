@@ -10,6 +10,14 @@ The file is deliberately framework-free. It has no fetch calls, WebSocket calls,
 
 The companion site is a planning and host-integration surface. The contract layer must not claim that browser-local state created a Minecraft server, installed Java, downloaded Paper or Spigot, executed a command, started a process, or transferred a plugin. The public page has one separately documented exception: a visitor-triggered, read-only Ollama observer may issue only three fixed `GET` requests to `http://127.0.0.1:11434`. That observer is not a desktop bridge, server-control channel, configurable endpoint, or general local-network capability.
 
+## Fixed installer browser-handoff boundary
+
+The public page's installer controller is not a transfer contract and does not call a release API, installer service, extension, background worker, or download observer. It reads exactly one static `application/json` record from `#mss-fixed-installer-manifest` in `index.html`. The host accepts only schema version 1 with exactly these fields: `schemaVersion`, `releaseTag`, `version`, `platform`, `assetName`, `assetUrl`, `releaseUrl`, and `unsigned`. It rejects a missing field, extra field, unexpected type, unknown platform, non-immutable tag, inconsistent package name/version, a URL outside the exact project-release path, or any signature status other than the explicitly documented `unsigned` value.
+
+Once valid, the fixed manifest can populate a native start decision and the single real asset link inside that decision. Until the visitor activates that link, no installer URL is available to the browser. Cancel, Escape, and dialog dismissal leave contract state, audit history, and notifications unchanged. Link activation is the only browser-visible event this page records: it may add bounded local audit and notification metadata saying that a browser handoff was requested, but it must not infer a transfer start, byte count, speed, destination, pause, resume, cancellation, completion, checksum result, installer execution, or application installation. The page must preserve those states as explicitly unobservable after handoff.
+
+The host may expose the start decision through the browser-local command palette, but palette activation must reveal the exact Downloads panel and open the same decision rather than start a link automatically. The browser's ordinary navigation or download handling owns the link after activation. No contract method stores or exposes a browser-download record, and no local-history or notification entry is proof of a download or installation outcome.
+
 ## Host connection
 
 Load this file before the host interaction file:

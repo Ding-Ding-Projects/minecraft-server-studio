@@ -34,6 +34,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Use the public landing page's separate browser-local authenticator for manually entered or `otpauth://totp/` entries, local QR pairing reveal, independently credentialed registered-target toy locks, and its local-only Support Tickets recovery desk. It uses origin-scoped browser storage rather than the desktop vault, makes no network request, and remains incomplete for QR import/decoding, synchronization, secret export, every-element lock coverage, localization, automated tests, and capture evidence.
 - Use the public landing page's separate browser-local history view for bounded page-owned audit metadata, local date/action/plain-text/regular-expression filtering, selected-record UTF-8 JSON, JSON Lines, CSV, TSV, or Markdown export, and two-key/full-slider confirmation before deleting page audit records. It never reads server, desktop, browser-history, filesystem, converter-content, or authenticator records; it does not know a browser download destination or completion result.
 - Use the public landing page's browser-local notification center to search, dismiss, and clear page-local notification metadata. Clearing dismissed or all records requires two acknowledgements and a full slider, and it affects no server, installer, file, credential, download, or external data.
+- Use the public landing page's fixed installer-handoff surface to review one verified immutable release manifest before activating a browser link. Cancelling leaves page-local records unchanged; the page records only a link-handoff request and never claims browser transfer progress, destination, cancellation, completion, checksum verification, installation, or runtime success.
 
 ## Desktop workflow
 
@@ -109,6 +110,8 @@ The companion site also independently provides a deliberately bounded local conv
 
 The companion site also has a bounded browser-local notification center. Its notices and audit records describe page-local preview events only; info, success, and progress toasts auto-dismiss after seven seconds while warning and error notices remain until dismissed. The center supports local plain-text and regular-expression discovery, individual/selected dismissal, and two-acknowledgement/full-slider confirmation before clearing only local notification metadata. It does not start or confirm a server operation, browser transfer, installer action, desktop action, or file change. See [Browser-local notification center and destructive confirmation](docs/features/browser-local-notifications-and-confirmation.md) for the local-storage, privacy, and verification boundaries.
 
+The companion site's installer handoff accepts only an embedded fixed, immutable release manifest and validates its exact tag, asset name, platform, release URL, asset URL, and unsigned state before enabling a real start decision. A visitor must choose the dialog's asset link to hand it to the browser. The page keeps progress and completion explicitly unknown after that point because it cannot inspect the browser's transfer or installation state. It creates only bounded browser-local handoff metadata, never a download record or an installer result. See [Browser-local installer download handoff](docs/features/browser-local-installer-download-handoff.md) for the full behavior, failure, security, and unrun-verification boundary.
+
 ## Documentation
 
 - [Server lifecycle and Paper/Spigot setup](docs/features/server-orchestration.md)
@@ -134,6 +137,7 @@ The companion site also has a bounded browser-local notification center. Its not
 - [Browser-local companion-site file converter](docs/features/browser-local-file-converter.md)
 - [Browser-local history and safe exports](docs/features/browser-local-history-and-safe-exports.md)
 - [Browser-local notification center and destructive confirmation](docs/features/browser-local-notifications-and-confirmation.md)
+- [Browser-local installer download handoff](docs/features/browser-local-installer-download-handoff.md)
 - [External editor integration](docs/features/external-editor-integration.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Local history and safe exports](docs/features/local-history-and-safe-exports.md)

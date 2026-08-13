@@ -26,6 +26,7 @@
 - [Browser-local companion-site file converter](browser-local-file-converter.md)
 - [Browser-local history and safe exports](browser-local-history-and-safe-exports.md)
 - [Browser-local notification center and destructive confirmation](browser-local-notifications-and-confirmation.md)
+- [Browser-local installer download handoff](browser-local-installer-download-handoff.md)
 - [External editor integration](external-editor-integration.md)
 - [Local authenticator and toy-lock foundation](authenticator-and-toy-locks.md)
 - [Support Tickets recovery desk](support-tickets.md)
