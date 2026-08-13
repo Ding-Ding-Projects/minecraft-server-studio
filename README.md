@@ -28,6 +28,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Use the local authenticator destination for vault-backed RFC 6238 TOTP code snapshots and optional independently credentialed toy-lock records. QR pairing/import, every-element lock wiring, secret export, and synchronization remain explicitly unavailable in this foundation.
 - Browse bounded app-private local-history metadata by date, action, plain text, or a local regex builder; create a redacted JSON, JSON Lines, YAML, TOML, CSV, TSV, or Markdown export and open it in VS Code only after a real output exists. This foundation does not create a Git repository, save snapshots, or restore prior state.
 - Open the fictional local Support Tickets recovery desk for a toy lock. It can show and ask the operating system to open the actual application-data folder for a user-directed reset route; it never sends a ticket, calls a network service, displays a credential, or deletes application data.
+- Use the public landing page's separate browser-local authenticator for manually entered or `otpauth://totp/` entries, local QR pairing reveal, independently credentialed registered-target toy locks, and its local-only Support Tickets recovery desk. It uses origin-scoped browser storage rather than the desktop vault, makes no network request, and remains incomplete for QR import/decoding, synchronization, secret export, every-element lock coverage, localization, automated tests, and capture evidence.
 
 ## Desktop workflow
 

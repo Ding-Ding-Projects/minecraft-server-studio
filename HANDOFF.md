@@ -21,6 +21,24 @@ The public companion site now has documentation and a per-surface inventory entr
 ### Verification boundary
 
 No tests, linting, independent review, build, package, runtime interaction, deployment verification, or screenshots were run or claimed for this documentation candidate under the active fast-delivery workflow. The documentation intentionally does not state universal completion. Localization, interaction, test, and capture evidence remain incomplete until real implementation and proof are recorded independently.
+## Browser-local landing-page authenticator and toy-lock candidate
+
+The public landing page now has a separate `site/authenticator-locks.js` module
+that keeps a bounded origin-scoped browser-storage record for manually entered
+Base32 or `otpauth://totp/` TOTP entries, local RFC 4226/6238 code snapshots,
+current/next/countdown display, an adjacent regex builder, deliberate local QR
+pairing reveal, independently credentialed registered-target toy locks, and a
+local-only Support Tickets recovery desk. It uses browser Web Crypto, makes no
+network request, does not contact the desktop app, and never adds a secret,
+password, verifier, current code, URI, QR payload, or optional ticket note to
+the ordinary page export/history/status model.
+
+The browser-storage record is not a credential vault or security boundary. QR
+image/clipboard/camera import and decoding, cross-device synchronization,
+secret export, every-rendered-element lock wiring, full operational
+localization, automated tests, built-site interaction, and capture evidence
+remain incomplete. No test, lint, review, browser interaction, capture, build,
+package, release, Page publish, or GitHub mutation was run in this lane.
 
 ## Appearance and browser-style server-tab foundation
 

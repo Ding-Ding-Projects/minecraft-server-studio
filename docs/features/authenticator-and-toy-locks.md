@@ -98,6 +98,55 @@ was run for this feature. The local completeness inventory records the source
 paths and documentation article while keeping localization, test, capture, and
 broader evidence fields pending.
 
+## Public landing-page browser-local companion
+
+The public landing page now independently ships a browser-local authenticator
+and toy-lock foundation in `site/authenticator-locks.js`. It is not a proxy for
+the desktop implementation and does not call the desktop application, a
+backend, a server, or a remote service.
+
+The companion site accepts bounded manual Base32 registration and bounded
+`otpauth://totp/` registration, computes RFC 4226/HOTP and RFC 6238/TOTP using
+browser Web Crypto, and supports SHA-1, SHA-256, SHA-512, six through eight
+digits, and the visible 15/30/45/60/90-second periods. It stores that bounded
+site state only in origin-scoped browser storage because a static page has no
+operating-system credential vault. This is a local browser-storage convenience
+boundary, not a security boundary, and it is never presented as equivalent to
+the desktop credential vault.
+
+Current and next codes plus a readable countdown render locally. A per-list
+plain-text search has its own adjacent regular-expression builder. An explicit
+pairing reveal renders a standard TOTP QR code entirely in the browser and
+shows the grouped manual Base32 secret for 60 seconds before clearing it from
+the DOM. The visitor types a current code from the paired authenticator back
+into the browser-local confirmation field before that pairing is marked
+confirmed. It does not fetch an image, use a QR service, upload a QR, scan a
+camera, parse a QR image or clipboard image, or retain a QR payload in exports
+or history.
+
+The landing page's toy locks are independently credentialed per registered
+target: the authenticator tab, entry list, and pairing reveal. A password lock
+uses an independently salted local PBKDF2 verifier; a TOTP lock uses a separate
+local SHA-1/30-second Base32 secret. Every configured lock returns to locked
+after a page reload. These are self-imposed for-fun locks, not encryption or
+protection from anyone who can access the browser profile. Broader every-element
+context-menu wiring remains incomplete and is not claimed.
+
+The companion Support Tickets destination is entirely local. It creates a
+ticket number, category, and local status; discards optional free-text notes;
+and states that nothing is sent, no ticket exists outside the browser, no
+network request is made, no data is collected, and nobody is reading it. Its
+recovery route is clearing this site's storage. A two-key/full-slider action
+can erase only the module's browser-local record; it does not delete desktop
+data, server data, browser downloads, or another site's storage.
+
+No companion-site authenticator secret, toy-lock password, verifier, TOTP
+secret, current code, URI, QR payload, or manual reveal is sent over a network,
+placed in the ordinary page export/history/status model, logged, or committed as
+user data. QR image/camera/clipboard import and decoding, synchronization,
+secret export, all-element lock coverage, complete localization, automated
+tests, built-site interaction, and capture evidence remain incomplete.
+
 ## Suggested articles
 
 - [Presentation settings and shared School mode](experience-settings.md)
