@@ -17,6 +17,10 @@ function rconResponseEnvelope(value) {
 contextBridge.exposeInMainWorld('studio', {
   experienceSettings: () => ipcRenderer.invoke('studio:experience-settings'),
   updateExperienceSettings: (patch) => ipcRenderer.invoke('studio:update-experience-settings', patch),
+  narrationScheduleSettings: () => ipcRenderer.invoke('studio:narration-schedule-settings'),
+  updateNarratorSettings: (patch) => ipcRenderer.invoke('studio:update-narrator-settings', patch),
+  addScheduledSetting: (draft) => ipcRenderer.invoke('studio:add-scheduled-setting', draft),
+  setScheduledSettingEnabled: (id, enabled) => ipcRenderer.invoke('studio:set-scheduled-setting-enabled', id, Boolean(enabled)),
   createSchoolModeRecord: () => ipcRenderer.invoke('studio:create-school-mode-record'),
   updateSchoolModeLabel: (label) => ipcRenderer.invoke('studio:update-school-mode-label', label),
   saveSchoolModeCredential: (input) => ipcRenderer.invoke('studio:save-school-mode-credential', input),

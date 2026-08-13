@@ -19,6 +19,8 @@ const state = {
   pluginPlan: null,
   pluginPlanServerId: null,
   applicationUpdate: null,
+  narrationSchedule: null,
+  narratorRuntime: null,
   unsaved: {
     settings: false,
     createDraft: false,
@@ -115,6 +117,21 @@ let selectedCommandAction = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const narrator = window.StudioNarrator?.createNarrator ? window.StudioNarrator.createNarrator() : null;
+
+const REGEX_SNIPPETS = Object.freeze({
+  literal: 'text',
+  anchor: '^$',
+  class: '[A-Za-z]',
+  group: '(text)',
+  alternation: 'first|second',
+  quantifier: 'x{1,3}'
+});
+
+const regexSearches = {
+  preferences: { mode: 'plain', query: '', pattern: '', flags: 'i' },
+  schedules: { mode: 'plain', query: '', pattern: '', flags: 'i' }
+};
 
 const FALLBACK_EXPERIENCE = Object.freeze({
   local: Object.freeze({ language: 'english', funnyLevels: Object.freeze({ english: 2, cantonese: 3 }), dialogEmoji: true, displayName: 'Minecraft Server Studio' }),
@@ -126,12 +143,27 @@ function currentExperience() {
   return state.experience || FALLBACK_EXPERIENCE;
 }
 
-function currentExperienceLocal() {
+function storedExperienceLocal() {
   return currentExperience().local || FALLBACK_EXPERIENCE.local;
+}
+
+function currentExperienceLocal() {
+  return currentExperience().effectiveLocal || storedExperienceLocal();
 }
 
 function currentSchoolMode() {
   return currentExperience().shared || FALLBACK_EXPERIENCE.shared;
+}
+
+function currentNarrationSchedule() {
+  return state.narrationSchedule || currentExperience().narrationSchedule || {
+    state: 'not-loaded',
+    detail: 'Narrator and scheduled settings have not loaded.',
+    narrator: { enabled: false, language: 'english', voices: { english: 'automatic', cantonese: 'automatic' }, rates: { english: 1, cantonese: 1 }, pitches: { english: 1, cantonese: 1 } },
+    schedules: [],
+    scheduleSources: [],
+    effective: { language: storedExperienceLocal().language || 'english', source: 'local-base', scheduleId: null, timezone: 'local' }
+  };
 }
 
 function effectiveLanguage() {
@@ -178,9 +210,25 @@ function toast(message, kind = 'info') {
   }
   const copy = document.createElement('span');
   copy.className = 'toast-copy';
-  copy.textContent = `${toastPrefix(kind)}: ${messageText(message)}`;
+  const messageValue = messageText(message);
+  copy.textContent = `${toastPrefix(kind)}: ${messageValue}`;
   item.append(copy);
   $('#toast-region').append(item);
+  const experienceCopy = window.StudioExperienceCopy;
+  const levels = storedExperienceLocal().funnyLevels;
+  const englishPrefix = experienceCopy?.toastPrefix ? experienceCopy.toastPrefix('english', levels, kind) : kind;
+  const cantonesePrefix = experienceCopy?.toastPrefix ? experienceCopy.toastPrefix('cantonese', levels, kind) : kind;
+  const englishMessage = message && typeof message === 'object' && typeof message.key === 'string' && experienceCopy?.format
+    ? experienceCopy.format(message.key, 'english', message.values || {})
+    : messageValue;
+  const cantoneseMessage = message && typeof message === 'object' && typeof message.key === 'string' && experienceCopy?.format
+    ? experienceCopy.format(message.key, 'cantonese', message.values || {})
+    : messageValue;
+  narrator?.narrate({
+    category: `toast-${kind}`,
+    english: `${englishPrefix}: ${englishMessage}`,
+    cantonese: `${cantonesePrefix}: ${cantoneseMessage}`
+  });
   setTimeout(() => item.remove(), kind === 'error' ? 9000 : 5000);
 }
 
@@ -271,6 +319,362 @@ function previewFunnyLevelOutputs() {
   if (cantonese) $('#funny-cantonese-output').textContent = `1–5 · ${toneText('cantonese', Number(cantonese.value))}`;
 }
 
+function narratorSettingsFromControls() {
+  return {
+    enabled: $('#narrator-enabled').checked,
+    language: $('#narrator-language').value,
+    voices: {
+      english: $('#narrator-english-voice').value || 'automatic',
+      cantonese: $('#narrator-cantonese-voice').value || 'automatic'
+    },
+    rates: {
+      english: Number($('#narrator-english-rate').value),
+      cantonese: Number($('#narrator-cantonese-rate').value)
+    },
+    pitches: {
+      english: Number($('#narrator-english-pitch').value),
+      cantonese: Number($('#narrator-cantonese-pitch').value)
+    }
+  };
+}
+
+function renderNarratorRangeOutputs() {
+  for (const language of ['english', 'cantonese']) {
+    const rate = $(`#narrator-${language}-rate`);
+    const pitch = $(`#narrator-${language}-pitch`);
+    if (rate) $(`#narrator-${language}-rate-output`).textContent = Number(rate.value).toFixed(1);
+    if (pitch) $(`#narrator-${language}-pitch-output`).textContent = Number(pitch.value).toFixed(1);
+  }
+}
+
+function populateNarratorVoicePicker(language, narratorSnapshot, writable) {
+  const picker = $(`#narrator-${language}-voice`);
+  const status = $(`#narrator-${language}-status`);
+  if (!picker || !status) return;
+  const saved = currentNarrationSchedule().narrator?.voices?.[language] || 'automatic';
+  const details = narratorSnapshot?.[language] || { choices: [], state: 'unavailable', detail: 'Narrator availability is not loaded.' };
+  const choices = Array.isArray(details.choices) ? details.choices : [];
+  picker.replaceChildren();
+  const automatic = document.createElement('option');
+  automatic.value = 'automatic';
+  automatic.textContent = 'Choose automatically';
+  picker.append(automatic);
+  for (const voice of choices) {
+    const option = document.createElement('option');
+    option.value = voice.id;
+    option.textContent = `${voice.name} · ${voice.lang}${voice.localService === false ? ' · network-backed' : ''}`;
+    picker.append(option);
+  }
+  if (saved !== 'automatic' && !choices.some((voice) => voice.id === saved)) {
+    const missing = document.createElement('option');
+    missing.value = saved;
+    missing.textContent = 'Saved selection — not installed on this computer';
+    picker.append(missing);
+  }
+  picker.value = [...picker.options].some((option) => option.value === saved) ? saved : 'automatic';
+  picker.disabled = !writable;
+  status.textContent = details.detail || 'No narrator voice state is available.';
+  status.dataset.state = details.state || 'unavailable';
+}
+
+function renderNarratorControls(narratorSnapshot = narrator?.getSnapshot()) {
+  const settings = currentNarrationSchedule();
+  const configuration = settings.narrator || {};
+  const writable = settings.state === 'ready';
+  const runtime = state.narratorRuntime || {};
+  const enabled = $('#narrator-enabled');
+  const language = $('#narrator-language');
+  const status = $('#narrator-status');
+  if (!enabled || !language || !status) return;
+  enabled.checked = configuration.enabled === true;
+  enabled.disabled = !writable;
+  language.value = ['english', 'cantonese', 'both'].includes(configuration.language) ? configuration.language : 'english';
+  language.disabled = !writable;
+  for (const track of ['english', 'cantonese']) {
+    const rate = $(`#narrator-${track}-rate`);
+    const pitch = $(`#narrator-${track}-pitch`);
+    if (rate) {
+      rate.value = String(configuration.rates?.[track] ?? 1);
+      rate.disabled = !writable;
+    }
+    if (pitch) {
+      pitch.value = String(configuration.pitches?.[track] ?? 1);
+      pitch.disabled = !writable;
+    }
+  }
+  renderNarratorRangeOutputs();
+  populateNarratorVoicePicker('english', narratorSnapshot, writable);
+  populateNarratorVoicePicker('cantonese', narratorSnapshot, writable);
+  const availability = narratorSnapshot?.availability || { state: 'unavailable', detail: 'Narrator availability is not loaded.' };
+  const runtimeDetail = runtime.screenReaderActive === true
+    ? (runtime.detail || 'A platform accessibility client is active. Narrator speech yields and no utterance will start until that state clears.')
+    : availability.detail;
+  status.textContent = `${settings.detail || 'Narrator settings are unavailable.'} ${runtimeDetail}`;
+  status.dataset.state = runtime.state === 'unavailable' ? 'unavailable' : runtime.screenReaderActive === true ? 'active' : availability.state || settings.state;
+  $('#save-narrator-settings-button').disabled = !writable;
+  $('#narrator-preview').disabled = !writable || configuration.enabled !== true || runtime.screenReaderActive === true || availability.state !== 'available';
+}
+
+async function saveNarratorSettings() {
+  const snapshot = await safely(() => window.studio.updateNarratorSettings(narratorSettingsFromControls()), 'Narrator settings saved.');
+  if (snapshot) applyExperienceSnapshot(snapshot);
+}
+
+function speakNarratorPreview() {
+  const runtime = state.narratorRuntime || {};
+  if (!narrator || runtime.screenReaderActive === true) return toast('Narrator preview yields while a platform accessibility client is active.', 'info');
+  narrator.configure(narratorSettingsFromControls(), runtime);
+  const started = narrator.narrate({
+    category: 'narrator-preview',
+    english: 'Narrator preview. This is a serialized local spoken event.',
+    cantonese: '旁白預覽。呢個係逐句排隊嘅本機語音事件。'
+  });
+  if (!started) toast('Narrator preview could not start. Save an enabled narrator setting and choose an available platform voice.', 'error');
+}
+
+function selectedScheduleWeekdays() {
+  if ($('#schedule-every-day').checked) return [0, 1, 2, 3, 4, 5, 6];
+  return $$('#schedule-weekday-options input[type="checkbox"]').filter((control) => control.checked).map((control) => Number(control.value));
+}
+
+function updateScheduleWeekdayControls() {
+  const everyDay = $('#schedule-every-day').checked;
+  $$('#schedule-weekday-options input[type="checkbox"]').forEach((control) => {
+    if (everyDay) control.checked = true;
+    control.disabled = everyDay;
+  });
+}
+
+function scheduleSearchText(schedule) {
+  const window = schedule.window || {};
+  return [schedule.label, schedule.value?.language, schedule.priority, window.dateStart, window.dateEnd, window.startTime, window.endTime, ...(window.weekdays || [])].filter((value) => value !== null && value !== undefined).join(' ');
+}
+
+function regexForSearch(search) {
+  const flags = String(search.flags || '').trim();
+  if (!/^[imu]*$/.test(flags) || new Set(flags).size !== flags.length) return { error: 'Use each supported JavaScript search flag at most once: i, m, or u.' };
+  if (!search.pattern) return { error: 'Enter a regex pattern before enabling regex search.' };
+  try {
+    return { regex: new RegExp(search.pattern, flags) };
+  } catch (error) {
+    return { error: error?.message || 'The regex pattern is invalid.' };
+  }
+}
+
+function searchMatches(key, text) {
+  const search = regexSearches[key];
+  const source = String(text || '').slice(0, 2_048);
+  if (search.mode !== 'regex') return source.toLocaleLowerCase().includes(String(search.query || '').toLocaleLowerCase());
+  const parsed = regexForSearch(search);
+  return parsed.regex ? parsed.regex.test(source) : false;
+}
+
+function setRegexStatus(key) {
+  const search = regexSearches[key];
+  const prefix = key === 'preferences' ? 'experience-settings' : 'schedule';
+  const status = $(`#${prefix}-regex-status`);
+  if (!status) return;
+  if (search.mode !== 'regex') {
+    status.textContent = 'Plain-text search is active.';
+    status.dataset.state = 'ready';
+    return;
+  }
+  const parsed = regexForSearch(search);
+  if (parsed.error) {
+    status.textContent = parsed.error;
+    status.dataset.state = 'invalid';
+    return;
+  }
+  const sample = $(`#${prefix}-regex-sample`)?.value || '';
+  status.textContent = sample ? `Regex is valid. Sample ${parsed.regex.test(sample) ? 'matches' : 'does not match'}.` : 'Regex is valid. Enter sample text to inspect a local match.';
+  status.dataset.state = 'ready';
+}
+
+function renderPreferenceSearch() {
+  const search = regexSearches.preferences;
+  const cards = $$('[data-settings-card]');
+  let matches = 0;
+  for (const card of cards) {
+    const match = searchMatches('preferences', card.dataset.settingsSearch || card.textContent || '');
+    card.classList.toggle('search-filtered', !match);
+    if (match) matches += 1;
+  }
+  const status = $('#experience-settings-search-status');
+  if (status) status.textContent = `${matches} preference section${matches === 1 ? '' : 's'} ${search.mode === 'regex' ? 'match the active regex.' : 'match the plain-text search.'}`;
+  setRegexStatus('preferences');
+}
+
+function formatScheduleWindow(schedule) {
+  const window = schedule.window || {};
+  const weekdays = Array.isArray(window.weekdays) && window.weekdays.length === 7 ? 'every day' : `weekdays ${(window.weekdays || []).join(', ') || 'none'}`;
+  const dates = [window.dateStart || 'no start date', window.dateEnd || 'no end date'].join(' to ');
+  return `${weekdays} · ${window.startTime || '?'}–${window.endTime || '?'} · ${dates}`;
+}
+
+function renderScheduleSourceOptions() {
+  const select = $('#schedule-source');
+  const detail = $('#schedule-source-detail');
+  const sources = currentNarrationSchedule().scheduleSources || [];
+  if (!select || !detail || !sources.length) return;
+  select.replaceChildren();
+  for (const source of sources) {
+    const option = document.createElement('option');
+    option.value = source.id;
+    option.textContent = source.enabled ? source.label : `${source.label} — unavailable in this build`;
+    option.disabled = source.enabled !== true;
+    select.append(option);
+  }
+  select.value = 'local';
+  const current = sources.find((source) => source.id === select.value) || sources[0];
+  detail.textContent = current?.detail || 'No schedule source is available.';
+}
+
+function renderScheduledSettings() {
+  const settings = currentNarrationSchedule();
+  const effective = settings.effective || {};
+  const status = $('#schedule-effective-status');
+  if (!status) return;
+  const active = effective.source === 'local-schedule';
+  status.textContent = active
+    ? `${effective.scheduleLabel || 'A local language rule'} is active in ${effective.timezone || 'the local timezone'} and applies ${effective.language || 'English'} now.`
+    : `No local schedule currently matches. The saved base language (${effective.language || 'English'}) remains active in ${effective.timezone || 'the local timezone'}.`;
+  status.dataset.state = settings.state === 'ready' ? (active ? 'active' : 'ready') : settings.state || 'unavailable';
+  $('#add-scheduled-setting-button').disabled = settings.state !== 'ready';
+  const list = $('#scheduled-settings-list');
+  if (!list) return;
+  list.replaceChildren();
+  const schedules = Array.isArray(settings.schedules) ? settings.schedules : [];
+  const visible = schedules.filter((schedule) => searchMatches('schedules', scheduleSearchText(schedule)));
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'scheduled-setting-empty';
+    empty.textContent = schedules.length ? 'No saved local language rules match the active search.' : 'No local language schedule is saved yet. Add one above to create a bounded rule.';
+    list.append(empty);
+  }
+  for (const schedule of visible) {
+    const item = document.createElement('article');
+    item.className = 'scheduled-setting';
+    item.dataset.active = String(schedule.id === effective.scheduleId);
+    item.setAttribute('role', 'listitem');
+    const copy = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = `${schedule.label} · ${schedule.value?.language || 'english'} · priority ${schedule.priority}`;
+    const detail = document.createElement('small');
+    detail.textContent = formatScheduleWindow(schedule);
+    copy.append(title, detail);
+    const toggle = document.createElement('label');
+    toggle.className = 'switch-field';
+    const control = document.createElement('input');
+    control.type = 'checkbox';
+    control.checked = schedule.enabled === true;
+    control.disabled = settings.state !== 'ready';
+    control.dataset.scheduleId = schedule.id;
+    const label = document.createElement('span');
+    const labelTitle = document.createElement('strong');
+    labelTitle.textContent = 'Enable rule';
+    const labelDetail = document.createElement('small');
+    labelDetail.textContent = schedule.enabled ? 'This rule can apply when its local window matches.' : 'This rule is retained but inactive.';
+    label.append(labelTitle, labelDetail);
+    toggle.append(control, label);
+    item.append(copy, toggle);
+    list.append(item);
+  }
+  const search = regexSearches.schedules;
+  const searchStatus = $('#schedule-search-status');
+  if (searchStatus) searchStatus.textContent = `${visible.length} of ${schedules.length} saved local rule${schedules.length === 1 ? '' : 's'} ${search.mode === 'regex' ? 'match the active regex.' : 'match the plain-text search.'}`;
+  setRegexStatus('schedules');
+}
+
+function renderNarrationScheduleControls(narratorSnapshot) {
+  renderScheduleSourceOptions();
+  renderNarratorControls(narratorSnapshot);
+  renderScheduledSettings();
+}
+
+async function addScheduledSetting() {
+  const result = await safely(() => window.studio.addScheduledSetting({
+    label: $('#schedule-label').value,
+    enabled: true,
+    priority: Number($('#schedule-priority').value),
+    value: { language: $('#schedule-language').value },
+    window: {
+      dateStart: $('#schedule-date-start').value || null,
+      dateEnd: $('#schedule-date-end').value || null,
+      startTime: $('#schedule-time-start').value,
+      endTime: $('#schedule-time-end').value,
+      weekdays: selectedScheduleWeekdays()
+    }
+  }), 'Local language schedule saved.');
+  if (result) applyExperienceSnapshot(result);
+}
+
+function updateScheduleSourceDetail() {
+  const source = (currentNarrationSchedule().scheduleSources || []).find((item) => item.id === $('#schedule-source').value);
+  $('#schedule-source-detail').textContent = source?.detail || 'This schedule source is unavailable.';
+}
+
+function attachRegexSearch(key) {
+  const prefix = key === 'preferences' ? 'experience-settings' : 'schedule';
+  const search = regexSearches[key];
+  const field = $(`#${prefix}-search`);
+  const toggle = $(`#${prefix}-regex-toggle`);
+  const builder = $(`#${prefix}-regex-builder`);
+  const pattern = $(`#${prefix}-regex-pattern`);
+  const flags = $(`#${prefix}-regex-flags`);
+  const sample = $(`#${prefix}-regex-sample`);
+  const use = $(`#${prefix}-regex-use`);
+  const clear = $(`#${prefix}-regex-clear`);
+  if (!field || !toggle || !builder || !pattern || !flags || !sample || !use || !clear) return;
+  const render = () => key === 'preferences' ? renderPreferenceSearch() : renderScheduledSettings();
+  field.addEventListener('input', () => {
+    search.mode = 'plain';
+    search.query = field.value.slice(0, 256);
+    render();
+  });
+  toggle.addEventListener('click', () => {
+    builder.hidden = !builder.hidden;
+    toggle.setAttribute('aria-expanded', String(!builder.hidden));
+    if (!builder.hidden) pattern.focus();
+  });
+  for (const input of [pattern, flags, sample]) {
+    input.addEventListener('input', () => {
+      search.pattern = pattern.value.slice(0, 256);
+      search.flags = flags.value.slice(0, 8);
+      setRegexStatus(key);
+      if (search.mode === 'regex') render();
+    });
+  }
+  use.addEventListener('click', () => {
+    search.pattern = pattern.value.slice(0, 256);
+    search.flags = flags.value.slice(0, 8);
+    if (regexForSearch(search).error) {
+      search.mode = 'regex';
+      render();
+      return;
+    }
+    search.mode = 'regex';
+    render();
+  });
+  clear.addEventListener('click', () => {
+    search.mode = 'plain';
+    search.pattern = '';
+    pattern.value = '';
+    flags.value = 'i';
+    search.flags = 'i';
+    field.focus();
+    render();
+  });
+  const selector = key === 'preferences' ? '[data-regex-insert]' : '[data-schedule-regex-insert]';
+  $$(selector).forEach((button) => button.addEventListener('click', () => {
+    const name = key === 'preferences' ? button.dataset.regexInsert : button.dataset.scheduleRegexInsert;
+    const insert = REGEX_SNIPPETS[name] || '';
+    pattern.setRangeText(insert, pattern.selectionStart || 0, pattern.selectionEnd || 0, 'end');
+    pattern.dispatchEvent(new Event('input', { bubbles: true }));
+    pattern.focus();
+  }));
+  render();
+}
+
 function renderSchoolModeControls() {
   const experience = currentExperience();
   const shared = experience.shared || FALLBACK_EXPERIENCE.shared;
@@ -322,7 +726,7 @@ function renderSchoolModeControls() {
 }
 
 function hydrateExperienceControls() {
-  const local = currentExperienceLocal();
+  const local = storedExperienceLocal();
   const languageValue = ['english', 'cantonese', 'bilingual'].includes(local.language) ? local.language : 'english';
   const language = document.querySelector(`input[name="language-mode"][value="${languageValue}"]`);
   if (language) language.checked = true;
@@ -335,8 +739,16 @@ function hydrateExperienceControls() {
 function applyExperienceSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return;
   state.experience = snapshot;
+  state.narrationSchedule = snapshot.narrationSchedule || state.narrationSchedule;
+  state.narratorRuntime = snapshot.narratorRuntime || state.narratorRuntime;
+  const narratorSnapshot = narrator?.configure(
+    state.narrationSchedule?.narrator,
+    state.narratorRuntime || {}
+  );
   applyLocalizedCopy();
   hydrateExperienceControls();
+  renderNarrationScheduleControls(narratorSnapshot);
+  renderPreferenceSearch();
   renderServers();
   renderEditor();
   renderConsole();
@@ -355,7 +767,7 @@ function closeExperienceSettings() {
 
 async function saveExperienceSettings(event) {
   event.preventDefault();
-  const local = currentExperienceLocal();
+  const local = storedExperienceLocal();
   const activeSchoolMode = Boolean(currentSchoolMode().effectiveSchoolMode);
   const selectedLanguage = document.querySelector('input[name="language-mode"]:checked')?.value || local.language;
   const snapshot = await safely(() => window.studio.updateExperienceSettings({
@@ -2027,12 +2439,31 @@ function handleStudioEvent(event) {
 }
 
 function bindEvents() {
+  attachRegexSearch('preferences');
+  attachRegexSearch('schedules');
   $('#experience-settings-button').addEventListener('click', openExperienceSettings);
   $('#close-experience-settings-dialog').addEventListener('click', closeExperienceSettings);
   $('#close-experience-settings-button').addEventListener('click', closeExperienceSettings);
   $('#experience-settings-form').addEventListener('submit', saveExperienceSettings);
   $('#funny-english').addEventListener('input', previewFunnyLevelOutputs);
   $('#funny-cantonese').addEventListener('input', previewFunnyLevelOutputs);
+  $('#save-narrator-settings-button').addEventListener('click', saveNarratorSettings);
+  $('#narrator-preview').addEventListener('click', speakNarratorPreview);
+  $('#narrator-english-rate').addEventListener('input', renderNarratorRangeOutputs);
+  $('#narrator-english-pitch').addEventListener('input', renderNarratorRangeOutputs);
+  $('#narrator-cantonese-rate').addEventListener('input', renderNarratorRangeOutputs);
+  $('#narrator-cantonese-pitch').addEventListener('input', renderNarratorRangeOutputs);
+  $('#schedule-every-day').addEventListener('change', updateScheduleWeekdayControls);
+  $('#schedule-source').addEventListener('change', updateScheduleSourceDetail);
+  $('#add-scheduled-setting-button').addEventListener('click', addScheduledSetting);
+  $('#scheduled-settings-list').addEventListener('change', async (event) => {
+    const control = event.target;
+    const scheduleId = control?.dataset?.scheduleId;
+    if (!scheduleId) return;
+    const snapshot = await safely(() => window.studio.setScheduledSettingEnabled(scheduleId, control.checked), 'Scheduled language rule updated.');
+    if (snapshot) applyExperienceSnapshot(snapshot);
+    else renderScheduledSettings();
+  });
   $('#create-school-mode-record-button').addEventListener('click', createSchoolModeRecord);
   $('#save-school-mode-label-button').addEventListener('click', saveSchoolModeLabel);
   $('#save-school-mode-credential-button').addEventListener('click', saveSchoolModeCredential);
@@ -2209,6 +2640,8 @@ function bindEvents() {
 async function initialize() {
   renderAdvancedControls();
   bindEvents();
+  updateScheduleWeekdayControls();
+  narrator?.onChange((snapshot) => renderNarratorControls(snapshot));
   window.studio.onEvent(handleStudioEvent);
   window.studio.onUnsavedWorkQuery(unsavedWorkState);
   const experience = await safely(() => window.studio.experienceSettings());

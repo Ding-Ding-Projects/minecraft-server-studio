@@ -28,6 +28,8 @@ Open **Studio preferences** from the left navigation to use these controls:
 
 The saved preference is applied immediately in the running renderer and the native window title. The installed application identity remains stable because the Electron application name and package configuration remain fixed.
 
+The optional spoken-event narrator and bounded scheduled language settings are documented separately in [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md). The schedule can temporarily override the effective language without overwriting this saved base preference.
+
 ## Shared School mode
 
 The mode's default label is **School mode**, but the user can rename it. After a label is saved, the application renders the selected label in the mode controls instead of relying on the shipped label.
@@ -64,5 +66,6 @@ This feature was added during the active speed-delivery workflow. Tests, linting
 ## Suggested related articles
 
 - [Local status and desktop completeness](local-status-and-completeness.md)
+- [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)
 - [Server orchestration](server-orchestration.md)
 - [Command Center](command-center.md)
