@@ -5,5 +5,6 @@
 - [Version-aware Java runtime and launch profiles](java-runtime-and-launch.md)
 - [Spigot BuildTools planning](spigot-buildtools.md)
 - [Command Center](command-center.md)
+- [RCON response safety](rcon-response-safety.md)
 - [Presentation settings and shared School mode](experience-settings.md)
 - [Local status and completeness](local-status-and-completeness.md)

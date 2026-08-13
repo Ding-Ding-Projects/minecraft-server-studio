@@ -1042,6 +1042,24 @@ function renderConsole() {
   output.scrollTop = output.scrollHeight;
 }
 
+function safeRconResponseForConsole(value) {
+  const safety = window.StudioRconResponseSafety;
+  if (!safety || typeof safety.normalizeRconIpcResponse !== 'function') {
+    return { text: '', redacted: true, truncated: false, sanitized: true };
+  }
+  return safety.normalizeRconIpcResponse(value);
+}
+
+function rconConsoleLine(value) {
+  const response = safeRconResponseForConsole(value);
+  const markers = [];
+  if (response.redacted) markers.push('[redacted]');
+  if (response.sanitized) markers.push('[sanitized]');
+  if (response.truncated) markers.push('[truncated]');
+  const prefix = markers.length ? `RCON ${markers.join(' ')}` : 'RCON';
+  return `${prefix}: ${response.text || '(no response)'}`;
+}
+
 function renderAll() {
   renderServers();
   renderDependencies();
@@ -1531,7 +1549,7 @@ function bindEvents() {
   $('#browse-plugin-button').addEventListener('click', async () => { const selected = await safely(() => window.studio.pickPlugin()); if (selected) { state.pluginPath = selected; $('#plugin-path').value = selected; } });
   $('#install-plugin-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (!state.pluginPath) return toast('Choose a plugin JAR first.', 'error'); const result = await safely(() => window.studio.installPlugin(server.id, state.pluginPath), 'Plugin installed. Restart the server to load it.'); if (result) { state.pluginPath = ''; $('#plugin-path').value = ''; refreshPlugins(); } });
   $('#send-console-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const result = await safely(() => window.studio.console(server.id, command)); if (result) $('#console-command').value = ''; });
-  $('#send-rcon-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const response = await safely(() => window.studio.rcon(server.id, command)); if (response !== null) { state.logs.push(`RCON: ${response || '(no response)'}`); renderConsole(); } });
+  $('#send-rcon-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const response = await safely(() => window.studio.rcon(server.id, command)); if (response !== null) { state.logs.push(rconConsoleLine(response)); renderConsole(); } });
   $('#clear-console-button').addEventListener('click', () => { state.logs = []; renderConsole(); });
   $$('.command-presets button').forEach((button) => button.addEventListener('click', () => { $('#console-command').value = button.dataset.command; $('#console-command').focus(); }));
 }

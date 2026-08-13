@@ -1,5 +1,19 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+function rconResponseEnvelope(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.version !== 1 || value.kind !== 'rcon-response' || typeof value.text !== 'string') {
+    return { version: 1, kind: 'rcon-response', text: '', redacted: true, truncated: false, sanitized: true };
+  }
+  return {
+    version: 1,
+    kind: 'rcon-response',
+    text: value.text,
+    redacted: value.redacted === true,
+    truncated: value.truncated === true,
+    sanitized: value.sanitized === true
+  };
+}
+
 contextBridge.exposeInMainWorld('studio', {
   experienceSettings: () => ipcRenderer.invoke('studio:experience-settings'),
   updateExperienceSettings: (patch) => ipcRenderer.invoke('studio:update-experience-settings', patch),
@@ -17,7 +31,7 @@ contextBridge.exposeInMainWorld('studio', {
   start: (id) => ipcRenderer.invoke('studio:start', id),
   stop: (id) => ipcRenderer.invoke('studio:stop', id),
   console: (id, command) => ipcRenderer.invoke('studio:console', id, command),
-  rcon: (id, command) => ipcRenderer.invoke('studio:rcon', id, command),
+  rcon: async (id, command) => rconResponseEnvelope(await ipcRenderer.invoke('studio:rcon', id, command)),
   listPlugins: (id) => ipcRenderer.invoke('studio:list-plugins', id),
   installPlugin: (id, sourcePath) => ipcRenderer.invoke('studio:install-plugin', id, sourcePath),
   pickFolder: () => ipcRenderer.invoke('studio:pick-folder'),

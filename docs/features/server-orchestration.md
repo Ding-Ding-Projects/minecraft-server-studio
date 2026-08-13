@@ -51,7 +51,7 @@ The Plugins tab accepts a user-selected local `.jar` file and copies it into the
 
 ## Security considerations
 
-The app runs server Java with `shell: false`, does not interpolate settings into shell commands, redacts password-like output patterns in its own console feed, and uses a private application-data registry rather than a repository inside a server folder. RCON and management-protocol secrets use the operating system protected-storage boundary and are excluded from the registry, exports, and console logs. When RCON is enabled, Minecraft still needs its password in the local server configuration to operate; protect the server folder according to your local access policy.
+The app runs server Java with `shell: false`, does not interpolate settings into shell commands, redacts password-like output patterns in its own console feed, and uses a private application-data registry rather than a repository inside a server folder. Desktop RCON responses are converted to a bounded, versioned safe envelope before IPC: the helper removes the current protected RCON password, URL-encoded password echoes, and common credential-shaped values, neutralizes unsafe control characters, and marks redaction or truncation in the console. RCON and management-protocol secrets use the operating system protected-storage boundary and are excluded from the registry, exports, and console logs. When RCON is enabled, Minecraft still needs its password in the local server configuration to operate; protect the server folder according to your local access policy. See [RCON response safety](rcon-response-safety.md) for the exact desktop boundary.
 
 ## Verification boundary
 
