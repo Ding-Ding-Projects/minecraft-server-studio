@@ -2,9 +2,11 @@
 
 The BuildTools adapter provides data models and validation for the desktop app's
 Spigot setup flow. It does not launch Java, install anything, download a JAR,
-extract an archive, convert an image, or write to a server. The application
-runner performs those effects only after it receives an explicitly confirmed
-execution request from a preflight model.
+extract an archive, convert an image, or write to a server. The legacy
+application-runner preflight/execution code is not renderer-reachable in the
+current desktop surface: the main process does not register
+`studio:buildtools-preflight` or `studio:execute-buildtools-plan`, and preload
+does not expose matching APIs.
 
 ## Live versions and Java
 
@@ -36,16 +38,21 @@ locations, known cloud-sync paths, temporary folders, dependency folders, and
 any workspace that intersects the server home. Its asynchronous inspection also
 rejects Git markers and symbolic-link/reparse-point components.
 
-The preflight supplies separate download, build, output, staging-output, and
-rollback-record directories. It records the exact JDK, dependency plan,
-BuildTools source, structured arguments, shell-free command data, and a
-stage/swap/rollback plan. Its digest must match the explicit confirmation
-before an executor can receive an authorized request.
+The legacy preflight model supplies separate download, build, output,
+staging-output, and rollback-record directories. It records the exact JDK,
+dependency plan, BuildTools source, structured arguments, shell-free command
+data, and a stage/swap/rollback plan. Its digest would need to match an
+explicit confirmation before a future executor could receive an authorized
+request; the current renderer cannot request this preflight or execution path.
 
 The separate [BuildTools plan-only orchestration](buildtools-orchestration.md)
-surface intentionally does not use this execution path. It provides only typed
-arguments, controlled workspace/output planning, and Java/Git readiness, with
-its execution state explicitly unavailable.
+surface intentionally does not use this execution path. The sole
+renderer-facing plan route, `studio:plan-buildtools` / `planBuildTools`, provides
+typed arguments, controlled workspace/output planning, and Java/Git readiness.
+It returns `execution.state: "unavailable"` with `processStarted: false` and
+does not expose a downloader, executor, JAR promotion, or rollback operation.
+Spigot provisioning likewise fails closed rather than treating the plan as an
+authorized setup request.
 
 Generated JARs are first validated in the isolated workspace, copied to a
 server-local stage, validated again, moved into a rollback location if a live

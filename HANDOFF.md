@@ -323,7 +323,7 @@ implementation lane.
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
 - `src/main/command-runtime-discovery.cjs`: bounded selected-JAR `--help`/`--version` evidence and fixed-query loopback-RCON discovery adapter; it never opens a shell or starts a server lifecycle operation.
 - `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules, including persistent app-managed Java inventory and official Adoptium metadata selection for portable recovery.
-- `src/main/buildtools-orchestration.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: separate typed BuildTools plan-only controller and renderer surface. It previews Java/Git readiness, a controlled workspace/output directory, and direct argv only; it does not download BuildTools, start a process, write a JAR, promote a JAR, or acquire a plugin.
+- `src/main/buildtools-orchestration.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/main/server-manager.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: separate typed BuildTools plan-only controller and renderer surface. Its only renderer-facing plan route is `studio:plan-buildtools` / `planBuildTools`; `studio:buildtools-preflight` and `studio:execute-buildtools-plan` are not registered or exposed. It previews Java/Git readiness, a controlled workspace/output directory, and direct argv only; it returns unavailable execution with `processStarted: false` and does not download BuildTools, start a process, write a JAR, promote or roll back a JAR, or acquire a plugin. Spigot provisioning fails closed instead of treating a plan as a setup request.
 - `src/main/config-plugin-safety.cjs`: lossless `server.properties` updates, Minecraft 1.21.9+ game-rule delivery state, bounded local plugin JAR inspection, dependency/cycle planning, staging, atomic promotion, and rollback records.
 - `src/main/server-backup-manager.cjs`: bounded local snapshot inventory, manifest hashing, stopped-server restore staging, official stable Paper update staging, and retained-JAR rollback helpers.
 - `docs/features/shared-status-hub-bridge.md` and `docs/features/local-status-and-completeness.md`: an opt-in external Status Hub documentation boundary. It requires explicit transport acceptance before claiming registration, update, inbox polling, or reply delivery; raw replies and credentials remain outside the renderer, history, exports, and logs.
@@ -357,11 +357,24 @@ number. It emits an exact direct-argv record with `shell: false`, never a
 copy-paste shell string.
 
 The controller consults the existing ServerManager Java and Git discovery APIs
-only to surface readiness. It has no downloader, installer, workspace writer,
-process runner, JAR validator, promotion/rollback implementation, or plugin
-acquisition path. The renderer disables execution and names that state plainly.
-Both `--disable-certificate-check` and `--disable-java-check` are rejected;
-there is no future-consequence path that makes either bypass acceptable.
+only to surface readiness. The only renderer-facing plan route remains
+`studio:plan-buildtools` / `planBuildTools`, which calls
+`BuildToolsOrchestrationController.createPlan()` and returns
+`execution.state: "unavailable"` with `processStarted: false`. Neither
+`studio:buildtools-preflight` nor `studio:execute-buildtools-plan` is
+registered in the main process or exposed through preload, so the retained
+legacy ServerManager preflight is not a desktop capability. Its
+`executeBuildToolsPlan()` method itself now fails closed with an unavailable
+error, so it cannot download, run, promote, or roll back a JAR even if another
+future caller reached it. There is no renderer-reachable downloader, installer,
+workspace writer, process runner, JAR validator, promotion/rollback
+implementation, or plugin acquisition path. Spigot provisioning likewise
+returns an unavailable plan-only state rather than converting a typed preview
+into a server setup.
+The renderer disables execution and names that state plainly. Both
+`--disable-certificate-check` and `--disable-java-check` are
+rejected; there is no future-consequence path that makes either bypass
+acceptable.
 
 ### Directly related documentation
 
