@@ -8,7 +8,14 @@ const state = {
   buildToolsMetadata: null,
   buildToolsPlan: null,
   activeTab: 'general',
-  pluginPath: ''
+  pluginPath: '',
+  applicationUpdate: null,
+  unsaved: {
+    settings: false,
+    createDraft: false,
+    pluginSelection: false,
+    consoleDraft: false
+  }
 };
 
 const ADVANCED_FIELDS = [
@@ -646,6 +653,7 @@ function renderAll() {
   renderEditor();
   renderConsole();
   renderLocalStatus();
+  renderApplicationUpdate();
   setActiveTab(state.activeTab);
 }
 
@@ -689,6 +697,67 @@ async function refreshLocalStatus() {
     state.localStatus = status;
     renderLocalStatus();
   }
+}
+
+async function refreshApplicationUpdate() {
+  const update = await safely(() => window.studio.updateStatus());
+  if (!update) return;
+  state.applicationUpdate = update;
+  renderApplicationUpdate();
+}
+
+function updateStateLabel(value) {
+  return ({
+    idle: 'Automatic check scheduled',
+    checking: 'Checking for updates',
+    current: 'Current',
+    available: 'Update available',
+    downloading: 'Downloading update',
+    ready: 'Ready to restart',
+    offline: 'Update feed offline',
+    failed: 'Update check failed',
+    disabled: 'Automatic checks disabled',
+    unconfigured: 'Update feed unavailable'
+  })[value] || 'Update status unavailable';
+}
+
+function renderApplicationUpdate() {
+  const update = state.applicationUpdate;
+  const card = $('#application-update-card');
+  if (!card || !update) return;
+  const stateValue = String(update.state || 'unconfigured');
+  card.dataset.state = stateValue;
+  $('#application-update-state').textContent = updateStateLabel(stateValue);
+  $('#application-update-copy').textContent = update.message || 'No update state is available yet.';
+  $('#application-update-version').textContent = update.availableVersion
+    ? `Installed version: ${update.currentVersion || 'unknown'} · candidate: ${update.availableVersion}${update.releaseTag ? ` · release: ${update.releaseTag}` : ''}`
+    : `Installed version: ${update.currentVersion || 'unknown'}`;
+  const integrity = update.integrity || {};
+  $('#application-update-integrity').textContent = integrity.detail || 'Squirrel RELEASES metadata has not been checked during this session.';
+  $('#application-update-warning').textContent = update.unsignedWarning || 'Update signing state is unavailable.';
+  const enabled = update.enabled !== false;
+  $('#updates-enabled').checked = enabled;
+  $('#updates-enabled').disabled = stateValue === 'unconfigured';
+  $('#check-updates-button').disabled = !enabled || ['checking', 'available', 'downloading'].includes(stateValue);
+  $('#restart-update-button').disabled = stateValue !== 'ready';
+  $('#later-update-button').disabled = stateValue !== 'ready';
+  $('#open-update-notes-button').disabled = !update.releaseNotesUrl;
+  $('#restart-update-button').textContent = update.restartBlocked ? 'Save work before restart' : 'Restart to install update';
+}
+
+function unsavedWorkState() {
+  const createDialog = $('#create-dialog');
+  const hasUnsavedWork = Boolean(
+    state.unsaved.settings
+    || state.unsaved.createDraft
+    || state.unsaved.pluginSelection
+    || state.unsaved.consoleDraft
+    || createDialog?.open
+  );
+  return {
+    hasUnsavedWork,
+    detail: hasUnsavedWork ? 'Server settings, a creation draft, a plugin selection, or a console draft has not been saved or discarded.' : 'No pending application-owned draft is recorded.'
+  };
 }
 
 async function refreshVersions() {
@@ -848,6 +917,7 @@ async function createServer(event) {
   const created = await safely(() => window.studio.createServer(draft), 'Server created. Choose Set up server to fetch its official software.');
   if (created) {
     state.selectedId = created.id;
+    state.unsaved.createDraft = false;
     $('#create-dialog').close();
     await refreshServers();
   }
@@ -870,7 +940,10 @@ async function saveSettings(event) {
     settings: settingsFromForm(),
     gameRules: gameRulesFromForm()
   }), 'Server settings saved.');
-  if (saved) await refreshServers();
+  if (saved) {
+    state.unsaved.settings = false;
+    await refreshServers();
+  }
 }
 
 async function saveManagementConnection() {
@@ -882,6 +955,7 @@ async function saveManagementConnection() {
   const result = await safely(() => window.studio.configureManagement(server.id, { endpoint, allowInsecureLoopback, token }), 'Protected management connection details saved.');
   if (result) {
     $('#management-token').value = '';
+    state.unsaved.settings = false;
     await refreshServers();
   }
   return result;
@@ -970,6 +1044,11 @@ function openCommandConfirmation(payload) {
 }
 
 function logEvent(event) {
+  if (event?.type === 'application-update') {
+    state.applicationUpdate = event.update || null;
+    renderApplicationUpdate();
+    return;
+  }
   const prefix = new Date(event.at || Date.now()).toLocaleTimeString();
   const label = event.serverId ? `[${event.serverId.slice(0, 8)}] ` : '';
   if (event.message) state.logs.push(`${prefix} ${label}${event.message}`);
@@ -982,9 +1061,19 @@ function logEvent(event) {
 function bindEvents() {
   $('#new-server-button').addEventListener('click', openCreateDialog);
   $('#empty-create-button').addEventListener('click', openCreateDialog);
-  $('#close-create-dialog').addEventListener('click', () => $('#create-dialog').close());
-  $('#cancel-create-button').addEventListener('click', () => $('#create-dialog').close());
+  $('#close-create-dialog').addEventListener('click', () => { state.unsaved.createDraft = false; $('#create-dialog').close(); });
+  $('#cancel-create-button').addEventListener('click', () => { state.unsaved.createDraft = false; $('#create-dialog').close(); });
   $('#create-form').addEventListener('submit', createServer);
+  $('#create-form').addEventListener('input', () => { state.unsaved.createDraft = true; });
+  $('#create-form').addEventListener('change', () => { state.unsaved.createDraft = true; });
+  $('#create-dialog').addEventListener('close', () => { state.unsaved.createDraft = false; });
+  const markSettingsDraft = (event) => {
+    const panel = event.target.closest('[data-panel]')?.dataset.panel;
+    if (['commands', 'console', 'plugins', 'status'].includes(panel)) return;
+    state.unsaved.settings = true;
+  };
+  $('#settings-form').addEventListener('input', markSettingsDraft);
+  $('#settings-form').addEventListener('change', markSettingsDraft);
   $('#browse-root-button').addEventListener('click', async () => {
     const folder = await safely(() => window.studio.pickFolder());
     if (folder) $('#create-root').value = folder;
@@ -994,6 +1083,36 @@ function bindEvents() {
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
+  $('#updates-enabled').addEventListener('change', async () => {
+    const update = await safely(() => window.studio.setUpdatesEnabled($('#updates-enabled').checked));
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+    }
+  });
+  $('#check-updates-button').addEventListener('click', async () => {
+    const update = await safely(() => window.studio.checkForUpdates());
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+    }
+  });
+  $('#later-update-button').addEventListener('click', async () => {
+    const update = await safely(() => window.studio.deferUpdate());
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+    }
+  });
+  $('#restart-update-button').addEventListener('click', async () => {
+    const update = await safely(() => window.studio.restartForUpdate());
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+      if (update.restartBlocked) toast('Save or discard the recorded work before restarting to install the update.', 'error');
+    }
+  });
+  $('#open-update-notes-button').addEventListener('click', () => safely(() => window.studio.openUpdateNotes()));
   $('#install-dependencies-button').addEventListener('click', async () => {
     const missing = Object.values(state.dependencies?.dependencies || {}).filter((item) => !item.available).map((item) => item.id);
     if (!missing.length) return toast('All required tools are already available.', 'success');
@@ -1041,10 +1160,11 @@ function bindEvents() {
   $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (server.software === 'spigot') { setActiveTab('buildtools'); return toast('Spigot setup requires the isolated BuildTools plan and its explicit execution action.', 'error'); } await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });
   $('#start-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.start(server.id), 'Server start requested.'); });
   $('#stop-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.stop(server.id), 'Graceful server stop requested.'); });
-  $('#browse-plugin-button').addEventListener('click', async () => { const selected = await safely(() => window.studio.pickPlugin()); if (selected) { state.pluginPath = selected; $('#plugin-path').value = selected; } });
-  $('#install-plugin-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (!state.pluginPath) return toast('Choose a plugin JAR first.', 'error'); const result = await safely(() => window.studio.installPlugin(server.id, state.pluginPath), 'Plugin installed. Restart the server to load it.'); if (result) { state.pluginPath = ''; $('#plugin-path').value = ''; refreshPlugins(); } });
-  $('#send-console-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const result = await safely(() => window.studio.console(server.id, command)); if (result) $('#console-command').value = ''; });
-  $('#send-rcon-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const response = await safely(() => window.studio.rcon(server.id, command)); if (response !== null) { state.logs.push(`RCON: ${response || '(no response)'}`); renderConsole(); } });
+  $('#browse-plugin-button').addEventListener('click', async () => { const selected = await safely(() => window.studio.pickPlugin()); if (selected) { state.pluginPath = selected; state.unsaved.pluginSelection = true; $('#plugin-path').value = selected; } });
+  $('#install-plugin-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (!state.pluginPath) return toast('Choose a plugin JAR first.', 'error'); const result = await safely(() => window.studio.installPlugin(server.id, state.pluginPath), 'Plugin installed. Restart the server to load it.'); if (result) { state.pluginPath = ''; state.unsaved.pluginSelection = false; $('#plugin-path').value = ''; refreshPlugins(); } });
+  $('#send-console-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const result = await safely(() => window.studio.console(server.id, command)); if (result) { $('#console-command').value = ''; state.unsaved.consoleDraft = false; } });
+  $('#console-command').addEventListener('input', () => { state.unsaved.consoleDraft = Boolean($('#console-command').value.trim()); });
+  $('#send-rcon-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const response = await safely(() => window.studio.rcon(server.id, command)); if (response !== null) { state.logs.push(`RCON: ${response || '(no response)'}`); $('#console-command').value = ''; state.unsaved.consoleDraft = false; renderConsole(); } });
   $('#clear-console-button').addEventListener('click', () => { state.logs = []; renderConsole(); });
   $$('.command-presets button').forEach((button) => button.addEventListener('click', () => { $('#console-command').value = button.dataset.command; $('#console-command').focus(); }));
 }
@@ -1053,9 +1173,10 @@ async function initialize() {
   renderAdvancedControls();
   bindEvents();
   window.studio.onEvent(logEvent);
+  window.studio.onUnsavedWorkQuery(unsavedWorkState);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshApplicationUpdate()]);
   renderCommandCenter();
 }
 

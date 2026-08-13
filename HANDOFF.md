@@ -8,13 +8,55 @@ The application source provides a Windows Electron control center, shared CLI, s
 
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
 - `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules.
-- `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
+- `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, command planning, and update-state/restart requests.
+- `src/main/update-controller.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: approved-feed validation, Electron Squirrel update-state wiring, visible update status, and user-controlled restart handling.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
 - `src/cli/mss.cjs`: shared local CLI.
 - `site/`: public marketing and browser-local interaction source, including a local Status destination.
 - `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. It does not assert a dim sum code name or photo unless a separately verified catalog asset is available.
 - `assets/minecraft-server-studio.svg`, `assets/minecraft-server-studio.ico`, and `scripts/generate-app-icon.ps1`: original vector master and reproducible multi-resolution Windows icon source.
 - `package.json`: local Windows executable icon plus an immutable commit-pinned Squirrel icon metadata URL.
+
+## Unsigned Squirrel application-update controller
+
+The updater lane adds an application-update controller for the Windows
+Squirrel.Windows install path. It derives only the approved public
+`https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/latest/download/`
+feed and uses it only from a packaged Windows Squirrel installation. It
+publishes distinct unconfigured, disabled, idle, checking, current, available,
+downloading, ready, offline, and failed states, and leaves the installed
+application usable if feed discovery, metadata validation, or package transfer
+fails. It does not accept a user-configured feed URL or any update credentials.
+
+The controller validates `RELEASES` before it calls Electron's updater, then
+uses the resulting Squirrel package metadata for the update event flow. The
+release and update artifacts are unsigned by design; the product must keep the
+unknown-publisher/SmartScreen warning visible and never claim signature
+verification. A staged `ready` update is not installed until the user selects
+restart, and normal unsaved-work protection must still run before that restart.
+
+### Directly related documentation
+
+- `docs/features/unsigned-automatic-updates.md`: approved-feed derivation,
+  literal state semantics, Squirrel metadata boundary, restart policy,
+  failure/offline recovery, and no-secret boundary.
+- `docs/features/local-status-and-completeness.md`: the updater contribution to
+  the still-incomplete backup/update inventory.
+
+### Verification boundary
+
+No tests, linting, build, package, packaged-runtime interaction, capture, or
+installed-update cycle was run by this documentation lane. Source-level updater
+behavior and any eventual release evidence must be recorded separately; this
+handoff does not claim either.
+
+### Remaining work
+
+- Keep the source inventory's `backups-and-updates` row incomplete until the
+  update controller, backup/restore, localization, test, and capture evidence
+  are all independently present.
+- Implement server/software/plugin backup-first update and rollback controls as
+  separate work; application self-update is not evidence for those surfaces.
 
 ### Verification state
 

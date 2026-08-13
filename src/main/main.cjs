@@ -1,7 +1,9 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { app, autoUpdater, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
+const { UpdateController } = require('./update-controller.cjs');
 let CredentialVault;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
@@ -14,6 +16,8 @@ app.setName('Minecraft Server Studio');
 let mainWindow;
 let serverManager;
 let credentialVault;
+let updateController;
+const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
   const payload = Buffer.from(String(body), 'utf8');
@@ -82,6 +86,34 @@ function sendToRenderer(event) {
   mainWindow.webContents.send('studio:event', event);
 }
 
+function queryRendererUnsavedWork() {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
+    return Promise.resolve({ hasUnsavedWork: true, detail: 'The application window is unavailable to confirm unsaved work.' });
+  }
+  const requestId = crypto.randomUUID();
+  const senderId = mainWindow.webContents.id;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      unsavedWorkQueries.delete(requestId);
+      resolve({ hasUnsavedWork: true, detail: 'The application did not confirm unsaved work before the restart safety timeout.' });
+    }, 5_000);
+    unsavedWorkQueries.set(requestId, { resolve, timer, senderId });
+    mainWindow.webContents.send('studio:query-unsaved-work', { requestId });
+  });
+}
+
+ipcMain.on('studio:unsaved-work-response', (event, response) => {
+  const requestId = String(response?.requestId || '');
+  const pending = unsavedWorkQueries.get(requestId);
+  if (!pending || pending.senderId !== event.sender.id) return;
+  unsavedWorkQueries.delete(requestId);
+  clearTimeout(pending.timer);
+  pending.resolve({
+    hasUnsavedWork: Boolean(response?.hasUnsavedWork),
+    detail: typeof response?.detail === 'string' ? response.detail.slice(0, 160) : ''
+  });
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -102,7 +134,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   credentialVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
@@ -115,6 +147,13 @@ app.whenReady().then(() => {
     },
     onEvent: sendToRenderer
   });
+  updateController = new UpdateController({
+    app,
+    autoUpdater,
+    dataDir: path.join(app.getPath('userData'), 'updates'),
+    onStateChange: (update) => sendToRenderer({ type: 'application-update', update })
+  });
+  await updateController.initialize();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -125,9 +164,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('before-quit', () => {
+  updateController?.shutdown();
+});
+
 function requireManager() {
   if (!serverManager) throw new Error('Minecraft Server Studio is still starting.');
   return serverManager;
+}
+
+function requireUpdater() {
+  if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
+  return updateController;
 }
 
 ipcMain.handle('studio:list-servers', () => requireManager().listServers());
@@ -227,3 +275,15 @@ ipcMain.handle('studio:invoke-management', async (_event, id, method, params) =>
 });
 ipcMain.handle('studio:command-catalog', async (_event, id) => requireManager().commandCatalog(id));
 ipcMain.handle('studio:command-plan', async (_event, id, request) => requireManager().commandPlan(id, request));
+ipcMain.handle('studio:update-status', () => requireUpdater().status());
+ipcMain.handle('studio:check-for-updates', () => requireUpdater().checkForUpdates({ reason: 'manual' }));
+ipcMain.handle('studio:set-updates-enabled', (_event, enabled) => requireUpdater().setEnabled(enabled));
+ipcMain.handle('studio:defer-update', () => requireUpdater().deferUpdate());
+ipcMain.handle('studio:restart-for-update', () => requireUpdater().restartForUpdate(queryRendererUnsavedWork));
+ipcMain.handle('studio:open-update-notes', async () => {
+  const releaseNotesUrl = requireUpdater().status().releaseNotesUrl;
+  const url = releaseNotesUrl ? new URL(releaseNotesUrl) : null;
+  const expectedPrefix = '/Ding-Ding-Projects/minecraft-server-studio/releases/';
+  if (!url || url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.startsWith(expectedPrefix)) throw new Error('No verified public release-notes link is available for this update state.');
+  await shell.openExternal(url.toString());
+});

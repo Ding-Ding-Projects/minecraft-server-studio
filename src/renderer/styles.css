@@ -82,6 +82,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .dependency-pill { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--outline-variant); border-radius: 999px; padding: 8px 10px; color: var(--on-surface-variant); font-size: .78rem; }
 .dependency-pill.available { border-color: #4f9d75; color: var(--success); }
 
+.application-update-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, .9fr); gap: 26px; margin-bottom: 24px; padding: 22px; border: 1px solid var(--outline-variant); border-radius: 24px; background: var(--surface-container); }
+.application-update-card p:not(.eyebrow) { max-width: 720px; margin-top: 8px; color: var(--on-surface-variant); line-height: 1.5; }
+.application-update-card[data-state="ready"] { border-color: #4f9d75; }
+.application-update-card[data-state="failed"], .application-update-card[data-state="offline"] { border-color: var(--error); }
+.application-update-actions { display: grid; gap: 10px; align-content: center; }
+.update-toggle { min-height: 0; }
+.update-action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.update-warning { color: var(--warning) !important; }
+
 .empty-state { display: grid; justify-items: center; gap: 12px; max-width: 620px; margin: 12vh auto; padding: 44px 24px; text-align: center; border: 1px dashed var(--outline); border-radius: 32px; color: var(--on-surface-variant); }
 .empty-state h3 { color: var(--on-surface); }
 .empty-state p { max-width: 500px; line-height: 1.5; }
@@ -172,7 +181,7 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 @media (max-width: 1050px) {
   .app-shell { grid-template-columns: 240px minmax(0, 1fr); }
   .workspace { padding-inline: 24px; }
-  .dependency-card, .plugin-install-card { grid-template-columns: 1fr; }
+  .dependency-card, .application-update-card, .plugin-install-card { grid-template-columns: 1fr; }
   .dependency-actions { grid-template-columns: 1fr auto; }
   .dependency-list { grid-column: 1 / -1; }
 }

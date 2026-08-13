@@ -57,6 +57,29 @@
           </div>
         </section>
 
+        <section class="application-update-card" id="application-update-card" data-state="unconfigured" aria-labelledby="application-update-title">
+          <div>
+            <p class="eyebrow">UNSIGNED SQUIRREL.WINDOWS UPDATES</p>
+            <h3 id="application-update-title">Application updates</h3>
+            <p id="application-update-copy">Loading the application-update state…</p>
+            <p id="application-update-version" class="muted">Installed version: loading</p>
+            <p id="application-update-integrity" class="muted">Squirrel RELEASES metadata has not been checked during this session.</p>
+            <p id="application-update-warning" class="update-warning">Updates are unsigned and can trigger an unknown-publisher or SmartScreen warning.</p>
+          </div>
+          <div class="application-update-actions">
+            <span id="application-update-state" class="status-chip">Loading</span>
+            <label class="switch-field update-toggle"><input id="updates-enabled" type="checkbox" checked><span><strong>Automatically check for updates</strong><small>Checks only the approved public HTTPS Squirrel.Windows feed. You can disable or re-enable checks at any time.</small></span></label>
+            <div class="update-action-row">
+              <button class="outlined-action" id="check-updates-button" type="button">Check for updates</button>
+              <button class="outlined-action" id="open-update-notes-button" type="button">Open release notes</button>
+            </div>
+            <div class="update-action-row">
+              <button class="primary-action" id="restart-update-button" type="button" disabled>Restart to install update</button>
+              <button class="outlined-action" id="later-update-button" type="button" disabled>Later</button>
+            </div>
+          </div>
+        </section>
+
         <section class="empty-state" id="empty-state">
           <div class="empty-glyph" aria-hidden="true">▦</div>
           <h3>Build a local server, not a pile of terminal commands.</h3>

@@ -52,7 +52,7 @@ The template includes these desktop surface rows:
 | `plugins` | Plugin management |
 | `configuration` | Server configuration |
 | `console-and-rcon` | Console and RCON |
-| `backups-and-updates` | Backups and updates |
+| `backups-and-updates` | Backup, restore, and unsigned application-update controls |
 | `settings-appearance-and-localization` | Settings, appearance, and localization |
 | `file-converter` | Local file converter |
 | `ollama` | Local Ollama suite |
@@ -62,6 +62,25 @@ The template includes these desktop surface rows:
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
 
+## Application-update inventory boundary
+
+The `backups-and-updates` row contains several independently required pieces of
+work. An unsigned Squirrel.Windows application-update controller can contribute
+its own implementation and documentation paths to that row, but it does not
+make server backup, server rollback, plugin update, or world restore complete.
+The row must remain incomplete until every required proof record is verified;
+an in-progress updater source record is not a substitute for localization,
+tests, built-artifact interaction, or capture evidence.
+
+The update-controller record must distinguish an unconfigured runtime from an
+offline or invalid approved public feed, preserve the installed application when
+an update fails, and describe the unsigned Squirrel boundary. It must not claim
+that an application update installed just because a release was discovered or
+downloaded. The only accepted feed is the product-derived public
+latest-release path; a visitor or desktop user cannot provide another feed URL.
+See [Unsigned automatic updates](unsigned-automatic-updates.md) for the state
+and recovery contract.
+
 ## Source and evidence boundaries
 
 The module is only a schema and evaluator. It is not source evidence that any server action, installer, converter, authenticator, or local model manager exists. A caller must populate implementation and documentation paths, then attach evidence for the exact desktop surface it has implemented.
@@ -70,10 +89,11 @@ The status snapshot accepts only local status data supplied by its caller. It re
 
 ## Verification status
 
-This feature record was added during the active speed-delivery workflow. Tests, linting, review, built-artifact interaction, runtime verification, and captures are intentionally recorded as **pending** rather than claimed. No build, package, deployment, commit, release, or external Status Hub verification is asserted by this documentation.
+This feature record was added during the active speed-delivery workflow. Tests, linting, review, built-artifact interaction, runtime verification, and captures are intentionally recorded as **pending** rather than claimed. No build, package, deployment, commit, release, application-update cycle, or external Status Hub verification is asserted by this documentation.
 
 ## Suggested related articles
 
 - [Server orchestration](server-orchestration.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)
 - [Spigot BuildTools adapter](spigot-buildtools.md)
+- [Unsigned automatic updates](unsigned-automatic-updates.md)

@@ -9,6 +9,7 @@
 - Version-aware Java compatibility source for Paper and Spigot/BuildTools, including Java 8, 11, 16, 17, 21, and Paper 26.1+ Java 25 requirements.
 - Automatic Java/Git detection, installation, retry status, and user-scoped portable fallback installation.
 - Dedicated Java runtime manager with strict Paper/Spigot compatibility gaps, direct `--version` then `-version` probing, bounded configured/PATH/JAVA_HOME candidate discovery, explicit package-manager plans, configured-only portable source handling, and direct-argv launch preflight token rejection.
+- Windows unsigned-update controller for the fixed approved public latest-release Squirrel.Windows feed, usable only from a packaged Windows install. It distinguishes unconfigured, disabled, idle, checking, current, available, downloading, ready, offline, and failed states; validates `RELEASES` before Electron update events, never claims code signing, and requires a user-selected restart.
 - Capability-first Minecraft Server Management Protocol transport: TLS-first JSON-RPC WebSocket discovery with `rpc.discover`, advertised-method allowlisting, and protected credential boundary.
 - Version/flavor/capability Command Center registry with typed action families, source badges, tokenized Minecraft-only fallback, and high-impact confirmation metadata.
 - Official Spigot metadata and BuildTools preflight source, safe workspace planning, structured flag composer, generated configuration preservation, plugin metadata inspection, and staged JAR rollback plan.
