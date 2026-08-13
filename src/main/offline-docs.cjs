@@ -14,7 +14,10 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 
 const OFFLINE_DOCUMENTATION_SCHEMA_VERSION = 1;
-const MAX_DOCUMENT_COUNT = 32;
+// Keep a finite catalog ceiling while leaving deliberate space for future
+// feature articles. The inventory is still exact and rejects duplicate or
+// unregistered documents; this is capacity, not discovery-by-directory.
+const MAX_DOCUMENT_COUNT = 96;
 const MAX_DOCUMENT_BYTES = 512 * 1024;
 const MAX_TOTAL_DOCUMENT_BYTES = 3 * 1024 * 1024;
 const MAX_DOCUMENT_ID_LENGTH = 96;
@@ -41,6 +44,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('local-ollama-suite', 'local-ollama-suite.md', 'Local Ollama suite foundation', 'Inspect the bounded fixed-loopback local service inventory.'),
   entry('browser-local-ollama-observer', 'browser-local-ollama-observer.md', 'Browser-local Ollama observer', 'Visitor-triggered browser-only observation of the fixed local Ollama API with bounded data handling and no remote-control bridge.'),
   entry('browser-local-file-converter', 'browser-local-file-converter.md', 'Browser-local companion-site file converter', 'Use bounded in-browser text, structured-data, and binary-encoding transformations without a desktop or server bridge.'),
+  entry('browser-local-history-and-safe-exports', 'browser-local-history-and-safe-exports.md', 'Browser-local history and safe exports', 'Review bounded non-secret companion-site action metadata and export selected records without a desktop or server bridge.'),
   entry('unsigned-automatic-updates', 'unsigned-automatic-updates.md', 'Unsigned automatic updates', 'Understand the fixed Squirrel update feed and restart choice.'),
   entry('release-packaging', 'release-packaging.md', 'Windows release packaging metadata', 'Understand public dim-sum code-name metadata and its no-copy release boundary.'),
   entry('file-converter', 'file-converter.md', 'Local file-converter foundation', 'Inspect a local file and browse the honest disabled adapter catalog.'),

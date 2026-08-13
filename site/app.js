@@ -44,6 +44,11 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     scheduleTimer: null,
     scheduleSignature: ""
   };
+  var historyUi = {
+    selectedIds: new Set(),
+    visibleIds: [],
+    message: ""
+  };
 
   var LOCALIZED_COPY = Object.freeze({
     "settings-eyebrow": { english: "Settings and appearance", cantonese: "設定與外觀" },
@@ -2279,14 +2284,18 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       if (compiled && compiled.error) {
         status.textContent = compiled.error;
         if (!globalResults) items.forEach(function (item) { item.hidden = false; });
+        if (typeof options.onRefresh === "function") {
+          safely(function () { options.onRefresh({ active: true, error: compiled.error, total: items.length, matches: [] }); });
+        }
         return;
       }
+      var active = mode.checked ? Boolean(pattern.value) : Boolean(input.value.trim());
+      var matches = active ? items.filter(function (item) { return hasMatch(textOf(item)); }) : items.slice();
       if (globalResults) {
         globalResults.replaceChildren();
-        if (!input.value.trim() && !mode.checked) {
+        if (!active) {
           status.textContent = "Enter a term, or choose regular expression mode.";
         } else {
-          var matches = items.filter(function (item) { return hasMatch(textOf(item)); });
           status.textContent = matches.length + " matching feature preview" + (matches.length === 1 ? "." : "s.");
           if (!matches.length) globalResults.textContent = "No matching feature preview was found.";
           matches.slice(0, 12).forEach(function (item) {
@@ -2300,9 +2309,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
           });
         }
       } else {
-        var active = mode.checked ? Boolean(pattern.value) : Boolean(input.value.trim());
         items.forEach(function (item) { item.hidden = active && !hasMatch(textOf(item)); });
-        var count = items.filter(function (item) { return !item.hidden; }).length;
+        var count = matches.length;
         status.textContent = active ? count + " local match" + (count === 1 ? "." : "es.") : "Plain-text search is ready.";
       }
       if (mode.checked && pattern.value) {
@@ -2316,7 +2324,21 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       if (hasContractMethod("evaluateRegex") && mode.checked && pattern.value) {
         safely(function () { contract.evaluateRegex({ pattern: pattern.value, flags: selectedFlags(), sample: sample.value }); });
       }
+      if (typeof options.onRefresh === "function") {
+        safely(function () { options.onRefresh({ active: active, error: "", total: items.length, matches: matches.slice() }); });
+      }
     }
+
+    input.__mssRegexController = {
+      matches: hasMatch,
+      isActive: function () { return mode.checked ? Boolean(pattern.value) : Boolean(input.value.trim()); },
+      getError: function () {
+        if (!mode.checked || !pattern.value) return "";
+        var compiled = expression(pattern.value, selectedFlags());
+        return compiled.error || "";
+      },
+      refresh: refresh
+    };
 
     opener.addEventListener("click", function () {
       builder.hidden = !builder.hidden;
@@ -4224,6 +4246,30 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     });
   }
 
+  function syncHistoryActionOptions(select) {
+    if (!select) return;
+    var current = select.value || "All actions";
+    var actions = state.history.map(function (entry) { return entry.action; }).filter(Boolean).filter(function (value, index, list) {
+      return list.indexOf(value) === index;
+    }).sort(function (left, right) { return left.localeCompare(right); });
+    var signature = actions.join("\u0001");
+    if (select.getAttribute("data-mss-history-action-signature") !== signature) {
+      select.replaceChildren();
+      var allActions = document.createElement("option");
+      allActions.value = "All actions";
+      allActions.textContent = "All actions";
+      select.appendChild(allActions);
+      actions.forEach(function (action) {
+        var option = document.createElement("option");
+        option.value = action;
+        option.textContent = action;
+        select.appendChild(option);
+      });
+      select.setAttribute("data-mss-history-action-signature", signature);
+    }
+    select.value = actions.indexOf(current) >= 0 ? current : "All actions";
+  }
+
   function renderHistory() {
     var surface = one('[data-contract-surface="local-history"]');
     if (!surface) return;
@@ -4232,35 +4278,128 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       area = made("section");
       area.setAttribute("data-mss-local-history", "true");
       var heading = made("h3");
-      heading.textContent = "Browser-local demonstration history";
+      heading.textContent = "Browser-local action history";
+      var boundary = made("p");
+      boundary.className = "history-boundary";
+      boundary.textContent = "This browser stores bounded non-secret action metadata only. It is not desktop Git history, a server log, a file store, or browser history. Exports omit vocabulary values and metadata, authenticator/TOTP/toy-lock/QR/password/verifier/current-code data, raw file data and paths, download destinations, and server or installer state.";
+      var selection = made("p");
+      selection.setAttribute("data-mss-history-selection", "true");
+      selection.setAttribute("role", "status");
+      selection.setAttribute("aria-live", "polite");
+      var actions = made("div");
+      actions.className = "history-actions";
+      var selectVisible = button("Select visible records", function () {
+        historyUi.visibleIds.forEach(function (id) { historyUi.selectedIds.add(id); });
+        historyUi.message = "Visible browser-local history records selected.";
+        renderHistory();
+      });
+      selectVisible.setAttribute("data-mss-history-select-visible", "true");
+      var clearSelection = button("Clear selection", function () {
+        historyUi.selectedIds.clear();
+        historyUi.message = "History selection cleared.";
+        renderHistory();
+      });
+      clearSelection.setAttribute("data-mss-history-clear-selection", "true");
+      var exportLabel = made("label");
+      exportLabel.textContent = "Selected-record export format";
+      var format = made("select");
+      format.setAttribute("data-mss-history-export-format", "true");
+      [["json", "JSON"], ["jsonl", "JSON Lines"], ["csv", "CSV"], ["tsv", "TSV"], ["markdown", "Markdown"]].forEach(function (pair) {
+        var option = document.createElement("option");
+        option.value = pair[0];
+        option.textContent = pair[1];
+        format.appendChild(option);
+      });
+      exportLabel.appendChild(format);
+      var exportButton = button("Export selected records", function () {
+        prepareHistoryExport(surface);
+      });
+      exportButton.setAttribute("data-mss-history-export", "true");
+      var removeSelected = button("Remove selected records", function () {
+        openHistoryDestructiveConfirmation(surface, "Remove selected browser-local history records", Array.from(historyUi.selectedIds), false);
+      });
+      removeSelected.setAttribute("data-mss-history-remove-selected", "true");
+      var clearAll = button("Clear all browser-local history", function () {
+        openHistoryDestructiveConfirmation(surface, "Clear all browser-local history records", [], true);
+      });
+      clearAll.setAttribute("data-mss-history-clear-all", "true");
       var list = made("ul");
       list.setAttribute("data-mss-history-list", "true");
-      area.append(heading, list);
+      list.className = "history-record-list";
+      area.append(heading, boundary, selection, actions, list);
+      actions.append(selectVisible, clearSelection, exportLabel, exportButton, removeSelected, clearAll);
       surface.appendChild(area);
     }
     var filters = one('[data-contract-hook="history-filters"]', surface);
     var date = filters && one('input[type="date"]', filters);
     var action = filters && one("select", filters);
     var query = filters && one('input[type="search"]', filters);
+    syncHistoryActionOptions(action);
     var dateValue = date && date.value;
     var actionValue = action && action.value && action.value !== "All actions" ? action.value.toLocaleLowerCase() : "";
     var queryValue = query && query.value ? query.value.toLocaleLowerCase() : "";
+    var regexController = query && query.__mssRegexController;
+    var regexProblem = regexController && regexController.getError ? regexController.getError() : "";
     var entries = state.history.filter(function (entry) {
       if (dateValue && historyTime(entry).slice(0, 10) !== dateValue) return false;
-      if (actionValue && entry.action.toLocaleLowerCase().indexOf(actionValue) === -1) return false;
-      return !queryValue || (entry.action + " " + entry.detail).toLocaleLowerCase().indexOf(queryValue) !== -1;
+      if (actionValue && entry.action.toLocaleLowerCase() !== actionValue) return false;
+      var text = [entry.action, entry.target, entry.detail, historyTime(entry)].join(" ");
+      if (!regexController) return !queryValue || text.toLocaleLowerCase().indexOf(queryValue) !== -1;
+      return !regexController.isActive() || (!regexProblem && regexController.matches(text));
+    });
+    historyUi.visibleIds = entries.map(function (entry) { return entry.id; });
+    Array.from(historyUi.selectedIds).forEach(function (id) {
+      if (!state.history.some(function (entry) { return entry.id === id; })) historyUi.selectedIds.delete(id);
     });
     var listHost = one("[data-mss-history-list]", area);
     listHost.replaceChildren();
+    var selectionStatus = one("[data-mss-history-selection]", area);
+    var selectedCount = historyUi.selectedIds.size;
+    if (selectionStatus) {
+      var baseStatus = selectedCount + " of " + state.history.length + " browser-local history record" + (state.history.length === 1 ? " is" : "s are") + " selected.";
+      selectionStatus.textContent = historyUi.message ? baseStatus + " " + historyUi.message : baseStatus;
+    }
+    ["[data-mss-history-export]", "[data-mss-history-remove-selected]"] .forEach(function (selector) {
+      var control = one(selector, area);
+      if (control) control.disabled = selectedCount === 0;
+    });
+    var clearAll = one("[data-mss-history-clear-all]", area);
+    if (clearAll) clearAll.disabled = state.history.length === 0;
     if (!entries.length) {
       var empty = made("li");
-      empty.textContent = state.history.length ? "No browser-local history matches the active filters." : "No browser-local history exists yet.";
+      empty.className = "history-empty";
+      empty.textContent = regexProblem ? "The regular expression is invalid: " + regexProblem : state.history.length ? "No browser-local history matches the active filters." : "No browser-local history exists yet.";
       listHost.appendChild(empty);
       return;
     }
     entries.forEach(function (entry) {
       var item = made("li");
-      item.textContent = entry.action + ": " + entry.detail + " Recorded locally at " + historyTime(entry) + ".";
+      item.className = "history-record";
+      var selectLabel = made("label");
+      selectLabel.className = "history-record-selection";
+      var checkbox = made("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = historyUi.selectedIds.has(entry.id);
+      checkbox.setAttribute("aria-label", "Select browser-local history record: " + entry.action);
+      checkbox.addEventListener("change", function () {
+        if (checkbox.checked) historyUi.selectedIds.add(entry.id);
+        else historyUi.selectedIds.delete(entry.id);
+        historyUi.message = "";
+        renderHistory();
+      });
+      selectLabel.append(checkbox, document.createTextNode(" Select"));
+      var record = made("div");
+      var title = made("strong");
+      title.textContent = entry.action;
+      var target = made("span");
+      target.textContent = entry.target ? "Target: " + entry.target + "." : "Target: not recorded.";
+      var detail = made("span");
+      detail.textContent = entry.detail || "No additional non-secret detail was recorded.";
+      var when = made("time");
+      when.dateTime = historyTime(entry);
+      when.textContent = "Recorded locally at " + historyTime(entry) + ".";
+      record.append(title, target, detail, when);
+      item.append(selectLabel, record);
       listHost.appendChild(item);
     });
   }
@@ -4271,6 +4410,147 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     all("input, select", filters).forEach(function (input) {
       input.addEventListener("input", renderHistory);
       input.addEventListener("change", renderHistory);
+    });
+    var search = one('input[type="search"]', filters);
+    if (search && search.getAttribute("data-mss-history-filter-listener") !== "true") {
+      search.setAttribute("data-mss-history-filter-listener", "true");
+      search.addEventListener("input", function () { window.setTimeout(renderHistory, 0); });
+    }
+  }
+
+  function installHistorySearchBuilder() {
+    var surface = one('[data-contract-surface="local-history"]');
+    var filters = surface && one('[data-contract-hook="history-filters"]', surface);
+    var search = filters && one('input[type="search"]', filters);
+    if (!search) return;
+    makeRegexBuilder(search, {
+      label: "browser-local history",
+      scope: surface,
+      candidates: function () {
+        return state.history.map(function (entry) {
+          var candidate = made("span");
+          candidate.textContent = [entry.action, entry.target, entry.detail, historyTime(entry)].join(" ");
+          candidate.setAttribute("data-mss-history-candidate", entry.id);
+          return candidate;
+        });
+      },
+      onRefresh: function () {
+        window.setTimeout(renderHistory, 0);
+      }
+    });
+  }
+
+  function selectedHistoryRecords() {
+    return state.history.filter(function (entry) { return historyUi.selectedIds.has(entry.id); }).map(function (entry) {
+      return { id: entry.id, action: entry.action, target: entry.target || "", detail: entry.detail || "", createdAt: historyTime(entry) };
+    });
+  }
+
+  function downloadLocalText(text, mime, name) {
+    var blob = new Blob([text], { type: /(?:^|;)\s*charset=/i.test(mime) ? mime : mime + ";charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.hidden = true;
+    (body || document.documentElement).appendChild(link);
+    link.click();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+      link.remove();
+    }, 1000);
+  }
+
+  function prepareHistoryExport(surface) {
+    var area = one("[data-mss-local-history]", surface);
+    var format = area && one("[data-mss-history-export-format]", area);
+    var records = selectedHistoryRecords();
+    if (!records.length || !format) return;
+    var output = hasContractMethod("createExport") ? safely(function () { return contract.createExport(format.value, records); }, null) : null;
+    if (!output || !output.text) {
+      historyUi.message = "The selected-record export could not be prepared in this browser.";
+      renderHistory();
+      return;
+    }
+    var extension = output.format === "markdown" ? "md" : output.format;
+    downloadLocalText(output.text, output.mime || "text/plain", "minecraft-server-studio-browser-history." + extension);
+    historyUi.message = records.length + " selected browser-local history record" + (records.length === 1 ? " was" : "s were") + " exported as " + String(output.format || format.value).toUpperCase() + ". The file states its omissions.";
+    addHistory("Browser-local history export prepared", records.length + " selected non-secret history record(s) prepared without raw file, credential, vocabulary, server, installer, or path data.");
+    notify("success", "Selected browser-local history records were prepared for export. The browser chooses any download destination, which this page does not know or track.");
+    renderHistory();
+  }
+
+  function openHistoryDestructiveConfirmation(surface, title, ids, clearAll) {
+    var activeIds = clearAll ? state.history.map(function (entry) { return entry.id; }) : ids.filter(function (id) { return historyUi.selectedIds.has(id); });
+    if (!activeIds.length) return;
+    showDialog(title, function (content) {
+      var description = made("p");
+      description.textContent = "This removes only " + activeIds.length + " browser-local history metadata record" + (activeIds.length === 1 ? "." : "s.") + " It does not change a desktop app, server, source file, browser download, or authenticator record.";
+      var firstLabel = made("label");
+      var first = made("input");
+      first.type = "checkbox";
+      firstLabel.append(first, document.createTextNode(" I understand these browser-local metadata records will be removed."));
+      var secondLabel = made("label");
+      var second = made("input");
+      second.type = "checkbox";
+      secondLabel.append(second, document.createTextNode(" I understand this action cannot restore the selected metadata records."));
+      var rangeLabel = made("label");
+      rangeLabel.textContent = "Full-range confirmation slider";
+      var range = made("input");
+      range.type = "range";
+      range.min = "0";
+      range.max = "100";
+      range.value = "0";
+      range.disabled = true;
+      rangeLabel.appendChild(range);
+      var status = made("output");
+      status.setAttribute("aria-live", "polite");
+      var emergency = button("Emergency exit", function () {
+        closeDialog(dialog);
+        focus(one(clearAll ? "[data-mss-history-clear-all]" : "[data-mss-history-remove-selected]", one("[data-mss-local-history]", surface)));
+      });
+      var confirm = button("Confirm metadata removal", function () {
+        var confirmation = null;
+        if (hasContractMethod("beginDestructiveAction") && hasContractMethod("advanceDestructiveAction")) {
+          confirmation = safely(function () {
+            var session = contract.beginDestructiveAction({
+              id: "browser-history-" + Date.now(),
+              title: title,
+              affected: activeIds.length
+            });
+            if (first.checked) session = contract.advanceDestructiveAction(session, { key: "first" }).session;
+            if (second.checked) session = contract.advanceDestructiveAction(session, { key: "second" }).session;
+            session = contract.advanceDestructiveAction(session, { slider: Number(range.value), confirm: true }).session;
+            return session;
+          }, null);
+        }
+        if (!confirmation || confirmation.state !== "confirmed") {
+          status.textContent = "Both acknowledgement controls and the full confirmation slider are required.";
+          return;
+        }
+        var result = clearAll && hasContractMethod("clearAuditRecords") ? safely(function () { return contract.clearAuditRecords({ confirmed: true }); }, null) : hasContractMethod("removeAuditRecords") ? safely(function () { return contract.removeAuditRecords(activeIds, { confirmed: true }); }, null) : null;
+        if (!result || result.ok !== true) {
+          status.textContent = result && result.error ? result.error : "The local history operation could not be completed.";
+          return;
+        }
+        activeIds.forEach(function (id) { historyUi.selectedIds.delete(id); });
+        historyUi.message = (result.removed || activeIds.length) + " browser-local history metadata record" + ((result.removed || activeIds.length) === 1 ? " was" : "s were") + " removed after confirmation.";
+        closeDialog(dialog);
+        hydrateContractState();
+        renderHistory();
+        live("Browser-local history metadata was removed. No source file, download, credential, server, or installed-app data changed.");
+      });
+      confirm.disabled = true;
+      function update() {
+        range.disabled = !(first.checked && second.checked);
+        confirm.disabled = range.disabled || range.value !== "100";
+        status.textContent = range.disabled ? "Select both acknowledgement controls to enable the slider." : range.value === "100" ? "The metadata-removal confirmation is ready." : "Move the slider to 100 to enable metadata removal.";
+      }
+      first.addEventListener("change", update);
+      second.addEventListener("change", update);
+      range.addEventListener("input", update);
+      content.append(description, firstLabel, secondLabel, rangeLabel, status, confirm, emergency);
+      update();
     });
   }
 
@@ -4325,54 +4605,9 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
   }
 
   function installExports() {
-    if (!main || one("[data-mss-export-controls]", main)) return;
-    var panel = made("section");
-    panel.setAttribute("data-mss-export-controls", "true");
-    var heading = made("h2");
-    heading.textContent = "Export browser-local demonstration data";
-    var copy = made("p");
-    copy.textContent = "Choose a format to save this page's local preview settings and demonstration history. The export excludes server data, installer assets, file contents, credentials, and personal vocabulary values.";
-    var label = made("label");
-    label.textContent = "Format";
-    var format = made("select");
-    [["json", "JSON"], ["jsonl", "JSON Lines"], ["csv", "CSV"], ["tsv", "TSV"], ["markdown", "Markdown"]].forEach(function (pair) {
-      var option = document.createElement("option");
-      option.value = pair[0];
-      option.textContent = pair[1];
-      format.appendChild(option);
-    });
-    label.appendChild(format);
-    var output = made("output");
-    output.setAttribute("aria-live", "polite");
-    var prepare = button("Prepare browser-local export", function () {
-      var record = exportRecord();
-      var contractExport = hasContractMethod("createExport") ? safely(function () { return contract.createExport(format.value, [record]); }, null) : null;
-      var data = contractExport && contractExport.text ? {
-        text: contractExport.text,
-        type: contractExport.mime || "text/plain",
-        extension: contractExport.format === "markdown" ? "md" : contractExport.format
-      } : serialize(format.value, record);
-      var mime = data.type || "text/plain";
-      var blob = new Blob([data.text], { type: /(?:^|;)\s*charset=/i.test(mime) ? mime : mime + ";charset=utf-8" });
-      var url = URL.createObjectURL(blob);
-      var link = document.createElement("a");
-      link.href = url;
-      link.download = "minecraft-server-studio-browser-preview." + data.extension;
-      link.hidden = true;
-      (body || document.documentElement).appendChild(link);
-      link.click();
-      window.setTimeout(function () {
-        URL.revokeObjectURL(url);
-        link.remove();
-      }, 1000);
-      output.textContent = "A browser-local " + format.value.toUpperCase() + " export was prepared. It contains only this page's demo data.";
-      addHistory("Browser-local export prepared", format.value.toUpperCase() + " demo export prepared without server or credential data.");
-      notify("success", "Browser-local demo export prepared. It contains no server, installer, credential, file, or runtime data.");
-    });
-    panel.append(heading, copy, label, prepare, output);
-    var install = one("#install");
-    if (install && install.parentNode) install.parentNode.insertBefore(panel, install);
-    else main.appendChild(panel);
+    // Safe exports belong to the browser-local History destination so the user
+    // can review the exact selected audit records before the browser receives
+    // a download request. No page-wide state export is offered here.
   }
 
   function installVerifiedDownloadCtas() {
@@ -4721,6 +4956,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     renderNotifications();
     installDestructiveDemo();
     installHistoryFilters();
+    installHistorySearchBuilder();
     installExports();
     installVerifiedDownloadCtas();
     installSearches();
