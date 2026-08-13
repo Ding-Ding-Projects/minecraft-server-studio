@@ -11,10 +11,8 @@
     "package": "electron-builder --win squirrel",
     "package:dir": "electron-builder --dir"
   },
-  "dependencies": {
-    "electron": "^37.0.0"
-  },
   "devDependencies": {
+    "electron": "^37.0.0",
     "electron-builder": "^26.0.12",
     "electron-builder-squirrel-windows": "26.15.3"
   },
