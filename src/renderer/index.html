@@ -325,23 +325,40 @@
           </section>
         </section>
 
-        <section class="server-editor hidden" id="server-editor" aria-label="Server configuration">
-          <div class="tab-strip" role="tablist" aria-label="Server settings tabs">
-            <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-general" data-tab="general" data-i18n="tab.general">General</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" data-i18n="tab.world">World</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay" data-i18n="tab.gameplay">Gameplay</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network" data-i18n="tab.network">Network</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime" data-i18n="tab.runtime">Runtime</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-paper-cli" data-tab="paper-cli">Paper JAR CLI</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools" data-i18n="tab.buildtools">BuildTools</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-backups" data-tab="backups">Backups + updates</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live" data-i18n="tab.live">Live management</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands" data-i18n="tab.commands">Command Center</button>
-            <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status" data-i18n="tab.status">Local status</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced" data-i18n="tab.advanced">Advanced</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins" data-i18n="tab.plugins">Plugins</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console" data-i18n="tab.console">Console</button>
-          </div>
+        <section class="server-editor hidden" id="server-editor" aria-label="Server configuration" data-tab-dock="left">
+          <section class="tab-navigation" id="server-tab-navigation" data-dock="left" aria-label="Server settings navigation">
+            <div class="tab-navigation-heading">
+              <div class="anchored-search" data-context-search="tab">
+                <label class="field search-field" for="tab-search"><span class="sr-only">Search server settings tabs</span><input id="tab-search" type="search" maxlength="256" autocomplete="off" placeholder="Find a settings tab"></label>
+                <button class="icon-action regex-toggle" id="tab-search-regex-toggle" type="button" aria-label="Open tab search regex builder" aria-controls="tab-search-regex-builder" aria-expanded="false">.*</button>
+                <section class="appearance-regex-builder" id="tab-search-regex-builder" aria-label="Tab search regex builder" hidden>
+                  <div class="settings-grid"><label class="field"><span>Pattern</span><input id="tab-search-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false" placeholder="Plain text is the default"></label><label class="field wide"><span>Sample text</span><input id="tab-search-sample" type="text" maxlength="512" autocomplete="off" placeholder="Inspect a local sample"></label></div>
+                  <fieldset class="regex-flags"><legend>Regex flags</legend><label><input id="tab-search-flag-i" type="checkbox" checked> Ignore case</label><label><input id="tab-search-flag-m" type="checkbox"> Multiline</label><label><input id="tab-search-flag-u" type="checkbox" checked> Unicode</label></fieldset>
+                  <div class="regex-token-row" role="group" aria-label="Regex construction tokens"><button type="button" data-appearance-regex-insert="tab" data-appearance-regex-token="[A-Za-z]">Class</button><button type="button" data-appearance-regex-insert="tab" data-appearance-regex-token="^$">Anchor</button><button type="button" data-appearance-regex-insert="tab" data-appearance-regex-token="()">Group</button><button type="button" data-appearance-regex-insert="tab" data-appearance-regex-token="|">Either</button><button type="button" data-appearance-regex-insert="tab" data-appearance-regex-token="+">Repeat</button><button type="button" class="outlined-action regex-plain-action" data-appearance-regex-plain="tab">Use plain text</button></div>
+                  <p id="tab-search-regex-feedback" class="regex-feedback" aria-live="polite">Regex matching is off; tabs use plain-text matching.</p><p id="tab-search-regex-captures" class="regex-captures" aria-live="polite">Capture groups appear here for a matching tab or local sample.</p>
+                </section>
+              </div>
+              <button class="outlined-action tab-overflow-toggle" id="tab-overflow-toggle" type="button" aria-controls="tab-overflow-panel" aria-expanded="false">All tabs</button>
+            </div>
+            <p id="tab-search-status" class="tab-search-status" aria-live="polite">All settings tabs are available.</p>
+            <div class="tab-strip" id="server-tab-strip" role="tablist" aria-label="Server settings tabs" aria-orientation="vertical">
+              <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-general" data-tab="general" data-i18n="tab.general">General</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" data-i18n="tab.world">World</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay" data-i18n="tab.gameplay">Gameplay</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network" data-i18n="tab.network">Network</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime" data-i18n="tab.runtime">Runtime</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-paper-cli" data-tab="paper-cli">Paper JAR CLI</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools" data-i18n="tab.buildtools">BuildTools</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-backups" data-tab="backups">Backups + updates</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live" data-i18n="tab.live">Live management</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands" data-i18n="tab.commands">Command Center</button>
+              <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status" data-i18n="tab.status">Local status</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced" data-i18n="tab.advanced">Advanced</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins" data-i18n="tab.plugins">Plugins</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console" data-i18n="tab.console">Console</button>
+            </div>
+            <section class="tab-overflow-panel" id="tab-overflow-panel" aria-label="All server settings tabs" hidden><p class="muted">Choose from the same filtered tab set. Pinning, grouping, reordering, and bulk-close controls are not enabled in this foundation.</p><div id="tab-overflow-list" class="tab-overflow-list" role="list"></div></section>
+          </section>
 
           <form id="settings-form">
             <section id="panel-general" class="settings-panel active" role="tabpanel" aria-labelledby="general-tab" data-panel="general">
@@ -754,6 +771,49 @@
             <label class="switch-field"><input id="dialog-emoji" type="checkbox"><span><strong data-i18n="settings.dialogEmoji">Show emoji decorations in dialogs and message boxes</strong><small data-i18n="settings.dialogEmojiDescription">Decorative emoji never replace the factual message or control labels.</small></span></label>
             <label class="field"><span data-i18n="settings.displayName">Display name</span><input id="experience-display-name" type="text" maxlength="80" required><small data-i18n="settings.displayNameDescription">Changes only what this app shows in its title and app-owned copy. Package identity, data location, installer identity, and update identity do not change.</small></label>
           </div>
+        </section>
+
+        <section class="experience-card appearance-card" aria-labelledby="appearance-tabs-title" data-settings-card data-settings-search="appearance theme density seed typography font tabs dock navigation search regex">
+          <div>
+            <p class="eyebrow">APPEARANCE AND NAVIGATION FOUNDATION</p>
+            <h3 id="appearance-tabs-title">Appearance and browser-style tabs</h3>
+            <p class="muted">These saved controls apply to this running desktop shell. Direct editing currently targets the app shell, server settings tab strip, and primary actions; all other rendered elements remain explicitly outside this foundation.</p>
+          </div>
+          <div class="anchored-search appearance-search" data-context-search="appearance">
+            <label class="field search-field" for="appearance-search"><span class="sr-only">Search appearance and tab controls</span><input id="appearance-search" type="search" maxlength="256" autocomplete="off" placeholder="Find an appearance or tab control"></label>
+            <button class="icon-action regex-toggle" id="appearance-search-regex-toggle" type="button" aria-label="Open appearance settings regex builder" aria-controls="appearance-search-regex-builder" aria-expanded="false">.*</button>
+            <section class="appearance-regex-builder" id="appearance-search-regex-builder" aria-label="Appearance settings regex builder" hidden>
+              <div class="settings-grid"><label class="field"><span>Pattern</span><input id="appearance-search-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false" placeholder="Plain text is the default"></label><label class="field wide"><span>Sample text</span><input id="appearance-search-sample" type="text" maxlength="512" autocomplete="off" placeholder="Inspect a local sample"></label></div>
+              <fieldset class="regex-flags"><legend>Regex flags</legend><label><input id="appearance-search-flag-i" type="checkbox" checked> Ignore case</label><label><input id="appearance-search-flag-m" type="checkbox"> Multiline</label><label><input id="appearance-search-flag-u" type="checkbox" checked> Unicode</label></fieldset>
+              <div class="regex-token-row" role="group" aria-label="Regex construction tokens"><button type="button" data-appearance-regex-insert="appearance" data-appearance-regex-token="[A-Za-z]">Class</button><button type="button" data-appearance-regex-insert="appearance" data-appearance-regex-token="^$">Anchor</button><button type="button" data-appearance-regex-insert="appearance" data-appearance-regex-token="()">Group</button><button type="button" data-appearance-regex-insert="appearance" data-appearance-regex-token="|">Either</button><button type="button" data-appearance-regex-insert="appearance" data-appearance-regex-token="+">Repeat</button><button type="button" class="outlined-action regex-plain-action" data-appearance-regex-plain="appearance">Use plain text</button></div>
+              <p id="appearance-search-regex-feedback" class="regex-feedback" aria-live="polite">Regex matching is off; controls use plain-text matching.</p><p id="appearance-search-regex-captures" class="regex-captures" aria-live="polite">Capture groups appear here for a matching control or local sample.</p>
+            </section>
+          </div>
+          <p id="appearance-search-status" class="tab-search-status" aria-live="polite">All appearance and tab controls are available.</p>
+          <div class="appearance-settings-grid appearance-searchable" data-appearance-search="theme density seed color typography font family scale weight">
+            <label class="field"><span>Theme</span><select id="appearance-theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select><small>Uses the operating-system color preference when set to System.</small></label>
+            <label class="field"><span>Density</span><select id="appearance-density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select><small>Changes shell spacing and control padding without changing server data.</small></label>
+            <label class="field"><span>Seed color</span><input id="appearance-seed-color" type="color" value="#6750A4"><small>Sets the Material primary color used by this foundation.</small></label>
+            <label class="field"><span>Font family</span><select id="appearance-font-family"><option value="system-ui">System UI</option><option value="Segoe UI">Segoe UI</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Consolas">Consolas</option></select><small>This bounded local list is implemented; installed-font enumeration is not.</small></label>
+            <label class="field"><span>Type scale <output id="appearance-font-scale-output" class="range-output">100%</output></span><input id="appearance-font-scale" type="range" min="0.85" max="1.25" step="0.01" value="1"><small>Live shell typography scale.</small></label>
+            <label class="field"><span>Font weight</span><select id="appearance-font-weight"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select><small>Applies to the bounded shell typography token.</small></label>
+            <label class="field"><span>Tab dock</span><select id="tab-dock"><option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option></select><small>Left is the default. The tab list changes keyboard axis and ARIA orientation with the dock.</small></label>
+          </div>
+          <section class="appearance-target-editor appearance-searchable" data-appearance-search="element target shell tab strip primary action surface text color corner radius">
+            <div><h4>Direct target editor</h4><p class="muted">The selected target's colors and corner radius update live. Values inherit the active theme until you apply an override.</p></div>
+            <div class="appearance-target-grid">
+              <label class="field"><span>Target</span><select id="appearance-target"><option value="shell">App shell</option><option value="tabStrip">Settings-tab strip</option><option value="primaryAction">Primary actions</option></select></label>
+              <label class="field"><span>Surface color</span><input id="appearance-target-surface" type="color" value="#10131A"></label>
+              <label class="field"><span>Text color</span><input id="appearance-target-on-surface" type="color" value="#E0E5F0"></label>
+              <label class="field"><span>Corner radius</span><input id="appearance-target-radius" type="number" min="0" max="999" step="1" value="0"><small>0–999 pixels; reset returns to the active theme.</small></label>
+            </div>
+            <p id="appearance-target-status" class="experience-status" aria-live="polite">Loading target appearance…</p>
+            <div class="appearance-actions"><button id="save-appearance-navigation-button" type="button" class="primary-action">Apply appearance and tabs</button><button id="reset-appearance-target-button" type="button" class="outlined-action">Reset selected target to theme</button></div>
+          </section>
+          <section class="appearance-inventory appearance-searchable" data-appearance-search="inventory boundaries full every element editor Word color picker pinned grouped reordered master search command palette">
+            <h4>Foundation inventory boundary</h4>
+            <ul><li>Implemented now: persisted theme, density, seed color, bounded typography, direct shell/tab/action targets, tab dock, tab selection, keyboard navigation, local tab search, regex filtering, and an all-tabs overflow list.</li><li>Not implemented in this foundation: an every-element editor, installed-font enumeration, word-processor-depth typography, infinite color translation, pinned/reordered/grouped tabs, cross-window tab search, command palette, or bulk tab actions.</li></ul>
+          </section>
         </section>
 
         <section class="experience-card narrator-card" data-school-hidden data-settings-card data-settings-search="narrator speech voice English Cantonese rate pitch accessibility screen reader">

@@ -9,6 +9,7 @@ The desktop main process owns the settings files. The renderer can use only the 
 | Record | Location | Contents | Secret boundary |
 | --- | --- | --- | --- |
 | App presentation settings | This app's per-user application-data `settings` directory | Schema version, language mode, English/Cantonese message-playfulness values, dialog/message emoji preference, and display name | No credential is stored in this file. |
+| Appearance and tab-navigation settings | This app's per-user application-data `settings` directory | Versioned theme, density, seed color, bounded typography, selected server-settings tab, dock edge, and direct-target overrides | No credential, server setting, or shared School-mode state is stored in this record. |
 | Shared School-mode record | The per-user `Ding Ding Projects/shared-experience-settings` application-data directory | Schema version, mode enabled state, user-selected mode label, and update timestamp | The record contains no password, PIN, or recoverable credential material. |
 | Shared unlock credential | The shared record directory's protected credential-vault area | Electron `safeStorage` ciphertext and non-secret key metadata only | The credential is never returned to the renderer, status snapshot, console, export, or log. |
 
@@ -28,7 +29,7 @@ Open **Studio preferences** from the left navigation to use these controls:
 
 The saved preference is applied immediately in the running renderer and the native window title. The installed application identity remains stable because the Electron application name and package configuration remain fixed.
 
-The optional spoken-event narrator and bounded scheduled language settings are documented separately in [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md). The schedule can temporarily override the effective language without overwriting this saved base preference.
+The optional spoken-event narrator and bounded scheduled language settings are documented separately in [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md). The schedule can temporarily override the effective language without overwriting this saved base preference. The separate persisted [appearance and tab-navigation foundation](appearance-and-tabs.md) applies its direct targets live without changing this application identity or the shared School-mode record.
 
 ## Shared School mode
 
@@ -57,7 +58,7 @@ If the credential is lost, the preferences dialog displays the exact shared appl
 - The shared record has no network client, synchronization service, analytics, or telemetry behavior.
 - The service does not write settings into the repository, a server folder, an export, or a console log.
 - Missing or unreadable shared state fails closed to English safety presentation instead of pretending that the mode is disabled.
-- The current foundation does not implement a personal-vocabulary upload, narrator, full appearance editor, tab-management suite, regex builder, file converter, local model manager, authenticator, toy locks, or scheduled settings. Those remain separately tracked incomplete surfaces.
+- The current foundation does not implement a personal-vocabulary upload, a full every-element appearance editor, complete tab-management suite, complete regex coverage, local history, exports, or full universal-surface coverage. Narrator, scheduled-language, authenticator, toy-lock, file-converter, local-model, and bounded appearance/tab foundations are documented separately and remain incomplete where their own articles say so.
 
 ## Verification status
 
@@ -66,6 +67,7 @@ This feature was added during the active speed-delivery workflow. Tests, linting
 ## Suggested related articles
 
 - [Local status and desktop completeness](local-status-and-completeness.md)
+- [Appearance and tab-navigation foundation](appearance-and-tabs.md)
 - [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)
 - [Server orchestration](server-orchestration.md)
 - [Command Center](command-center.md)

@@ -4,6 +4,46 @@
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
+## Appearance and browser-style server-tab foundation
+
+The desktop source now keeps a separate strict local appearance/navigation record
+alongside the existing presentation, narrator/schedule, authenticator/toy-lock,
+converter, documentation, updater, BuildTools, Paper JAR CLI, backup, Ollama,
+and Status Hub bridge modules. It persists theme, density, seed color, a bounded
+font family/scale/weight set, direct shell/tab-strip/primary-action overrides,
+the active server settings tab, and the tab dock edge. The server tab strip
+defaults to the left edge, changes its ARIA orientation and arrow-key axis with
+the dock, keeps an all-tabs overflow list, and has independent anchored regex
+builders for tab and appearance-control searches.
+
+This is deliberately not an every-element appearance editor or complete tab
+management suite. Installed-font enumeration, Word-style typography, an
+infinite color translator, pinning, grouping, reordering, master tab search,
+bulk close, and command-palette coverage remain unavailable and are shown as
+such in the preferences inventory.
+
+### Directly related paths
+
+- `src/main/appearance-navigation-settings.cjs`
+- `src/main/studio-settings.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/main/server-manager.cjs`
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/appearance-and-tabs.md`
+- `docs/features/experience-settings.md`
+- `docs/features/local-status-and-completeness.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, runtime interaction, or
+capture ran for this source-only appearance/navigation candidate. The local
+inventory continues to mark evidence incomplete, and this lane makes no
+claim of every-element editing, complete tab management, or packaged-runtime
+verification.
+
 ## Paper JAR CLI control candidate
 
 The Paper JAR CLI lane adds `src/main/paper-cli-profile.cjs`, a typed profile
@@ -237,7 +277,7 @@ The backup/update candidate adds a bounded local snapshot lifecycle for world, c
 - The optional Status Hub bridge still needs its complete independent proof set: localized copy, focused tests, built-artifact interaction, real capture, and actual accepted external registration/update/poll/reply evidence. Local status remains the required fallback if it is unconfigured or unavailable.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.
-- The presentation-settings foundation does not yet complete universal localization, personal-vocabulary upload, narration, scheduled settings, appearance customization, tabs/regex/palette, converter, local model manager, authenticator/toy locks, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.
+- The settings foundation now includes bounded narrator/schedule, authenticator/toy-lock, converter, local-model, and appearance/tab source modules, but does not yet complete universal localization, personal-vocabulary upload, every-element appearance editing, complete tab management/regex/palette coverage, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.
 - The local Ollama foundation does not yet complete the exhaustive official Model Store, catalog pagination and revision evidence, hardware-fit assessment, batch pulls, streamed chat, capability-gated attachments, registered harness profiles, rollback, offline documentation/troubleshooting, or their required proof set.
 - The documentation destination bundles and renders the current feature-article inventory, but local history, notification center, full localization, complete command-palette/tabs coverage, tests, packaged interaction, and captures remain pending.
-- The presentation-settings foundation does not yet complete universal localization, personal-vocabulary upload, full narrator runtime evidence, scheduled appearance values or validated external schedule sources, appearance customization, tabs/regex/palette, converter, local model manager, authenticator/toy locks, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.
+- Scheduled appearance values, validated external schedule sources, full narrator runtime evidence, broad local-model/converter workflows, universal localization, personal-vocabulary upload, history, exports, and packaged-runtime evidence remain open work. The bounded settings modules above do not stand in for those complete contracts.

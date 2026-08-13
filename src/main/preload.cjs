@@ -17,6 +17,7 @@ function rconResponseEnvelope(value) {
 contextBridge.exposeInMainWorld('studio', {
   experienceSettings: () => ipcRenderer.invoke('studio:experience-settings'),
   updateExperienceSettings: (patch) => ipcRenderer.invoke('studio:update-experience-settings', patch),
+  updateAppearanceNavigation: (patch) => ipcRenderer.invoke('studio:update-appearance-navigation', patch),
   narrationScheduleSettings: () => ipcRenderer.invoke('studio:narration-schedule-settings'),
   updateNarratorSettings: (patch) => ipcRenderer.invoke('studio:update-narrator-settings', patch),
   addScheduledSetting: (draft) => ipcRenderer.invoke('studio:add-scheduled-setting', draft),
