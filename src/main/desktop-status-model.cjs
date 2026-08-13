@@ -89,6 +89,7 @@ const DESKTOP_SURFACES = deepFreeze([
   surface('backups-and-updates', 'Backups and updates', 'Local backup, restore, update discovery, staging, rollback, and progress controls.'),
   surface('application-updates', 'Application updates', 'Unsigned Squirrel application-update discovery, download, restart, and recovery controls.'),
   surface('settings-appearance-and-localization', 'Settings, appearance, and localization', 'Desktop settings, appearance controls, language modes, and localized rich controls.'),
+  surface('command-palette', 'Desktop command palette', 'A local Ctrl+Shift+F palette that navigates documented destinations, tabs, articles, and safe renderer controls.'),
   surface('file-converter', 'Local file converter', 'Offline adapter catalog, conversion queue, validation, and result history.'),
   surface('ollama', 'Local Ollama suite', 'Local runtime, model store, chat, batch pull, hardware-fit, and harness controls.'),
   surface('authenticator-and-toy-locks', 'Authenticator and toy locks', 'Local authenticator, toy-lock flows, credential-vault boundaries, and recovery guidance.'),

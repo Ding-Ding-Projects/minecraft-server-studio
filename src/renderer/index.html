@@ -18,6 +18,7 @@
         </div>
 
         <button class="primary-action" id="new-server-button" type="button" data-i18n="nav.createServer">Create server</button>
+        <button class="outlined-action" id="open-command-palette-button" type="button" aria-haspopup="dialog" aria-controls="command-palette-dialog" data-i18n="nav.commandPalette">Command palette (Ctrl+Shift+F)</button>
         <button class="text-action" id="authenticator-destination-button" type="button" aria-controls="authenticator-destination">Authenticator and toy locks</button>
         <button class="text-action" id="support-tickets-destination-button" type="button" aria-controls="support-tickets-destination">Support Tickets</button>
         <button class="text-action" id="notification-center-destination-button" type="button" aria-controls="notification-center-destination">Notification center</button>
@@ -936,6 +937,42 @@
         </section>
       </section>
     </main>
+
+    <dialog id="command-palette-dialog" aria-labelledby="command-palette-title" aria-describedby="command-palette-description command-palette-status">
+      <section class="command-palette-shell">
+        <header class="command-palette-heading">
+          <div>
+            <p class="eyebrow" data-i18n="palette.eyebrow">LOCAL NAVIGATION</p>
+            <h2 id="command-palette-title" data-i18n="palette.title">Command palette</h2>
+            <p id="command-palette-description" class="muted" data-i18n="palette.description">Find an implemented destination, bundled article, server tab, or safe local control. Press Ctrl+Shift+F from anywhere in this desktop app.</p>
+          </div>
+          <button id="close-command-palette-button" class="icon-action" type="button" aria-label="Close command palette" data-i18n-aria-label="palette.close">×</button>
+        </header>
+        <section class="command-palette-search-anchor" aria-label="Command palette search">
+          <label class="field" for="command-palette-search">
+            <span data-i18n="palette.search">Find a destination or control</span>
+            <input id="command-palette-search" type="search" maxlength="256" autocomplete="off" spellcheck="false" placeholder="Plain text by default" data-i18n-placeholder="palette.searchPlaceholder" aria-controls="command-palette-results" aria-activedescendant="">
+          </label>
+          <button id="command-palette-regex-toggle" type="button" class="outlined-action" aria-controls="command-palette-regex-builder" aria-expanded="false" data-i18n="palette.regexButton">Build regex</button>
+          <section id="command-palette-regex-builder" class="command-palette-regex-builder" aria-labelledby="command-palette-regex-title" hidden>
+            <div>
+              <h3 id="command-palette-regex-title" data-i18n="palette.regexTitle">Regex builder</h3>
+              <p class="muted" data-i18n="palette.regexDescription">Plain text stays the default. The bounded expression matches only this local palette catalog and optional local sample text.</p>
+            </div>
+            <div class="settings-grid">
+              <label class="field wide" for="command-palette-pattern"><span data-i18n="palette.rawPattern">Raw pattern</span><input id="command-palette-pattern" type="text" maxlength="256" autocomplete="off" spellcheck="false" placeholder="Example: ^Offline|settings$" data-i18n-placeholder="palette.patternPlaceholder"></label>
+              <fieldset class="regex-flags wide"><legend data-i18n="palette.regexFlags">Regex flags</legend><label><input id="command-palette-flag-i" type="checkbox" checked> <span data-i18n="palette.ignoreCase">Ignore case</span></label><label><input id="command-palette-flag-m" type="checkbox"> <span data-i18n="palette.multiline">Multiline</span></label><label><input id="command-palette-flag-u" type="checkbox" checked> <span data-i18n="palette.unicode">Unicode</span></label></fieldset>
+              <label class="field wide" for="command-palette-sample"><span data-i18n="palette.sample">Sample text</span><textarea id="command-palette-sample" rows="2" maxlength="512" placeholder="Optional local sample text" data-i18n-placeholder="palette.samplePlaceholder"></textarea></label>
+            </div>
+            <div class="regex-token-row" role="group" aria-label="Guided regular expression tokens" data-i18n-aria-label="palette.tokenTools"><button type="button" class="outlined-action" data-command-palette-token="literal" data-i18n="palette.literal">Literal</button><button type="button" class="outlined-action" data-command-palette-token="class" data-i18n="palette.characterClass">Character class</button><button type="button" class="outlined-action" data-command-palette-token="anchor" data-i18n="palette.anchor">Anchor</button><button type="button" class="outlined-action" data-command-palette-token="group" data-i18n="palette.group">Group</button><button type="button" class="outlined-action" data-command-palette-token="alternation" data-i18n="palette.alternation">Alternation</button><button type="button" class="outlined-action" data-command-palette-token="quantifier" data-i18n="palette.quantifier">Quantifier</button><button id="command-palette-use-plain" type="button" class="outlined-action" data-i18n="palette.usePlain">Use plain text</button></div>
+            <p id="command-palette-regex-feedback" class="regex-feedback" aria-live="polite">Regex mode is off. Plain-text search is active.</p>
+          </section>
+        </section>
+        <p id="command-palette-status" class="command-palette-status" role="status" aria-live="polite">Loading local destinations and controls…</p>
+        <div id="command-palette-results" class="command-palette-results" role="listbox" aria-label="Command palette results" data-i18n-aria-label="palette.results" tabindex="-1"></div>
+        <p class="command-palette-boundary muted" data-i18n="palette.boundary">This foundation indexes renderer-visible local routes and safe controls only. Passwords, credentials, tokens, private values, arbitrary command execution, and unimplemented features are excluded.</p>
+      </section>
+    </dialog>
 
     <dialog id="create-dialog" aria-labelledby="create-title">
       <form id="create-form" method="dialog">
