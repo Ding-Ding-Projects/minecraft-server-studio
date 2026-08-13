@@ -22,6 +22,8 @@
 
 ### Fixed
 
+- Route CLI `command` and `stop` through a one-shot protected Electron gateway that fixes RCON to loopback, keeps the password out of CLI arguments, environment variables, registry JSON, and output, and fails closed to desktop configuration recovery.
+- Reject `mss config --set rcon.password=...` and omit legacy RCON password fields from CLI JSON output.
 - Normalize `rpc.discover` descriptors before persistence, bind the stored allowlist to its endpoint, expire it after a bounded lifetime, and restore it only when a reconnect targets the same current endpoint.
 - Keep a protected management credential out of the generic WebSocket transport, show the provider-adapter-required state, and disable authenticated protocol routes until a documented provider-specific adapter exists.
 

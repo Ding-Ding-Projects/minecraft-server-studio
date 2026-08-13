@@ -12,7 +12,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Configure gameplay, world generation, network/RCON, Java runtime, resource-pack, plugin, and server-property settings with switches, sliders, number steppers, selects, type-ahead version input, file pickers, and browse controls.
 - Start and stop a local Java process safely without a shell, read live output, and send console commands.
 - Install local Paper/Spigot plugin JARs through a file picker.
-- Use the CLI for setup, foreground operation, RCON commands, plugin installation, and configuration automation.
+- Use the CLI for setup, foreground operation, protected loopback RCON commands, plugin installation, and configuration automation.
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
 - Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory without a chat or external status-service bridge.
@@ -25,7 +25,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 3. Use **Install missing tools** if the Java runtime required by the selected version or Git is not detected. The app uses Winget or Chocolatey where available, then downloads a user-scoped portable Java/Git fallback itself. The app never requires a manual prerequisite installation before setup can continue.
 4. Select **Set up server**. Paper is downloaded from the Paper API; Spigot is built through BuildTools with the selected revision.
 5. Edit the structured controls on the General, World, Gameplay, Network, Runtime, BuildTools, Live management, Command Center, Plugins, Console, and Local status tabs.
-6. Start the server and use the local console. Enable RCON and save its protected password only when the external CLI must issue commands to a running server.
+6. Start the server and use the local console. Enable RCON and save its protected password in the desktop app only when the external CLI must issue commands to a running server.
 
 ## Command-line interface
 
@@ -44,7 +44,7 @@ npm run start:cli -- plugin-install <server-id> "D:\\Downloads\\ExamplePlugin.ja
 npm run start:cli -- config <server-id> --set pvp=false --set max-players=40
 ```
 
-`start` intentionally stays attached to the foreground process so output remains observable. `command` and `stop` use RCON, which must be enabled and given a password in the Network tab.
+`start` intentionally stays attached to the foreground process so output remains observable. `command` and `stop` use a one-shot Electron main-process gateway for RCON. Before either command, open the desktop app on the same Windows account, enable RCON in the Network tab, and save its protected password for that server. The CLI sends only the server ID and Minecraft command to the gateway; it has no password option and rejects `config --set rcon.password=...`. The gateway fixes RCON to `127.0.0.1`, requires the desktop app's default local registry, and redacts its bounded response before the CLI prints it. `MSS_DATA_DIR` remains available for the other local CLI operations, but `command` and `stop` deliberately reject it until an explicit shared-profile design exists.
 
 ## Build on a new Windows machine
 
@@ -74,6 +74,7 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 - The management protocol is TLS-first and stores any bearer credential reference through protected storage. The generic WebSocket transport does not invent a provider-specific bearer handshake; it never enables methods before `rpc.discover` advertises them and is not a Paper HTTP API.
 - Command discovery never scrapes or invents commands. It runs only selected-JAR `--help`/`--version` probes with direct Java arguments, or user-selected fixed `help`, `plugins`, and Paper `paper` queries against an already-running local console or protected loopback RCON route. Every bounded response keeps source, route, timestamp, truncation, and failure state; plugin descriptor metadata remains non-executable until live runtime evidence confirms the command name.
 - RCON passwords and management bearer credentials are stored through the operating system protected-storage boundary and omitted from the local registry, exports, and console logs. Minecraft still requires its active RCON password in its local configuration; treat the server folder as sensitive.
+- The CLI never accepts an RCON password from command-line arguments, environment variables, stdin, or `servers.json`. Its one-shot local gateway reads the app-private protected value only under the same Windows account, uses it only for a fixed loopback connection, and emits no credential data.
 - Plugins are local JARs selected through the operating-system file picker. Minecraft Server Studio does not claim to audit third-party plugin safety.
 
 ## Companion Sites source
@@ -88,6 +89,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Spigot BuildTools planning](docs/features/spigot-buildtools.md)
 - [Command Center](docs/features/command-center.md)
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
+- [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Feature documentation index](docs/features/README.md)
 - [Changelog](CHANGELOG.md)

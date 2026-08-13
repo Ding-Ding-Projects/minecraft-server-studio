@@ -6,4 +6,5 @@
 - [Spigot BuildTools planning](spigot-buildtools.md)
 - [Command Center](command-center.md)
 - [Presentation settings and shared School mode](experience-settings.md)
+- [CLI RCON gateway](cli-rcon-gateway.md)
 - [Local status and completeness](local-status-and-completeness.md)
