@@ -18,7 +18,7 @@
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
 - Offline changelog browsing from bundled curated notes and package-local release metadata, with local filtering and export rather than runtime release fetching.
 - Serialized next-release metadata that can record one unused public dim-sum catalog link without copying the source photo into the product release.
-- Workflow-local stable Squirrel/Electron application versions derived from Actions run/attempt metadata, with exact version-matched installer, full-package, and `RELEASES` validation before immutable release publication.
+- Workflow-local stable Squirrel/Electron application versions derived from Actions run/attempt metadata, with exact version-matched installer, full-package, and `RELEASES` validation before immutable release publication; the installed updater compares the packaged Electron version only with strict full-package metadata, not source `package.json` or a provenance tag, and refuses rollback candidates.
 
 ## Next implementation items
 

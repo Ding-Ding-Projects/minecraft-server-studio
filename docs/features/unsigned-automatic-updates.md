@@ -59,6 +59,14 @@ filename all use the same application version without changing the source
 package identity, app identifier, executable identity, update-feed address, or
 application-data identity.
 
+At update time, the main-process controller reads Electron's loaded packaged
+application version through `app.getVersion()`. It accepts only a stable
+three-part numeric version, then compares that installed runtime value with the
+validated Squirrel package filename. It does not read `package.json` from the
+source checkout, infer a version from an installer filename, or use a release
+tag as a package version. This lets an installed `0.104.1` build compare
+correctly even though the checked-in development baseline remains `0.1.0`.
+
 The GitHub Release tag remains a separate provenance record in the existing
 `v<source-version>-build.<run>.<attempt>` format. It is deliberately not used
 as the Squirrel package version. The workflow rejects a pre-existing tag rather
@@ -107,12 +115,33 @@ the approved HTTPS delivery origin. A missing, malformed, mismatched, or
 unsupported index/package pair is a failed update, not an installable
 candidate.
 
+Only package filenames in the exact stable form
+`minecraft-server-studio-<major>.<minor>.<patch>-full.nupkg` (or an optional
+matching `-delta.nupkg`) are accepted. The controller rejects duplicate full
+packages for one version and chooses the greatest validated full-package
+version rather than trusting the row order in `RELEASES`. It compares that
+package version with the installed runtime version: an older full package is a
+failed rollback attempt, an equal package remains eligible for the normal
+**Current** result, and only a newer package proceeds to Electron's native
+Squirrel updater. The redirect-derived GitHub Release tag is retained only as
+release-note provenance; it is never parsed or compared as an application
+version. After validation, the controller pins Electron's native updater to
+the exact approved release-download directory discovered from that canonical
+redirect, rather than fetching `latest` a second time. A changed, malformed, or
+unresolved redirect chain therefore fails before the native updater can select
+a different package.
+
 For a workflow-derived application version such as `0.94.1`, the matching
 release assets are `Minecraft.Server.Studio-0.94.1-x64-Setup.exe`,
 `minecraft-server-studio-0.94.1-full.nupkg`, and the `RELEASES` row naming that
 full package. The full package is the essential update payload. Delta packages
 remain optional because the current packaging configuration does not set a
 remote Squirrel release source for delta generation.
+
+For example, the published `v0.1.0-build.104.1` provenance release carries the
+separate application package version `0.104.1` and the package
+`minecraft-server-studio-0.104.1-full.nupkg`. The tag is not an updater input;
+the controller derives the candidate only from the validated package row.
 
 After that validation, Electron's Squirrel updater selects and transfers the
 candidate package. The `available` and `downloading` states are driven by its
