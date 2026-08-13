@@ -7,6 +7,7 @@ The application source provides a Windows Electron control center, shared CLI, s
 ### Changed areas
 
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
+- `src/main/command-runtime-discovery.cjs`: bounded selected-JAR `--help`/`--version` evidence and fixed-query loopback-RCON discovery adapter; it never opens a shell or starts a server lifecycle operation.
 - `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules.
 - `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
@@ -24,5 +25,6 @@ This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime int
 
 - The dedicated Java runtime-manager now owns strict Paper/Spigot compatibility policy, direct Java probes, bounded configured/PATH/JAVA_HOME discovery, explicit package-manager plans, optional configured portable-source handling, and direct-argv launch preflight. Tests, runtime interaction, and captures remain unrun under the speed-delivery boundary.
 - Add a provider-specific authenticated WebSocket connector before treating a stored management bearer credential as transmitted authentication.
+- Runtime command discovery is now sourced from explicitly selected local JAR probes and observed running local-console or loopback-RCON `help`/`plugins`/Paper `paper` responses. It has not been exercised against a real server in this fast-delivery pass, so source, timeout, truncation, and interleaving states remain intentionally visible instead of being claimed as verified runtime support.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.

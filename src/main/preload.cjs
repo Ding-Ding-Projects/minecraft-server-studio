@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('studio', {
   discoverManagement: (id) => ipcRenderer.invoke('studio:discover-management', id),
   invokeManagement: (id, method, params) => ipcRenderer.invoke('studio:invoke-management', id, method, params),
   commandCatalog: (id) => ipcRenderer.invoke('studio:command-catalog', id),
+  refreshCommandDiscovery: (id, input) => ipcRenderer.invoke('studio:refresh-command-discovery', id, input),
   commandPlan: (id, request) => ipcRenderer.invoke('studio:command-plan', id, request),
   onEvent: (callback) => {
     const listener = (_event, value) => callback(value);

@@ -277,9 +277,45 @@ function commandMethodFor(action) {
   return candidates.find((candidate) => capabilities.includes(candidate)) || null;
 }
 
-function actionTransportState(action) {
+function rawCommandTransportState(requested) {
+  const server = selectedServer();
+  if (requested === 'protocol' || requested === 'lifecycle') {
+    return {
+      executable: false,
+      message: 'The raw token composer does not call an arbitrary management-protocol method or host lifecycle action. Choose a local console or RCON route.',
+      source: 'Raw token composer',
+      protocolMethod: null,
+      route: registryRouteForTransport(requested)
+    };
+  }
+  if (requested === 'local') {
+    const available = server?.status === 'running';
+    return {
+      executable: available,
+      message: available
+        ? 'Raw tokens are not a command-availability claim; they will be sent only to the running local Minecraft console.'
+        : 'Start the selected local server process before sending raw tokenized Minecraft command text.',
+      source: 'Raw token composer',
+      protocolMethod: null,
+      route: 'local-console'
+    };
+  }
+  const available = Boolean(server?.settings?.['enable-rcon'] === 'true' && server?.rconSecretConfigured);
+  return {
+    executable: available,
+    message: available
+      ? 'Raw tokens are not a command-availability claim; they will be sent only through the selected protected loopback RCON route.'
+      : 'Enable RCON and save its protected local credential before sending raw tokenized command text.',
+    source: 'Raw token composer',
+    protocolMethod: null,
+    route: 'rcon'
+  };
+}
+
+function actionTransportState(action, rawFallback = false) {
   const select = $('#command-transport');
   const requested = select?.value || 'local';
+  if (rawFallback) return rawCommandTransportState(requested);
   const execution = action?.execution;
   if (execution) {
     const route = requested === 'protocol' ? execution.protocol
@@ -321,10 +357,26 @@ function updateCommandPreview() {
   const structured = buildStructuredCommand(action);
   const raw = $('#command-raw-tokens')?.value.trim();
   const command = raw || structured;
-  const stateForAction = actionTransportState(action);
+  const stateForAction = actionTransportState(action, Boolean(raw));
   $('#command-preview').textContent = command ? `/${command}` : 'Complete the required rich fields or use the tokenized fallback.';
   $('#command-source-badge').textContent = stateForAction.source;
   $('#command-capability-state').textContent = stateForAction.message;
+  const runtime = commandCatalog.runtime || {};
+  const discovery = commandCatalog.discovered || {};
+  const discoverySummary = `${Array.isArray(discovery.jarProbes) ? discovery.jarProbes.length : 0} selected-JAR probe(s), ${Array.isArray(discovery.liveResponses) ? discovery.liveResponses.length : 0} live response(s)`;
+  const origin = action?.origin || {};
+  const evidence = (action?.badges || []).map((badge) => `${badge.label || badge.id}: ${badge.state}`).join(' · ');
+  const originParts = raw
+    ? ['Origin: user-supplied bounded Minecraft tokens', 'Command existence and permission are not asserted by the registry.']
+    : [
+      `Origin: ${origin.label || origin.source || 'built-in command schema'}`,
+      origin.plugin ? `Plugin: ${origin.plugin}` : null,
+      origin.permission ? `Permission: ${origin.permission}` : null,
+      runtime.flavor && runtime.flavor !== 'unknown' ? `Runtime: ${runtime.flavor}${runtime.minecraftVersion ? ` ${runtime.minecraftVersion}` : ''}` : null,
+      evidence ? `Evidence: ${evidence}` : null,
+      `Captured sources: ${discoverySummary}`
+    ].filter(Boolean);
+  $('#command-origin-copy').textContent = originParts.join(' · ') || 'Origin and runtime evidence are not available yet.';
   const risk = action?.risk || 'safe';
   const notices = [];
   if (action?.deprecated) notices.push('Deprecated in some server versions; inspect source/runtime help before use.');
@@ -370,10 +422,49 @@ function renderCommandFieldEditor(action) {
   updateCommandPreview();
 }
 
+function renderCommandEvidence() {
+  const container = $('#command-evidence-list');
+  if (!container) return;
+  container.replaceChildren();
+  const discovered = commandCatalog.discovered || {};
+  const entries = [
+    ...(Array.isArray(discovered.jarProbes) ? discovered.jarProbes : []),
+    ...(Array.isArray(discovered.liveResponses) ? discovered.liveResponses : [])
+  ];
+  if (!entries.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No selected-JAR, local-console, or RCON discovery evidence has been recorded for this server.';
+    container.append(empty);
+    return;
+  }
+  for (const entry of entries) {
+    const item = document.createElement('article');
+    item.className = 'command-evidence-entry';
+    const title = document.createElement('strong');
+    title.textContent = `${entry.request || 'unknown request'} · ${entry.state || 'captured'}`;
+    const metadata = document.createElement('small');
+    const parts = [
+      entry.source || 'local runtime',
+      entry.route || 'direct local probe',
+      entry.capturedAt ? new Date(entry.capturedAt).toLocaleString() : 'time unavailable',
+      entry.exitCode === null || entry.exitCode === undefined ? null : `exit ${entry.exitCode}`,
+      entry.timedOut ? 'timed out' : null,
+      entry.truncated ? 'truncated at the configured bound' : null
+    ].filter(Boolean);
+    metadata.textContent = parts.join(' · ');
+    const response = document.createElement('pre');
+    response.textContent = entry.text || 'No response text was captured.';
+    item.append(title, metadata, response);
+    container.append(item);
+  }
+}
+
 function renderCommandCenter() {
   const familySelect = $('#command-family');
   const actionSelect = $('#command-action');
   if (!familySelect || !actionSelect) return;
+  renderCommandDiscoveryControls();
   const previousFamily = familySelect.value;
   familySelect.replaceChildren();
   for (const family of commandCatalog.families || []) {
@@ -392,6 +483,7 @@ function renderCommandCenter() {
     option.textContent = action.deprecated ? `${label} — deprecated warning` : label;
     actionSelect.append(option);
   }
+  renderCommandEvidence();
   renderCommandFieldEditor(currentCommandAction());
 }
 
@@ -716,6 +808,50 @@ async function refreshCommandCatalog() {
   }
 }
 
+function selectedCommandDiscoverySources() {
+  const sources = [];
+  if ($('#command-discovery-jar')?.checked) sources.push('selected-jar');
+  if ($('#command-discovery-local')?.checked) sources.push('local-console');
+  if ($('#command-discovery-rcon')?.checked) sources.push('rcon');
+  return sources;
+}
+
+function selectedCommandDiscoveryQueries() {
+  const queries = [];
+  if ($('#command-discovery-help')?.checked) queries.push('help');
+  if ($('#command-discovery-plugins')?.checked) queries.push('plugins');
+  if ($('#command-discovery-paper')?.checked) queries.push('paper');
+  return queries;
+}
+
+function renderCommandDiscoveryControls() {
+  const server = selectedServer();
+  const paper = $('#command-discovery-paper');
+  if (paper) {
+    paper.disabled = server?.software !== 'paper';
+    if (paper.disabled) paper.checked = false;
+    paper.title = paper.disabled ? 'The Paper runtime query is available only for a selected Paper server.' : 'Request current Paper runtime usage evidence.';
+  }
+}
+
+async function collectCommandDiscovery() {
+  const server = selectedServer();
+  if (!server) return toast('Choose a local server before collecting command evidence.', 'error');
+  const sources = selectedCommandDiscoverySources();
+  if (!sources.length) return toast('Select at least one explicit command discovery source first.', 'error');
+  const queries = selectedCommandDiscoveryQueries();
+  if ((sources.includes('local-console') || sources.includes('rcon')) && !queries.length) {
+    return toast('Select at least one fixed runtime query before collecting local-console or RCON evidence.', 'error');
+  }
+  const result = await safely(() => window.studio.refreshCommandDiscovery(server.id, { sources, queries }));
+  if (!result) return;
+  commandCatalog = result.catalog || commandCatalog;
+  renderCommandCenter();
+  await refreshServers();
+  const summary = result.discovery || {};
+  toast(`Recorded ${summary.jarProbeCount || 0} selected-JAR probe(s) and ${summary.liveResponseCount || 0} live runtime response(s).`, 'success');
+}
+
 async function refreshSpigotVersions() {
   const metadata = await safely(() => window.studio.refreshSpigotVersions());
   if (metadata) {
@@ -904,7 +1040,7 @@ async function runCommandAction() {
   const action = selectedCommandAction;
   const rawCommand = $('#command-raw-tokens').value.trim();
   const transport = $('#command-transport').value;
-  const transportState = actionTransportState(action);
+  const transportState = actionTransportState(action, Boolean(rawCommand));
   const server = selectedServer();
   if (!server || !action) return;
   if (!transportState.executable) return toast(transportState.message || 'Complete the command fields first.', 'error');
@@ -1035,7 +1171,7 @@ function bindEvents() {
   $('#command-raw-tokens').addEventListener('input', updateCommandPreview);
   $('#send-command-button').addEventListener('click', runCommandAction);
   $('#copy-command-button').addEventListener('click', async () => { const command = $('#command-raw-tokens').value.trim() || buildStructuredCommand(currentCommandAction()); if (!command) return; try { await navigator.clipboard.writeText(`/${command}`); toast('Composed Minecraft command copied.', 'success'); } catch { toast('Clipboard access was unavailable. Select the preview text instead.', 'error'); } });
-  $('#refresh-command-center-button').addEventListener('click', async () => { await refreshCommandCatalog(); toast('Command sources refreshed from local runtime, plugin, and protocol evidence.'); });
+  $('#refresh-command-center-button').addEventListener('click', collectCommandDiscovery);
   $('#open-folder-button').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
   $('#edit-open-folder').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
   $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (server.software === 'spigot') { setActiveTab('buildtools'); return toast('Spigot setup requires the isolated BuildTools plan and its explicit execution action.', 'error'); } await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });

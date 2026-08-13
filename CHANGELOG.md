@@ -11,6 +11,7 @@
 - Dedicated Java runtime manager with strict Paper/Spigot compatibility gaps, direct `--version` then `-version` probing, bounded configured/PATH/JAVA_HOME candidate discovery, explicit package-manager plans, configured-only portable source handling, and direct-argv launch preflight token rejection.
 - Capability-first Minecraft Server Management Protocol transport: TLS-first JSON-RPC WebSocket discovery with `rpc.discover`, advertised-method allowlisting, and protected credential boundary.
 - Version/flavor/capability Command Center registry with typed action families, source badges, tokenized Minecraft-only fallback, and high-impact confirmation metadata.
+- Explicit Command Center runtime discovery: bounded direct selected-JAR `--help`/`--version` probes; user-selected, provenance-bearing local-console and protected loopback-RCON `help`/`plugins`/Paper `paper` evidence; live-command origin, version/flavor, capability, permission, risk, and truthful raw-token fallback states. Plugin descriptor commands now remain non-executable until the running server confirms them.
 - Official Spigot metadata and BuildTools preflight source, safe workspace planning, structured flag composer, generated configuration preservation, plugin metadata inspection, and staged JAR rollback plan.
 - Protected main-process credential-vault source for RCON and management-protocol credentials.
 - Independent local desktop status destination and browser-local public-site status destination, both with explicit no-external-bridge boundaries and incomplete-evidence disclosure.
