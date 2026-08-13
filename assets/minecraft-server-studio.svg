@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minecraft Server Studio application mark
+  Original artwork. The paired PowerShell generator reads the named colour
+  swatches below and writes the Windows multi-resolution icon container.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Minecraft Server Studio</title>
+  <desc id="desc">A green server rack with grass-block pixels and bright status lights.</desc>
+  <defs>
+    <linearGradient id="background-gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#164B38"/>
+      <stop offset="1" stop-color="#0B2D23"/>
+    </linearGradient>
+    <linearGradient id="rack-gradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2D7A54"/>
+      <stop offset="1" stop-color="#174C36"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Named swatches are intentionally kept as visible SVG fills for the icon generator. -->
+  <rect id="server-shell" x="16" y="16" width="224" height="224" rx="52" fill="url(#background-gradient)"/>
+  <path id="grass-top" d="M47 73h22V58h21v14h20V53h23v19h19V59h22v14h21v17h20v47H47z" fill="#43A047"/>
+  <path id="grass-highlight" d="M47 73h22V58h21v14h20V53h23v19h19V59h22v14h21v17h20v20H47z" fill="#75C84A" opacity=".78"/>
+  <rect id="server-rack" x="47" y="92" width="162" height="116" rx="22" fill="url(#rack-gradient)" stroke="#90E768" stroke-width="8"/>
+  <g id="rack-lines" fill="#D8F7C6">
+    <rect x="70" y="118" width="76" height="10" rx="5"/>
+    <rect x="70" y="148" width="76" height="10" rx="5"/>
+    <rect x="70" y="178" width="76" height="10" rx="5"/>
+  </g>
+  <g id="status-lights">
+    <circle cx="174" cy="123" r="8" fill="#B9F56B"/>
+    <circle cx="174" cy="153" r="8" fill="#5FD4FF"/>
+    <circle cx="174" cy="183" r="8" fill="#B9F56B"/>
+  </g>
+  <path id="corner-spark" d="M199 50l5 11 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#F5FFD1"/>
+</svg>
