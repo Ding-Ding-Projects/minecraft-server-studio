@@ -353,6 +353,7 @@
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live" data-i18n="tab.live">Live management</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands" data-i18n="tab.commands">Command Center</button>
               <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status" data-i18n="tab.status">Local status</button>
+              <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-history" data-tab="history">History + exports</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced" data-i18n="tab.advanced">Advanced</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins" data-i18n="tab.plugins">Plugins</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console" data-i18n="tab.console">Console</button>
@@ -680,6 +681,64 @@
                 <div id="local-status-inventory" class="status-record-list" aria-live="polite"></div>
               </section>
               <p id="local-status-boundary" class="muted">No local status snapshot has been loaded.</p>
+            </section>
+
+            <section id="panel-history" class="settings-panel" role="tabpanel" data-panel="history" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">APP-PRIVATE, REDACTED EVENT JOURNAL</p>
+                  <h3>Local history and safe exports</h3>
+                  <p class="muted">This foundation records bounded append-only metadata for supported local changes. It intentionally does not store server settings, credentials, passwords, tokens, private vocabulary data, TOTP material, paths, snapshots, or raw payloads.</p>
+                </div>
+                <button id="refresh-local-history-button" type="button" class="outlined-action">Refresh history</button>
+              </div>
+              <div class="status-summary-grid" aria-live="polite">
+                <article class="status-summary-card"><span>Journal state</span><strong id="local-history-state">Loading</strong></article>
+                <article class="status-summary-card"><span>Records</span><strong id="local-history-count">Not loaded</strong></article>
+                <article class="status-summary-card"><span>Latest export</span><strong id="local-history-export-state">No export yet</strong></article>
+              </div>
+              <section class="wide status-detail-card history-boundary-card">
+                <div><h4>History boundary</h4><p id="local-history-boundary" class="muted">History state has not been loaded.</p></div>
+                <div><h4>Restore state</h4><p id="local-history-restore" class="muted">Restore state has not been loaded.</p><button id="restore-local-history-button" class="outlined-action" type="button" disabled>Restore unavailable</button></div>
+              </section>
+              <section class="history-filter-card">
+                <div class="panel-heading"><div><h4>Find history records</h4><p class="muted">Filter only the redacted local metadata kept by this app. Plain text is the default; regular expressions are an explicit local option.</p></div><span id="local-history-match-count" class="status-chip">0 records</span></div>
+                <div class="settings-grid">
+                  <label class="field"><span>Start date</span><input id="history-from-date" type="date"></label>
+                  <label class="field"><span>End date</span><input id="history-to-date" type="date"></label>
+                  <label class="field"><span>Action</span><select id="history-action-filter"><option value="">All actions</option><option value="record-created">Record created</option><option value="record-updated">Record updated</option><option value="settings-changed">Settings changed</option><option value="record-deleted">Record deleted</option><option value="configuration-changed">Configuration changed</option><option value="export-created">Export created</option></select></label>
+                  <label class="field"><span>Search history</span><input id="history-search" type="search" maxlength="128" placeholder="Plain text by default"></label>
+                </div>
+                <details class="wide regex-builder" id="history-regex-builder">
+                  <summary>Build a regular expression for this search</summary>
+                  <div class="regex-builder-content">
+                    <p class="muted">This anchored builder applies to the Search history field above. The app evaluates a bounded pattern against redacted local metadata only. Nested-quantifier patterns are rejected before evaluation.</p>
+                    <label class="switch-field"><input id="history-regex-enabled" type="checkbox"><span><strong>Use regular expression</strong><small>When enabled, the Search history value is the raw pattern. Plain-text search remains the default.</small></span></label>
+                    <label class="field"><span>Supported flags</span><input id="history-regex-flags" type="text" value="i" maxlength="2" inputmode="text" aria-describedby="history-regex-flags-help"><small id="history-regex-flags-help">Use unique <code>i</code> and <code>m</code> flags only.</small></label>
+                    <label class="field wide"><span>Sample redacted text</span><textarea id="history-regex-sample" rows="3" maxlength="512" placeholder="Optional local sample text for preview; it is not saved or exported."></textarea></label>
+                    <div class="wide regex-builder-actions" aria-label="Regular expression building actions">
+                      <button type="button" class="outlined-action history-regex-token" data-history-regex-token="^">Anchor start</button>
+                      <button type="button" class="outlined-action history-regex-token" data-history-regex-token="$">Anchor end</button>
+                      <button type="button" class="outlined-action history-regex-token" data-history-regex-token="[A-Za-z0-9_-]">Character class</button>
+                      <button type="button" class="outlined-action history-regex-token" data-history-regex-token="()">Group</button>
+                      <button type="button" class="outlined-action history-regex-token" data-history-regex-token="|">Alternation</button>
+                      <button type="button" class="outlined-action history-regex-token" data-history-regex-token="+">Quantifier</button>
+                    </div>
+                    <p id="history-regex-preview" class="regex-preview" aria-live="polite">Enter a sample and a pattern to preview this local expression.</p>
+                  </div>
+                </details>
+                <div class="wide history-filter-actions"><button id="apply-history-filter-button" type="button" class="primary-action">Apply filters</button><button id="clear-history-filter-button" type="button" class="outlined-action">Clear filters</button></div>
+                <p id="local-history-filter-error" class="wide history-filter-error" role="alert" hidden></p>
+                <div id="local-history-records" class="status-record-list" aria-live="polite"></div>
+              </section>
+              <section class="history-export-card">
+                <div><h4>Export redacted history metadata</h4><p class="muted">Exports are limited to the current date, action, and search filters. Every format includes an omission statement and excludes private data.</p></div>
+                <div class="settings-grid">
+                  <label class="field"><span>Export format</span><select id="history-export-format"><option value="json">JSON</option><option value="jsonl">JSON Lines</option><option value="yaml">YAML</option><option value="toml">TOML</option><option value="csv">CSV</option><option value="tsv">TSV</option><option value="markdown">Markdown</option></select></label>
+                  <div class="history-export-actions"><button id="export-local-history-button" type="button" class="primary-action">Export filtered history</button><button id="open-history-export-vscode-button" type="button" class="outlined-action" disabled>Open latest export in VS Code</button></div>
+                  <p id="local-history-export-detail" class="wide muted">No local history export has been created in this app-private export area.</p>
+                </div>
+              </section>
             </section>
 
             <section id="panel-advanced" class="settings-panel" role="tabpanel" data-panel="advanced" hidden>

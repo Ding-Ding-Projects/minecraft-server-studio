@@ -36,6 +36,7 @@
 - Optional local event narrator with platform-only voice enumeration, separately persisted English/Cantonese voice identities, rate and pitch controls, serialized debounced speech, and an accessibility-client yield state; plus bounded local-time scheduled language rules with deterministic precedence, base-language fallback, cross-midnight semantics, and visible disabled HTTPS/Home Assistant source choices.
 - Bounded desktop appearance and server-tab navigation foundation with a strict local settings record, persisted theme/density/seed/typography controls, direct shell/tab/action targets, docked tab orientation and selection, local anchored regex search, and an all-tabs overflow list. Full every-element appearance editing, Word-style typography, color translation, tab grouping/pinning/reordering, and master tab search remain intentionally unavailable.
 - Local authenticator and toy-lock foundation: RFC 6238 code snapshots with vault-backed secrets, bounded manual Base32 and `otpauth://totp/` registration, a local code list with an anchored regex route, independently credentialed password/TOTP toy-lock records, and an explicitly unavailable QR boundary until a safe in-process renderer/decoder exists.
+- Source-level local-history and safe-export foundation: bounded redacted app-private JSONL metadata; date, action, plain-text, and regex filtering; JSON, JSONL, YAML, TOML, CSV, TSV, and Markdown output; VS Code handoff only for a generated export; and no Git repository, snapshot, or restore path.
 
 ### Fixed
 

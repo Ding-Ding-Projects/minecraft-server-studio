@@ -27,7 +27,7 @@ There is no setting that weakens this boundary. RCON remains opt-in, loopback-on
 
 The helper removes the exact current RCON password before it leaves the main process, including a URL-encoded occurrence. It also redacts common assignment, JSON-like, bearer/basic authorization, URI-userinfo, and query-string credential patterns. It does not log the source response, the password, a password-derived value, or an unbounded error string.
 
-The desktop console and its in-memory log receive only the safe envelope text. This project does not currently ship a general console export or local-history surface; any later record or export route must consume the same safe envelope rather than the network response. The helper does not change RCON transport, server settings, vault storage, or CLI behavior.
+The desktop console and its in-memory log receive only the safe envelope text. The redacted local-history and export foundation intentionally does not journal or export RCON response text. If a later record or export route adds RCON response content, it must consume the same safe envelope rather than the network response. The helper does not change RCON transport, server settings, vault storage, or CLI behavior.
 
 ## Verification boundary
 

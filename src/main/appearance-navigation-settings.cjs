@@ -13,7 +13,7 @@ const FONT_WEIGHTS = Object.freeze([400, 500, 600, 700]);
 const TAB_DOCKS = Object.freeze(['left', 'right', 'top', 'bottom']);
 const TAB_IDS = Object.freeze([
   'general', 'world', 'gameplay', 'network', 'runtime', 'paper-cli', 'buildtools', 'backups',
-  'live', 'commands', 'status', 'advanced', 'plugins', 'console'
+  'live', 'commands', 'status', 'history', 'advanced', 'plugins', 'console'
 ]);
 const ELEMENT_TARGETS = Object.freeze(['shell', 'tabStrip', 'primaryAction']);
 
