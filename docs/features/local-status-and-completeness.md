@@ -46,7 +46,7 @@ The template includes these desktop surface rows:
 | `dependency-bootstrap` | Automatic dependency bootstrap |
 | `paper` | Paper setup |
 | `spigot-buildtools` | Spigot and BuildTools setup |
-| `java-runtime-and-jar-launch` | Java runtimes and JAR launch |
+| `java-runtime-and-jar-launch` | Persistent managed Java inventory, official recovery metadata, and JAR launch |
 | `protocol-management` | Protocol management |
 | `command-center` | Command center |
 | `plugins` | Plugin management |

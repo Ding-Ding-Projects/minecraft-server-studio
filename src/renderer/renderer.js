@@ -550,7 +550,7 @@ function renderServers() {
     item.type = 'button';
     item.className = `server-card ${server.id === state.selectedId ? 'selected' : ''}`;
     item.innerHTML = `<strong>${escapeHtml(server.name)}</strong><span class="server-meta"><span>${escapeHtml(server.software)} · ${escapeHtml(server.minecraftVersion)}</span><span><i class="dot ${server.status}"></i>${escapeHtml(server.status)}</span></span>`;
-    item.addEventListener('click', () => { state.selectedId = server.id; renderAll(); refreshCommandCatalog(); });
+    item.addEventListener('click', () => { state.selectedId = server.id; renderAll(); refreshCommandCatalog(); refreshDependencies(); });
     container.append(item);
   }
 }
@@ -570,13 +570,29 @@ function renderDependencies() {
     const pill = document.createElement('span');
     const error = state.dependencyErrors[dependency.id];
     pill.className = `dependency-pill ${dependency.available ? 'available' : ''}`;
-    pill.textContent = `${dependency.available ? '✓' : error ? '!' : '○'} ${dependency.label}${dependency.version ? ` — ${dependency.version}` : error ? ' — install failed; retry available' : ' — not found'}`;
+    const javaRequirementUnknown = dependency.id === 'java' && dependency.requirementState === 'unknown';
+    const incompatibleJava = dependency.id === 'java' && !dependency.available && dependency.requiredFeature && Array.isArray(dependency.detectedFeatures) && dependency.detectedFeatures.length;
+    const detail = javaRequirementUnknown
+      ? ' — selected server Java requirement is unknown; automatic Java install is unavailable'
+      : incompatibleJava
+        ? ` — Java ${dependency.detectedFeatures.join(', ')} found; Java ${dependency.requiredFeature} is required`
+        : dependency.version
+          ? ` — ${dependency.version}`
+          : error
+            ? ' — install failed; retry available'
+            : ' — not found';
+    pill.textContent = `${dependency.available ? '✓' : error ? '!' : '○'} ${dependency.label}${detail}`;
     container.append(pill);
   }
-  const missing = Object.values(state.dependencies.dependencies).some((item) => !item.available);
+  const missing = Object.values(state.dependencies.dependencies).some((item) => !item.available && item.installable !== false);
+  const javaUnknown = state.dependencies.dependencies.java?.requirementState === 'unknown';
   $('#install-dependencies-button').disabled = !missing;
   $('#install-dependencies-button').textContent = Object.keys(state.dependencyErrors).length ? 'Retry missing tools' : 'Install missing tools';
-  $('#install-dependencies-button').title = missing ? 'Uses Windows package managers first, then an app-private portable fallback.' : 'All required tools are installed.';
+  $('#install-dependencies-button').title = missing
+    ? 'Uses Windows package managers first, then a verified app-private portable Java fallback when the official provider metadata is available.'
+    : javaUnknown
+      ? 'Automatic Java installation stays unavailable because the selected server version has no documented Java requirement.'
+      : 'All tools required by the selected server are available.';
 }
 
 function renderEditor() {
@@ -670,14 +686,15 @@ async function refreshServers() {
   if (!selectedServer() && servers.length) state.selectedId = servers[0].id;
   renderAll();
   await refreshCommandCatalog();
+  await refreshDependencies();
 }
 
 async function refreshDependencies() {
-  const inspection = await safely(() => window.studio.inspectDependencies());
+  const inspection = await safely(() => window.studio.inspectDependencies(selectedServer()?.id));
   if (inspection) {
     state.dependencies = inspection;
     for (const dependency of Object.values(inspection.dependencies)) {
-      if (dependency.available) delete state.dependencyErrors[dependency.id];
+      if (dependency.available || dependency.installable === false) delete state.dependencyErrors[dependency.id];
     }
     renderDependencies();
   }
@@ -798,6 +815,8 @@ function renderRuntimeInventory(payload = []) {
     : 'No Java runtime inventory is available yet. Use Detect tools or Browse Java.';
   if (response.installPlan?.portable?.state === 'missing-source') {
     $('#java-runtime-state').textContent += ' ' + response.installPlan.portable.reason;
+  } else if (response.installPlan?.portable?.state === 'configured') {
+    $('#java-runtime-state').textContent += ' A verified Eclipse Adoptium fallback is available for the required Java feature if package-manager installation does not provide a compatible runtime.';
   }
 }
 
@@ -850,6 +869,7 @@ async function createServer(event) {
     state.selectedId = created.id;
     $('#create-dialog').close();
     await refreshServers();
+    await refreshDependencies();
   }
 }
 
@@ -995,8 +1015,12 @@ function bindEvents() {
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
   $('#install-dependencies-button').addEventListener('click', async () => {
-    const missing = Object.values(state.dependencies?.dependencies || {}).filter((item) => !item.available).map((item) => item.id);
-    if (!missing.length) return toast('All required tools are already available.', 'success');
+    const missing = Object.values(state.dependencies?.dependencies || {}).filter((item) => !item.available && item.installable !== false).map((item) => item.id);
+    if (!missing.length) {
+      return toast(state.dependencies?.dependencies?.java?.requirementState === 'unknown'
+        ? 'Automatic Java installation is unavailable because the selected server version has no documented Java requirement.'
+        : 'All tools required by the selected server are already available.', state.dependencies?.dependencies?.java?.requirementState === 'unknown' ? 'error' : 'success');
+    }
     $('#install-dependencies-button').disabled = true;
     const result = await safely(() => window.studio.installDependencies(missing, selectedServer()?.id));
     if (result) {

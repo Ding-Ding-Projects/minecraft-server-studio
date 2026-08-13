@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('studio', {
   createServer: (draft) => ipcRenderer.invoke('studio:create-server', draft),
   updateServer: (id, patch) => ipcRenderer.invoke('studio:update-server', id, patch),
   paperVersions: () => ipcRenderer.invoke('studio:paper-versions'),
-  inspectDependencies: () => ipcRenderer.invoke('studio:inspect-dependencies'),
+  inspectDependencies: (serverId) => ipcRenderer.invoke('studio:inspect-dependencies', serverId),
   installDependencies: (ids, serverId) => ipcRenderer.invoke('studio:install-dependencies', ids, serverId),
   provision: (id) => ipcRenderer.invoke('studio:provision', id),
   start: (id) => ipcRenderer.invoke('studio:start', id),

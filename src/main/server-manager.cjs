@@ -25,6 +25,9 @@ const javaRuntime = require('./java-runtime-manager.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
 const SPIGOT_BUILDTOOLS_URL = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
+const MANAGED_JAVA_INVENTORY_SCHEMA = 1;
+const MAX_MANAGED_JAVA_RUNTIMES = 16;
+const MAX_PORTABLE_JAVA_BYTES = 4 * 1024 * 1024 * 1024;
 const DEFAULT_PROPERTIES = Object.freeze({
   'accepts-transfers': 'false',
   'allow-flight': 'false',
@@ -102,7 +105,7 @@ const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'dependency-bootstrap': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/dependency-bootstrap.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Detection, installation, retry, and status source is registered; verification remains pending.' } },
   'paper': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection and setup source is registered; verification remains pending.' } },
   'spigot-buildtools': { implementationPath: ['src/main/buildtools-adapter.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/spigot-buildtools.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'BuildTools preflight and rich-control source is registered; verification remains pending.' } },
-  'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, direct probes, and launch preflight source are registered; verification remains pending.' } },
+  'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, persistent app-managed runtime records, official portable-source metadata, direct probes, and launch preflight source are registered; verification remains pending.' } },
   'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Capability-first protocol discovery is being integrated.' } },
   'command-center': { implementationPath: ['src/main/command-center-registry.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/command-center.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Registry and renderer integration are being completed.' } },
   'plugins': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Plugin staging is present; manifest inspection is being integrated.' } },
@@ -172,8 +175,8 @@ function validVersion(value) {
   return /^\d+\.\d+(?:\.\d+)?$/.test(stringValue(value));
 }
 
-function javaInstallerDependencyForFeature(feature, portableSources) {
-  const plan = javaRuntime.createJavaInstallPlan(feature, { portableSources });
+function javaInstallerDependencyForFeature(feature, portableSource) {
+  const plan = javaRuntime.createJavaInstallPlan(feature, { portableSource });
   return {
     ...DEPENDENCIES.java,
     label: plan.label,
@@ -185,15 +188,15 @@ function javaInstallerDependencyForFeature(feature, portableSources) {
   };
 }
 
-function managedJavaPortableSpec(feature, portableSources) {
-  const plan = javaRuntime.createJavaInstallPlan(feature, { portableSources });
+function managedJavaPortableSpec(feature, portableSource) {
+  const plan = javaRuntime.createJavaInstallPlan(feature, { portableSource });
   return {
     archiveName: plan.portable.archiveName || 'java-' + plan.feature + '-windows.zip',
-    destination: path.join('java', String(plan.feature)),
+    destination: path.join('java', String(plan.feature), plan.portable.sha256 ? plan.portable.sha256.slice(0, 16) : 'unresolved'),
     executableNames: ['java.exe', 'java'],
     async source() {
       if (plan.portable.state !== 'configured') throw new Error(plan.portable.reason);
-      return { url: plan.portable.url, sha256: plan.portable.sha256 };
+      return { ...plan.portable };
     }
   };
 }
@@ -300,6 +303,32 @@ async function findFileRecursively(root, names, depth = 4) {
   return null;
 }
 
+async function knownJavaInstallationCandidates(dataDir) {
+  const roots = [
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Eclipse Adoptium'),
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Java'),
+    path.join(process.env.LOCALAPPDATA || dataDir, 'Programs', 'Eclipse Adoptium'),
+    path.join(process.env.LOCALAPPDATA || dataDir, 'Programs', 'Java')
+  ];
+  const candidates = [];
+  for (const root of [...new Set(roots)]) {
+    let entries;
+    try {
+      entries = await fs.readdir(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries.slice(0, MAX_MANAGED_JAVA_RUNTIMES)) {
+      if (!entry.isDirectory()) continue;
+      for (const executableName of process.platform === 'win32' ? ['java.exe', 'java'] : ['java', 'java.exe']) {
+        const candidate = path.join(root, entry.name, 'bin', executableName);
+        if (await pathExists(candidate)) candidates.push(candidate);
+      }
+    }
+  }
+  return candidates;
+}
+
 async function writeJsonAtomically(target, value) {
   const directory = path.dirname(target);
   await fs.mkdir(directory, { recursive: true });
@@ -390,6 +419,145 @@ async function downloadFile(url, destination, expectedSha256, emit) {
   emit?.(`Saved ${path.basename(destination)} (${Math.ceil(bytes.length / 1024 / 1024)} MB).`);
 }
 
+function safeHttpsDownloadUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(String(value || '').trim());
+  } catch {
+    throw new Error('The portable Java provider returned an invalid download URL.');
+  }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    throw new Error('The portable Java provider download URL must use HTTPS without embedded credentials.');
+  }
+  return parsed;
+}
+
+async function fetchHttpsWithRedirects(url, timeoutMs = 120_000) {
+  let current = safeHttpsDownloadUrl(url);
+  for (let redirects = 0; redirects <= 5; redirects += 1) {
+    let response;
+    try {
+      response = await fetch(current, {
+        headers: { 'User-Agent': 'Minecraft-Server-Studio/0.1.0' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+    } catch (error) {
+      throw new Error('The portable Java download request failed: ' + redactOutput(error && error.message || 'network error').slice(0, 512));
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error('The portable Java download redirected without a destination.');
+      current = safeHttpsDownloadUrl(new URL(location, current).toString());
+      continue;
+    }
+    if (!response.ok || !response.body) throw new Error('The portable Java download failed with HTTP ' + response.status + '.');
+    return response;
+  }
+  throw new Error('The portable Java download exceeded the allowed HTTPS redirect limit.');
+}
+
+async function downloadVerifiedPortableJavaArchive(source, destination, emit) {
+  const expectedBytes = Number(source && source.expectedBytes);
+  const expectedSha256 = String(source && source.sha256 || '').toLowerCase();
+  if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 1 || expectedBytes > MAX_PORTABLE_JAVA_BYTES) {
+    throw new Error('The portable Java provider metadata did not include a bounded archive size.');
+  }
+  if (!/^[a-f0-9]{64}$/i.test(expectedSha256)) {
+    throw new Error('The portable Java provider metadata did not include a valid SHA-256 checksum.');
+  }
+  const temporary = destination + '.' + crypto.randomUUID() + '.part';
+  let handle;
+  try {
+    emit?.('Downloading a verified portable Java archive from the official provider.');
+    const response = await fetchHttpsWithRedirects(source.url);
+    handle = await fs.open(temporary, 'w', 0o600);
+    const hash = crypto.createHash('sha256');
+    let received = 0;
+    for await (const chunk of response.body) {
+      const bytes = Buffer.from(chunk);
+      received += bytes.length;
+      if (received > expectedBytes) throw new Error('The portable Java download exceeded the provider-reported archive size.');
+      hash.update(bytes);
+      await handle.write(bytes);
+    }
+    await handle.close();
+    handle = null;
+    if (received !== expectedBytes) {
+      throw new Error('The portable Java download size did not match the provider metadata.');
+    }
+    if (hash.digest('hex').toLowerCase() !== expectedSha256) {
+      throw new Error('The portable Java download did not match the provider SHA-256 checksum.');
+    }
+    await fs.rename(temporary, destination);
+    emit?.('Portable Java archive passed provider size and SHA-256 validation.');
+  } catch (error) {
+    if (handle) await handle.close().catch(() => {});
+    await fs.rm(temporary, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+function safePortableArchiveEntry(value) {
+  const entry = String(value || '').trim().replace(/\\/g, '/');
+  if (!entry || entry.length > 1_024 || entry.includes('\0') || entry.startsWith('/') || /^[A-Za-z]:/.test(entry)) return false;
+  const parts = entry.split('/').filter(Boolean);
+  return parts.length > 0 && parts.every((part) => part !== '.' && part !== '..');
+}
+
+async function assertPortableRuntimeTree(root) {
+  const pending = [{ directory: root, depth: 0 }];
+  let entriesSeen = 0;
+  while (pending.length) {
+    const current = pending.pop();
+    if (current.depth > 8) throw new Error('Portable Java extraction exceeded the allowed directory depth.');
+    let entries;
+    try {
+      entries = await fs.readdir(current.directory, { withFileTypes: true });
+    } catch {
+      throw new Error('Portable Java extraction could not be inspected safely.');
+    }
+    for (const entry of entries) {
+      entriesSeen += 1;
+      if (entriesSeen > 20_000) throw new Error('Portable Java extraction exceeded the allowed entry count.');
+      const candidate = path.join(current.directory, entry.name);
+      const stat = await fs.lstat(candidate);
+      if (stat.isSymbolicLink() || (!stat.isFile() && !stat.isDirectory())) {
+        throw new Error('Portable Java extraction contained an unsupported link or special filesystem entry.');
+      }
+      if (stat.isDirectory()) pending.push({ directory: candidate, depth: current.depth + 1 });
+    }
+  }
+}
+
+async function extractPortableJavaArchive(archive, destination, onLine) {
+  const tar = await commandExists(process.platform === 'win32' ? 'tar.exe' : 'tar');
+  if (!tar.available) throw new Error('The operating-system archive extractor is unavailable for the verified portable Java ZIP.');
+  const executable = tar.path || (process.platform === 'win32' ? 'tar.exe' : 'tar');
+  const listing = await javaRuntime.runDirect(executable, ['-tf', archive], {
+    timeoutMs: 30_000,
+    maximumBytes: 512 * 1024
+  });
+  if (!listing.started || listing.timedOut || listing.code !== 0) {
+    throw new Error('Portable Java archive validation failed: ' + redactOutput(listing.error || listing.stderr || listing.stdout || 'archive listing exited ' + listing.code).slice(-1_000));
+  }
+  const entries = listing.stdout.split(/\r?\n/).filter(Boolean);
+  if (!entries.length || entries.length > 20_000 || entries.some((entry) => !safePortableArchiveEntry(entry))) {
+    throw new Error('Portable Java archive validation rejected an unsafe or unsupported entry path.');
+  }
+  const result = await javaRuntime.runDirect(executable, ['-xf', archive, '-C', destination], {
+    timeoutMs: 30_000,
+    maximumBytes: 32 * 1024
+  });
+  for (const line of (result.stdout + '\n' + result.stderr).split(/\r?\n/)) {
+    if (line.trim()) onLine?.(redactOutput(line));
+  }
+  if (!result.started || result.timedOut || result.code !== 0) {
+    throw new Error('Portable Java extraction failed: ' + redactOutput(result.error || result.stderr || result.stdout || 'archive extractor exited ' + result.code).slice(-1_000));
+  }
+  await assertPortableRuntimeTree(destination);
+}
+
 function copyPublicServer(server) {
   return {
     id: server.id,
@@ -416,6 +584,25 @@ function copyPublicServer(server) {
   };
 }
 
+function normalizeManagedJavaRuntimeRecord(value) {
+  const record = value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  if (!record) return null;
+  const feature = Number(record.feature);
+  const executable = stringValue(record.path).trim();
+  if (!javaRuntime.SUPPORTED_JAVA_FEATURES.includes(feature) || !executable || /[\r\n\0]/.test(executable) || !path.isAbsolute(executable)) {
+    return null;
+  }
+  const plan = javaRuntime.createJavaInstallPlan(feature, { portableSource: record.source });
+  if (plan.portable.state !== 'configured') return null;
+  return {
+    feature,
+    path: path.resolve(executable),
+    source: { ...plan.portable },
+    installedAt: stringValue(record.installedAt).trim() || null,
+    verifiedAt: stringValue(record.verifiedAt).trim() || null
+  };
+}
+
 class ServerManager {
   constructor(options = {}) {
     this.dataDir = options.dataDir || path.join(os.homedir(), '.minecraft-server-studio');
@@ -433,10 +620,9 @@ class ServerManager {
     this.commandDiscovery = new Map();
     this.registryFile = path.join(this.dataDir, 'servers.json');
     this.toolchainDir = path.join(this.dataDir, 'toolchain');
-    this.javaPortableSources = options.javaPortableSources && typeof options.javaPortableSources === 'object'
-      ? options.javaPortableSources
-      : Object.create(null);
+    this.managedJavaInventoryFile = path.join(this.toolchainDir, 'java-runtimes.json');
     this.managedJavaPaths = new Set();
+    this.managedJavaInventoryRefresh = null;
   }
 
   emit(event) {
@@ -730,6 +916,85 @@ class ServerManager {
     await writeJsonAtomically(this.registryFile, { schema: 1, servers: registry.servers });
   }
 
+  async readManagedJavaRuntimeRecords() {
+    await fs.mkdir(this.toolchainDir, { recursive: true });
+    let parsed;
+    try {
+      parsed = JSON.parse(await fs.readFile(this.managedJavaInventoryFile, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      this.emit({ type: 'dependency-output', dependency: 'java', message: 'The app-managed Java inventory could not be read and will not be used until a new verified runtime is installed.' });
+      return [];
+    }
+    if (!parsed || parsed.schema !== MANAGED_JAVA_INVENTORY_SCHEMA || !Array.isArray(parsed.runtimes) || parsed.runtimes.length > MAX_MANAGED_JAVA_RUNTIMES) {
+      this.emit({ type: 'dependency-output', dependency: 'java', message: 'The app-managed Java inventory is unsupported or invalid and will not be used until a new verified runtime is installed.' });
+      return [];
+    }
+    const records = [];
+    const identities = new Set();
+    for (const candidate of parsed.runtimes) {
+      const normalized = normalizeManagedJavaRuntimeRecord(candidate);
+      if (!normalized) continue;
+      const identity = process.platform === 'win32' ? normalized.path.toLowerCase() : normalized.path;
+      if (identities.has(identity)) continue;
+      identities.add(identity);
+      records.push(normalized);
+    }
+    return records;
+  }
+
+  async writeManagedJavaRuntimeRecords(records) {
+    const bounded = records.slice(0, MAX_MANAGED_JAVA_RUNTIMES);
+    await writeJsonAtomically(this.managedJavaInventoryFile, {
+      schema: MANAGED_JAVA_INVENTORY_SCHEMA,
+      runtimes: bounded
+    });
+    this.managedJavaPaths = new Set(bounded.map((record) => record.path));
+  }
+
+  async revalidateManagedJavaInventory() {
+    if (!this.managedJavaInventoryRefresh) {
+      this.managedJavaInventoryRefresh = this.performManagedJavaInventoryRevalidation().finally(() => {
+        this.managedJavaInventoryRefresh = null;
+      });
+    }
+    return this.managedJavaInventoryRefresh;
+  }
+
+  async performManagedJavaInventoryRevalidation() {
+    const stored = await this.readManagedJavaRuntimeRecords();
+    const valid = [];
+    for (const record of stored) {
+      try {
+        if (!(await pathExists(record.path))) continue;
+        const probed = await javaRuntime.probeJavaRuntime(record.path);
+        if (!probed.launchable || probed.feature !== record.feature || !path.isAbsolute(probed.path)) continue;
+        valid.push({ ...record, path: probed.path, verifiedAt: probed.verifiedAt });
+      } catch {
+        // A previously managed runtime is not eligible until a direct probe succeeds again.
+      }
+    }
+    const changed = valid.length !== stored.length || valid.some((record, index) => record.path !== stored[index]?.path || record.verifiedAt !== stored[index]?.verifiedAt);
+    if (changed) await this.writeManagedJavaRuntimeRecords(valid);
+    else this.managedJavaPaths = new Set(valid.map((record) => record.path));
+    return valid;
+  }
+
+  async rememberManagedJavaRuntime(record) {
+    const normalized = normalizeManagedJavaRuntimeRecord(record);
+    if (!normalized) throw new Error('The verified portable Java runtime could not be recorded because its metadata is incomplete.');
+    const existing = await this.readManagedJavaRuntimeRecords();
+    const identity = process.platform === 'win32' ? normalized.path.toLowerCase() : normalized.path;
+    const next = [normalized, ...existing.filter((candidate) => (process.platform === 'win32' ? candidate.path.toLowerCase() : candidate.path) !== identity)];
+    await this.writeManagedJavaRuntimeRecords(next);
+    return normalized;
+  }
+
+  async officialJavaInstallPlan(feature) {
+    const portableSource = await javaRuntime.resolveOfficialJavaPortableSource(feature);
+    return javaRuntime.createJavaInstallPlan(feature, { portableSource });
+  }
+
   async listServers() {
     const registry = await this.registry();
     return registry.servers.map((server) => ({
@@ -847,32 +1112,67 @@ class ServerManager {
     return copyPublicServer(existing);
   }
 
-  async inspectDependencies() {
+  async inspectDependencies(serverId = null) {
+    const selectedServer = serverId ? await this.getServer(serverId) : null;
+    const javaRequirement = selectedServer ? javaRuntime.describeJavaRequirementForServer(selectedServer) : null;
     const inspected = {};
     for (const [key, dependency] of Object.entries(DEPENDENCIES)) {
-      const resolved = await this.findDependency(key, dependency);
+      const requiredFeature = key === 'java' && javaRequirement?.status === 'known' ? javaRequirement.feature : null;
+      const resolved = await this.findDependency(key, dependency, requiredFeature, {
+        configuredPath: key === 'java' ? selectedServer?.javaPath : null
+      });
       inspected[key] = {
         id: key,
         label: dependency.label,
         available: resolved.available,
         path: resolved.path,
-        version: resolved.available ? await getCommandVersion(resolved.path || dependency.command, dependency.versionArgs) : null
+        version: key === 'java' && resolved.feature ? 'Java ' + resolved.feature : (resolved.available ? await getCommandVersion(resolved.path || dependency.command, dependency.versionArgs) : null),
+        source: resolved.source || null,
+        requiredFeature,
+        requirementState: key === 'java' && javaRequirement ? javaRequirement.status : null,
+        requirementMessage: key === 'java' && javaRequirement ? javaRequirement.message : null,
+        installable: key !== 'java' || !javaRequirement || javaRequirement.status === 'known',
+        detectedFeatures: key === 'java' ? (resolved.detectedFeatures || []) : undefined
       };
     }
     const winget = await commandExists('winget');
     const chocolatey = await commandExists('choco');
-    return { dependencies: inspected, installers: { winget: winget.available, chocolatey: chocolatey.available } };
+    return { dependencies: inspected, installers: { winget: winget.available, chocolatey: chocolatey.available }, javaRequirement };
   }
 
-  async findDependency(id, dependency = DEPENDENCIES[id], javaFeature = null) {
+  async javaRuntimeCandidates(options = {}) {
+    const managed = await this.revalidateManagedJavaInventory();
+    const installed = await knownJavaInstallationCandidates(this.dataDir);
+    return javaRuntime.discoverJavaRuntimeCandidates({
+      configuredPath: options.configuredPath,
+      explicitCandidates: [
+        ...managed.map((record) => ({ path: record.path, source: 'app-managed runtime' })),
+        ...installed.map((candidate) => ({ path: candidate, source: 'bounded installed location' }))
+      ]
+    });
+  }
+
+  async findJavaDependency(requiredFeature = null, configuredPath = null) {
+    const candidates = await this.javaRuntimeCandidates({ configuredPath });
+    const detectedFeatures = [];
+    for (const candidate of candidates) {
+      try {
+        const probed = await javaRuntime.probeJavaRuntime(candidate.path);
+        if (!probed.launchable || !Number.isSafeInteger(probed.feature)) continue;
+        if (!detectedFeatures.includes(probed.feature)) detectedFeatures.push(probed.feature);
+        if (requiredFeature === null || probed.feature === requiredFeature) {
+          return { available: true, path: probed.path, source: candidate.source, feature: probed.feature, detectedFeatures };
+        }
+      } catch {
+        // Continue searching bounded candidates; an unusable executable is not a Java runtime.
+      }
+    }
+    return { available: false, path: null, source: null, feature: null, detectedFeatures };
+  }
+
+  async findDependency(id, dependency = DEPENDENCIES[id], javaFeature = null, options = {}) {
     if (id === 'java') {
-      const candidates = await javaRuntime.discoverJavaRuntimeCandidates({
-        explicitPaths: [...this.managedJavaPaths]
-      });
-      const candidate = candidates[0];
-      return candidate
-        ? { available: true, path: candidate.path, source: candidate.source }
-        : { available: false, path: null, source: null };
+      return this.findJavaDependency(javaFeature, options.configuredPath);
     }
     const fromPath = await commandExists(dependency.command);
     if (fromPath.available) return { ...fromPath, source: 'PATH' };
@@ -893,10 +1193,89 @@ class ServerManager {
     return { available: false, path: null, source: null };
   }
 
+  async installPortableJavaRuntime(javaFeature) {
+    if (!javaRuntime.SUPPORTED_JAVA_FEATURES.includes(Number(javaFeature))) {
+      throw new Error('The selected server does not have a supported automatic Java requirement. No portable Java runtime will be guessed.');
+    }
+    const installPlan = await this.officialJavaInstallPlan(javaFeature);
+    const portable = managedJavaPortableSpec(javaFeature, installPlan.portable);
+    const source = await portable.source();
+    const downloads = path.join(this.toolchainDir, 'downloads');
+    const archive = path.join(downloads, 'java-' + javaFeature + '-' + source.sha256.slice(0, 16) + '-' + source.archiveName);
+    let destination = path.join(this.toolchainDir, portable.destination);
+    await fs.mkdir(downloads, { recursive: true });
+
+    const destinationExists = await pathExists(destination);
+    const existingExecutable = await findFileRecursively(destination, ['java.exe', 'java'], 5);
+    if (existingExecutable) {
+      try {
+        const existing = await javaRuntime.probeJavaRuntime(existingExecutable);
+        if (existing.launchable && existing.feature === Number(javaFeature)) {
+          await this.rememberManagedJavaRuntime({
+            feature: Number(javaFeature),
+            path: existing.path,
+            source,
+            installedAt: new Date().toISOString(),
+            verifiedAt: existing.verifiedAt
+          });
+          return { available: true, path: existing.path, source: 'app-managed runtime' };
+        }
+      } catch {
+        // Keep a failed historical directory untouched and stage a new isolated recovery candidate.
+      }
+    }
+    if (destinationExists) {
+      this.emit({ type: 'dependency-output', dependency: 'java', message: 'A prior incomplete portable Java directory was retained; the new verified runtime will use an isolated recovery destination.' });
+      destination += '.repair-' + crypto.randomUUID();
+    }
+
+    const staging = destination + '.staging-' + crypto.randomUUID();
+    let promoted = false;
+    try {
+      await fs.rm(archive, { force: true });
+      await fs.mkdir(staging, { recursive: true });
+      this.emit({ type: 'dependency-progress', dependency: 'java', message: 'Installing the selected Java feature into the app-managed runtime area.' });
+      await downloadVerifiedPortableJavaArchive(source, archive, (message) => this.emit({ type: 'dependency-output', dependency: 'java', message }));
+      await extractPortableJavaArchive(archive, staging, (line) => this.emit({ type: 'dependency-output', dependency: 'java', message: line }));
+      const stagedExecutable = await findFileRecursively(staging, ['java.exe', 'java'], 5);
+      if (!stagedExecutable) throw new Error('Portable Java extraction completed without a Java executable.');
+      const stagedRuntime = await javaRuntime.probeJavaRuntime(stagedExecutable);
+      if (!stagedRuntime.launchable || stagedRuntime.feature !== Number(javaFeature)) {
+        throw new Error('The extracted Java runtime did not verify as Java ' + javaFeature + '.');
+      }
+      const relativeExecutable = path.relative(staging, stagedExecutable);
+      if (!relativeExecutable || path.isAbsolute(relativeExecutable) || relativeExecutable.split(path.sep).includes('..')) {
+        throw new Error('The portable Java archive exposed an executable outside its private staging directory.');
+      }
+      await fs.rename(staging, destination);
+      promoted = true;
+      const executable = path.join(destination, relativeExecutable);
+      const runtime = await javaRuntime.probeJavaRuntime(executable);
+      if (!runtime.launchable || runtime.feature !== Number(javaFeature)) {
+        throw new Error('The promoted portable Java runtime did not pass its final direct version probe.');
+      }
+      await this.rememberManagedJavaRuntime({
+        feature: Number(javaFeature),
+        path: runtime.path,
+        source,
+        installedAt: new Date().toISOString(),
+        verifiedAt: runtime.verifiedAt
+      });
+      this.emit({ type: 'dependency-progress', dependency: 'java', message: 'The verified Java ' + javaFeature + ' runtime is now stored in the app-managed inventory.' });
+      return { available: true, path: runtime.path, source: 'app-managed runtime' };
+    } catch (error) {
+      if (promoted) {
+        await fs.rm(destination, { recursive: true, force: true }).catch(() => {});
+      }
+      throw error;
+    } finally {
+      await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
   async installPortableDependency(id, javaFeature = null) {
-    const portable = id === 'java' && javaFeature
-      ? managedJavaPortableSpec(javaFeature, this.javaPortableSources)
-      : PORTABLE_TOOLCHAIN[id];
+    if (id === 'java') return this.installPortableJavaRuntime(javaFeature);
+    const portable = PORTABLE_TOOLCHAIN[id];
     if (!portable) throw new Error(`No portable fallback is registered for ${id}.`);
     const source = await portable.source();
     const downloads = path.join(this.toolchainDir, 'downloads');
@@ -908,12 +1287,6 @@ class ServerManager {
     this.emit({ type: 'dependency-progress', dependency: id, message: `Installing ${DEPENDENCIES[id].label} into the app's private toolchain.` });
     await downloadFile(source.url, archive, source.sha256, (message) => this.emit({ type: 'dependency-output', dependency: id, message }));
     await expandZip(archive, destination, (line) => this.emit({ type: 'dependency-output', dependency: id, message: line }));
-    if (id === 'java') {
-      const executable = await findFileRecursively(destination, ['java.exe', 'java'], 5);
-      if (!executable) throw new Error('The portable Java extraction completed but did not expose a Java executable.');
-      this.managedJavaPaths.add(executable);
-      return { available: true, path: executable, source: 'app-managed runtime' };
-    }
     const installed = await this.findDependency(id, DEPENDENCIES[id]);
     if (!installed.available) throw new Error(`The portable ${DEPENDENCIES[id].label} extraction completed but its executable was not found.`);
     return installed;
@@ -923,15 +1296,22 @@ class ServerManager {
     const requested = [...new Set(ids)].filter((id) => DEPENDENCIES[id]);
     if (!requested.length) throw new Error('Choose at least one supported dependency to install.');
     const requestedServer = serverId ? await this.getServer(serverId) : null;
-    const javaFeature = requestedServer ? javaRuntime.javaRequirementForServer(requestedServer).feature : 21;
+    const javaRequirement = requestedServer ? javaRuntime.describeJavaRequirementForServer(requestedServer) : null;
+    const javaFeature = javaRequirement ? (javaRequirement.status === 'known' ? javaRequirement.feature : null) : 21;
+    const javaInstallPlan = requested.includes('java') && javaFeature ? await this.officialJavaInstallPlan(javaFeature) : null;
     const results = [];
     for (const id of requested) {
+      if (id === 'java' && !javaFeature) {
+        results.push({ id, status: 'blocked', error: javaRequirement?.message || 'The selected Java requirement is unknown, so no automatic Java runtime will be chosen.' });
+        continue;
+      }
       const dependency = id === 'java'
-        ? javaInstallerDependencyForFeature(javaFeature, this.javaPortableSources)
+        ? javaInstallerDependencyForFeature(javaFeature, javaInstallPlan.portable)
         : DEPENDENCIES[id];
-      const before = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null);
-      const javaBeforeMatches = id !== 'java' || (before.available && (await this.inspectJavaRuntime(before.path, requestedServer)).feature === javaFeature);
-      if (before.available && javaBeforeMatches) {
+      const before = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null, {
+        configuredPath: id === 'java' ? requestedServer?.javaPath : null
+      });
+      if (before.available) {
         results.push({ id, status: 'already-installed', path: before.path });
         continue;
       }
@@ -954,11 +1334,9 @@ class ServerManager {
           lastError = error.message;
         }
       }
-      let after = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null);
-      if (id === 'java' && after.available) {
-        const inspected = await this.inspectJavaRuntime(after.path, requestedServer);
-        if (inspected.feature !== javaFeature) after = { ...after, available: false };
-      }
+      let after = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null, {
+        configuredPath: id === 'java' ? requestedServer?.javaPath : null
+      });
       if (!after.available) {
         try {
           after = await this.installPortableDependency(id, id === 'java' ? javaFeature : null);
@@ -970,7 +1348,7 @@ class ServerManager {
       if (!installed || !after.available) results.push({ id, status: 'failed', error: lastError });
       else results.push({ id, status: 'installed', path: after.path, source: after.source });
     }
-    return { results, inspection: await this.inspectDependencies() };
+    return { results, inspection: await this.inspectDependencies(serverId) };
   }
 
   async paperVersions() {
@@ -997,12 +1375,17 @@ class ServerManager {
     };
   }
 
-  async runtimeInventory(id) {
+  async runtimeInventory(id, options = {}) {
     const server = await this.getServer(id);
     const requirement = javaRuntime.describeJavaRequirementForServer(server);
+    const managed = await this.revalidateManagedJavaInventory();
+    const installed = await knownJavaInstallationCandidates(this.dataDir);
     const runtimeCandidates = await javaRuntime.discoverJavaRuntimeCandidates({
       configuredPath: server.javaPath,
-      explicitPaths: [...this.managedJavaPaths]
+      explicitCandidates: [
+        ...managed.map((record) => ({ path: record.path, source: 'app-managed runtime' })),
+        ...installed.map((candidate) => ({ path: candidate, source: 'bounded installed location' }))
+      ]
     });
     const runtimes = [];
     for (const candidate of runtimeCandidates) {
@@ -1022,8 +1405,8 @@ class ServerManager {
         });
       }
     }
-    const installPlan = requirement.status === 'known'
-      ? javaRuntime.createJavaInstallPlan(requirement.feature, { portableSources: this.javaPortableSources })
+    const installPlan = requirement.status === 'known' && options.includeInstallPlan !== false
+      ? await this.officialJavaInstallPlan(requirement.feature)
       : null;
     return { requirement, runtimes, installPlan };
   }
@@ -1038,7 +1421,7 @@ class ServerManager {
         throw new Error('The configured Java path does not exist. Select an installed Java runtime or clear the custom path.');
       }
     } else {
-      const inventory = await this.runtimeInventory(server.id);
+      const inventory = await this.runtimeInventory(server.id, { includeInstallPlan: false });
       const compatible = inventory.runtimes.find((runtime) => runtime.compatible && path.isAbsolute(runtime.path));
       if (!compatible) {
         throw new Error(`Java ${requirement.feature} is required for this server. Use the in-app dependency installer before setting up or starting it.`);

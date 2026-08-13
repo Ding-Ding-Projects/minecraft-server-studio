@@ -2,12 +2,12 @@
 
 ## Minecraft Server Studio expanded candidate
 
-The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
+The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
 ### Changed areas
 
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
-- `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules.
+- `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules, including persistent app-managed Java inventory and official Adoptium metadata selection for portable recovery.
 - `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
 - `src/cli/mss.cjs`: shared local CLI.
@@ -22,7 +22,7 @@ This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime int
 
 ### Remaining work
 
-- The dedicated Java runtime-manager now owns strict Paper/Spigot compatibility policy, direct Java probes, bounded configured/PATH/JAVA_HOME discovery, explicit package-manager plans, optional configured portable-source handling, and direct-argv launch preflight. Tests, runtime interaction, and captures remain unrun under the speed-delivery boundary.
+- The dedicated Java runtime-manager now owns strict Paper/Spigot compatibility policy, direct Java probes, bounded configured/PATH/JAVA_HOME and persistent managed-runtime discovery, explicit package-manager plans, official Adoptium metadata selection for compatible Windows JDK recovery, provider size/SHA-256 validation, staged direct-argv extraction, and launch preflight. Tests, runtime interaction, and captures remain unrun under the speed-delivery boundary.
 - Add a provider-specific authenticated WebSocket connector before treating a stored management bearer credential as transmitted authentication.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.

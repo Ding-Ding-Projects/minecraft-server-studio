@@ -3,9 +3,10 @@
 /**
  * Version-aware Java runtime planning for Minecraft Server Studio.
  *
- * The module may probe an explicit executable with direct argv, but never
- * installs, downloads, writes configuration, launches a server, or handles a
- * credential. Installation stays an explicit application-owned action.
+ * The module may probe an explicit executable with direct argv and resolve
+ * official provider metadata, but never downloads an archive, installs,
+ * writes configuration, launches a server, or handles a credential.
+ * Installation stays an explicit application-owned action.
  */
 
 const fs = require('node:fs/promises');
@@ -15,6 +16,12 @@ const { spawn } = require('node:child_process');
 const SUPPORTED_JAVA_FEATURES = Object.freeze([8, 11, 16, 17, 21, 25]);
 const MAX_PROBE_BYTES = 32 * 1024;
 const DEFAULT_PROBE_TIMEOUT_MS = 8_000;
+const ADOPTIUM_API_ORIGIN = 'https://api.adoptium.net';
+const ADOPTIUM_METADATA_PATH = '/v3/assets/latest';
+const ADOPTIUM_VENDOR = 'eclipse';
+const ADOPTIUM_ARCHITECTURES = Object.freeze({ x64: 'x64', arm64: 'aarch64' });
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
+const MAX_PROVIDER_METADATA_BYTES = 512 * 1024;
 
 function runtimeError(code, message) {
   const error = new Error(message);
@@ -268,6 +275,10 @@ async function discoverJavaRuntimeCandidates(options) {
   for (const candidate of Array.isArray(configuration.explicitPaths) ? configuration.explicitPaths : []) {
     addCandidate(collected, candidate, 'explicit runtime path');
   }
+  for (const candidate of Array.isArray(configuration.explicitCandidates) ? configuration.explicitCandidates : []) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    addCandidate(collected, candidate.path, text(candidate.source).trim() || 'explicit runtime path');
+  }
   const javaHome = text(configuration.javaHome === undefined ? process.env.JAVA_HOME : configuration.javaHome).trim();
   if (javaHome) {
     const names = process.platform === 'win32' ? ['java.exe', 'java'] : ['java', 'java.exe'];
@@ -275,6 +286,173 @@ async function discoverJavaRuntimeCandidates(options) {
   }
   for (const candidate of await pathJavaCandidates(configuration)) addCandidate(collected, candidate, 'PATH');
   return Object.freeze(collected.map(({ identity, ...entry }) => Object.freeze(entry)));
+}
+
+function normalizedWindowsArchitecture(value = process.arch) {
+  const normalized = text(value).trim().toLowerCase();
+  return ADOPTIUM_ARCHITECTURES[normalized] || null;
+}
+
+function safeHttpsUrl(value, label) {
+  const raw = text(value).trim();
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', (label || 'The provider URL') + ' is not a valid HTTPS URL.');
+  }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', (label || 'The provider URL') + ' must be an HTTPS URL without embedded credentials.');
+  }
+  return parsed.toString();
+}
+
+function portableSourceMissing(feature, reason) {
+  return Object.freeze({
+    state: 'missing-source',
+    feature: Number(feature),
+    reason: reason || 'No canonical portable Java ' + Number(feature) + ' source is available. Package-manager actions remain available when installed; no URL is invented.'
+  });
+}
+
+async function readBoundedProviderJson(response) {
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PROVIDER_METADATA_BYTES) {
+    throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', 'The official Eclipse Adoptium metadata response exceeded the allowed size.');
+  }
+  const chunks = [];
+  let received = 0;
+  for await (const chunk of response.body) {
+    const bytes = Buffer.from(chunk);
+    received += bytes.length;
+    if (received > MAX_PROVIDER_METADATA_BYTES) {
+      throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', 'The official Eclipse Adoptium metadata response exceeded the allowed size.');
+    }
+    chunks.push(bytes);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks, received).toString('utf8'));
+  } catch {
+    throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', 'The official Eclipse Adoptium metadata response was not valid JSON.');
+  }
+}
+
+function normalizePortableSource(feature, source) {
+  if (!source || typeof source !== 'object') return portableSourceMissing(feature);
+  try {
+    const url = safeHttpsUrl(source.url, 'The portable Java download URL');
+    const sha256 = text(source.sha256).trim().toLowerCase();
+    const expectedBytes = Number(source.expectedBytes);
+    const archiveName = text(source.archiveName).trim();
+    if (!SHA256_PATTERN.test(sha256)) {
+      throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', 'The portable Java provider metadata did not include a valid SHA-256 checksum.');
+    }
+    if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 1 || expectedBytes > 4 * 1024 * 1024 * 1024) {
+      throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', 'The portable Java provider metadata did not include a bounded archive size.');
+    }
+    if (!archiveName || archiveName.length > 255 || !/^[A-Za-z0-9][A-Za-z0-9._+-]*\.zip$/i.test(archiveName)) {
+      throw runtimeError('JAVA_PORTABLE_METADATA_INVALID', 'The portable Java provider metadata did not include a safe ZIP archive name.');
+    }
+    return Object.freeze({
+      state: 'configured',
+      provider: text(source.provider, 'Eclipse Adoptium'),
+      metadataUrl: source.metadataUrl ? safeHttpsUrl(source.metadataUrl, 'The portable Java metadata URL') : null,
+      url,
+      sha256,
+      expectedBytes,
+      archiveName,
+      releaseName: text(source.releaseName).trim() || null,
+      architecture: text(source.architecture).trim() || null,
+      resolvedAt: text(source.resolvedAt).trim() || null
+    });
+  } catch (error) {
+    return portableSourceMissing(feature, error.message);
+  }
+}
+
+function adoptiumMetadataUrl(feature, options) {
+  const architecture = normalizedWindowsArchitecture(options && options.architecture);
+  if (!architecture) return null;
+  const base = text(options && options.adoptiumApiOrigin, ADOPTIUM_API_ORIGIN).replace(/\/+$/, '');
+  let parsed;
+  try {
+    parsed = new URL(base + ADOPTIUM_METADATA_PATH + '/' + encodeURIComponent(String(feature)) + '/hotspot');
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'api.adoptium.net' || parsed.username || parsed.password) return null;
+  parsed.searchParams.set('architecture', architecture);
+  parsed.searchParams.set('heap_size', 'normal');
+  parsed.searchParams.set('image_type', 'jdk');
+  parsed.searchParams.set('jvm_impl', 'hotspot');
+  parsed.searchParams.set('os', 'windows');
+  parsed.searchParams.set('vendor', ADOPTIUM_VENDOR);
+  return parsed.toString();
+}
+
+function portableSourceFromAdoptiumMetadata(feature, payload, metadataUrl, options) {
+  const architecture = normalizedWindowsArchitecture(options && options.architecture);
+  if (!architecture) {
+    return portableSourceMissing(feature, 'The current CPU architecture is not supported by the official portable Java fallback. Package-manager actions remain available when installed.');
+  }
+  const records = Array.isArray(payload) ? payload : [];
+  const record = records.find((candidate) => {
+    const binary = candidate && candidate.binary;
+    return binary
+      && candidate.vendor === ADOPTIUM_VENDOR
+      && Number(candidate.version?.major) === Number(feature)
+      && binary.os === 'windows'
+      && binary.architecture === architecture
+      && binary.image_type === 'jdk'
+      && binary.jvm_impl === 'hotspot'
+      && binary.heap_size === 'normal'
+      && binary.package;
+  });
+  if (!record) {
+    return portableSourceMissing(feature, 'No official Eclipse Adoptium Windows ' + architecture + ' JDK metadata is currently available for Java ' + Number(feature) + '. Package-manager actions remain available when installed.');
+  }
+  const binary = record.binary;
+  return normalizePortableSource(feature, {
+    provider: 'Eclipse Adoptium',
+    metadataUrl,
+    url: binary.package.link,
+    sha256: binary.package.checksum,
+    expectedBytes: binary.package.size,
+    archiveName: binary.package.name,
+    releaseName: text(record.release_name).trim() || null,
+    architecture,
+    resolvedAt: new Date().toISOString()
+  });
+}
+
+async function resolveOfficialJavaPortableSource(feature, options) {
+  const normalized = Number(feature);
+  if (!SUPPORTED_JAVA_FEATURES.includes(normalized)) {
+    throw runtimeError('JAVA_INSTALL_UNSUPPORTED', 'No automatic Java installer plan is bundled for Java ' + text(feature) + '.');
+  }
+  const metadataUrl = adoptiumMetadataUrl(normalized, options);
+  if (!metadataUrl) {
+    return portableSourceMissing(normalized, 'The official portable Java metadata route is unavailable for this platform or configuration. Package-manager actions remain available when installed.');
+  }
+  let response;
+  try {
+    response = await fetch(metadataUrl, {
+      headers: { Accept: 'application/json', 'User-Agent': 'Minecraft-Server-Studio/0.1.0' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000)
+    });
+  } catch (error) {
+    return portableSourceMissing(normalized, 'The official Eclipse Adoptium metadata request failed: ' + text(error && error.message, 'network error') + '. Package-manager actions remain available when installed.');
+  }
+  if (!response.ok) {
+    return portableSourceMissing(normalized, 'The official Eclipse Adoptium metadata request returned HTTP ' + response.status + '. Package-manager actions remain available when installed.');
+  }
+  try {
+    const payload = await readBoundedProviderJson(response);
+    return portableSourceFromAdoptiumMetadata(normalized, payload, metadataUrl, options);
+  } catch (error) {
+    return portableSourceMissing(normalized, text(error && error.message, 'The official Eclipse Adoptium metadata response was invalid.') + ' Package-manager actions remain available when installed.');
+  }
 }
 
 function createJavaInstallPlan(feature, options) {
@@ -286,20 +464,8 @@ function createJavaInstallPlan(feature, options) {
   const configuredSources = configuration.portableSources && typeof configuration.portableSources === 'object'
     ? configuration.portableSources
     : {};
-  const portable = configuredSources[String(normalized)] || configuredSources[normalized] || null;
-  const portablePlan = portable && typeof portable.url === 'string' && /^https:\/\//i.test(portable.url)
-    ? Object.freeze({
-      state: 'configured',
-      url: portable.url,
-      sha256: typeof portable.sha256 === 'string' ? portable.sha256.toLowerCase() : null,
-      archiveName: typeof portable.archiveName === 'string' && portable.archiveName.trim()
-        ? portable.archiveName.trim()
-        : 'java-' + normalized + '-windows.zip'
-    })
-    : Object.freeze({
-      state: 'missing-source',
-      reason: 'No canonical portable Java ' + normalized + ' source is configured. Package-manager actions remain available when installed; no URL is invented.'
-    });
+  const portable = configuration.portableSource || configuredSources[String(normalized)] || configuredSources[normalized] || null;
+  const portablePlan = normalizePortableSource(normalized, portable);
   return Object.freeze({
     feature: normalized,
     label: 'Eclipse Temurin ' + normalized + ' JDK',
@@ -455,6 +621,9 @@ module.exports = {
   runDirect,
   probeJavaRuntime,
   discoverJavaRuntimeCandidates,
+  normalizedWindowsArchitecture,
+  portableSourceFromAdoptiumMetadata,
+  resolveOfficialJavaPortableSource,
   createJavaInstallPlan,
   unsafeJvmTokenReason,
   normalizeExpertTokens,
