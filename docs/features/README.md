@@ -12,6 +12,7 @@
 - [Command Center](command-center.md)
 - [RCON response safety](rcon-response-safety.md)
 - [Presentation settings and shared School mode](experience-settings.md)
+- [Personal vocabulary upload](personal-vocabulary-upload.md)
 - [App-logo customization](app-logo-customization.md)
 - [Browser-local companion-site logo customization](site-logo-customization.md)
 - [Appearance and tab-navigation foundations (desktop and public companion site)](appearance-and-tabs.md)

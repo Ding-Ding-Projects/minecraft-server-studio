@@ -756,6 +756,12 @@ button.server-tab-workspace-group-heading::after { content: '⌄'; margin-left: 
 .logo-regex-builder { position: relative; z-index: 2; display: grid; gap: 12px; margin-top: 10px; padding: 14px; border: 1px solid var(--primary); border-radius: 16px; background: var(--surface-container-high); box-shadow: 0 14px 30px #0008; }
 .logo-regex-token-row { display: flex; flex-wrap: wrap; gap: 7px; }
 .logo-regex-token-row .outlined-action { min-height: 34px; padding-inline: 11px; font-size: .75rem; }
+.personal-vocabulary-card { position: relative; }
+.personal-vocabulary-search-anchor { position: relative; }
+.personal-vocabulary-action-controls { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container-high); }
+.personal-vocabulary-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 2px; }
+.personal-vocabulary-actions > div { min-width: 0; }
+.personal-vocabulary-actions .danger-action { flex: 0 0 auto; }
 .logo-preset-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px; }
 .logo-preset-option { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; min-height: 72px; padding: 10px; border: 1px solid var(--outline-variant); border-radius: 14px; color: var(--on-surface); background: #151922; text-align: left; }
 .logo-preset-option[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-container); }
@@ -769,6 +775,8 @@ button.server-tab-workspace-group-heading::after { content: '⌄'; margin-left: 
 
 @media (max-width: 1050px) {
   .logo-customization-grid { grid-template-columns: 1fr; }
+  .personal-vocabulary-actions { align-items: stretch; flex-direction: column; }
+  .personal-vocabulary-actions .danger-action { width: 100%; }
 }
 
 /* The command palette stays local to the renderer and paints a bounded surface of its own. */

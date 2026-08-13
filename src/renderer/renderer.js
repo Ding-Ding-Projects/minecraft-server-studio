@@ -47,6 +47,11 @@ const state = {
     query: '',
     flags: 'i'
   },
+  personalVocabularySearch: {
+    mode: 'plain',
+    query: '',
+    flags: 'i'
+  },
   pluginPlan: null,
   pluginPlanServerId: null,
   applicationUpdate: null,
@@ -233,6 +238,7 @@ const COMMAND_PALETTE_DESTINATIONS = Object.freeze([
   Object.freeze({ id: 'destination-offline-changelog', title: 'Offline changelog', detail: 'Browse locally bundled version records and their recorded commit links.', route: 'changelog', targetId: 'changelog-search' }),
   Object.freeze({ id: 'destination-authenticator', title: 'Authenticator and toy locks', detail: 'Open the local authenticator and toy-lock destination.', route: 'authenticator', targetId: 'authenticator-codes-tab' }),
   Object.freeze({ id: 'destination-support-tickets', title: 'Support Tickets', detail: 'Open the fictional local recovery desk and its exact recovery-folder route.', route: 'support-tickets', targetId: 'support-ticket-create-form' }),
+  Object.freeze({ id: 'destination-private-vocabulary', title: 'Private vocabulary', detail: 'Reveal the local validated replacement-map picker, status, clear control, and its attached regex builder.', titleCopyKey: 'settings.personalVocabularyPaletteTitle', detailCopyKey: 'settings.personalVocabularyPaletteDetail', route: 'preferences', targetId: 'pick-personal-vocabulary-button', schoolSuppressed: true }),
   Object.freeze({ id: 'destination-preferences', title: 'Studio preferences', detail: 'Open local presentation, appearance, narrator, and scheduled-setting controls.', route: 'preferences', targetId: 'experience-settings-search' })
 ]);
 const DEFAULT_APPEARANCE_NAVIGATION = Object.freeze({
@@ -282,12 +288,18 @@ let tabPersistenceTimer = null;
 let tabWorkspaceContextId = null;
 let tabWorkspacePickerTabId = null;
 let tabWorkspacePickerReturnFocus = null;
+const EMPTY_PERSONAL_VOCABULARY_COPY = Object.freeze({
+  english: Object.freeze({}),
+  cantonese: Object.freeze({})
+});
 
 const FALLBACK_EXPERIENCE = Object.freeze({
   local: Object.freeze({ language: 'english', funnyLevels: Object.freeze({ english: 2, cantonese: 3 }), dialogEmoji: true, displayName: 'Minecraft Server Studio' }),
   appearanceNavigation: DEFAULT_APPEARANCE_NAVIGATION,
   shared: Object.freeze({ state: 'not-loaded', effectiveSchoolMode: true, schoolMode: Object.freeze({ enabled: false, label: 'Mode' }) }),
-  credential: Object.freeze({ state: 'unavailable', configured: false })
+  credential: Object.freeze({ state: 'unavailable', configured: false }),
+  personalVocabulary: Object.freeze({ state: 'not-loaded', active: false }),
+  personalVocabularyCopy: EMPTY_PERSONAL_VOCABULARY_COPY
 });
 
 const FALLBACK_LOGO = Object.freeze({
@@ -685,6 +697,21 @@ function currentSchoolMode() {
   return currentExperience().shared || FALLBACK_EXPERIENCE.shared;
 }
 
+function currentPersonalVocabulary() {
+  const vocabulary = currentExperience().personalVocabulary;
+  if (!vocabulary || typeof vocabulary !== 'object' || Array.isArray(vocabulary)) return FALLBACK_EXPERIENCE.personalVocabulary;
+  return vocabulary;
+}
+
+function activePersonalVocabularyCopy() {
+  const vocabulary = currentPersonalVocabulary();
+  const copyProjection = currentExperience().personalVocabularyCopy;
+  if (currentSchoolMode().effectiveSchoolMode || vocabulary.active !== true || vocabulary.state !== 'ready' || !copyProjection || typeof copyProjection !== 'object' || Array.isArray(copyProjection)) {
+    return EMPTY_PERSONAL_VOCABULARY_COPY;
+  }
+  return copyProjection;
+}
+
 function currentAppearanceNavigation() {
   const appearance = currentExperience().appearanceNavigation;
   if (!appearance || typeof appearance !== 'object' || !appearance.settings || typeof appearance.settings !== 'object') {
@@ -792,7 +819,12 @@ function effectiveLanguage() {
 
 function copyText(key, values = {}) {
   const copy = window.StudioExperienceCopy;
-  return copy?.format ? copy.format(key, effectiveLanguage(), values) : key;
+  return copy?.format ? copy.format(key, effectiveLanguage(), values, activePersonalVocabularyCopy()) : key;
+}
+
+function copyTextForLanguage(key, language, values = {}) {
+  const copy = window.StudioExperienceCopy;
+  return copy?.format ? copy.format(key, language, values, activePersonalVocabularyCopy()) : key;
 }
 
 function toneText(language, level) {
@@ -803,13 +835,226 @@ function toneText(language, level) {
 function toastPrefix(kind) {
   const copy = window.StudioExperienceCopy;
   return copy?.toastPrefix
-    ? copy.toastPrefix(effectiveLanguage(), currentExperienceLocal().funnyLevels, kind)
+    ? copy.toastPrefix(effectiveLanguage(), currentExperienceLocal().funnyLevels, kind, activePersonalVocabularyCopy())
     : kind;
 }
 
 function messageText(message) {
   if (message && typeof message === 'object' && typeof message.key === 'string') return copyText(message.key, message.values || {});
   return String(message || '');
+}
+
+function safePersonalVocabularyRegex(pattern, flags) {
+  if (typeof pattern !== 'string' || pattern.length > 160) throw new Error('Private-vocabulary regex patterns must be 160 characters or fewer.');
+  if (!/^(?:|i|im)$/.test(flags)) throw new Error('Private-vocabulary regex flags are invalid.');
+  const nestedUnbounded = /(?:\([^)]*[+*][^)]*\)|\[[^\]]*[+*][^\]]*\])[+*{]/.test(pattern);
+  const repeatedWildcard = /(?:\.\*|\.\+)[^|]{0,80}(?:\.\*|\.\+)/.test(pattern);
+  if (nestedUnbounded || repeatedWildcard) {
+    throw new Error('This private-vocabulary regex can cause unsafe backtracking. Simplify nested or repeated unbounded parts.');
+  }
+  return new RegExp(pattern, flags);
+}
+
+function personalVocabularyStateCopy(snapshot = currentPersonalVocabulary()) {
+  if (currentSchoolMode().effectiveSchoolMode) return copyText('settings.personalVocabularyStateSchool');
+  const key = ({
+    ready: 'settings.personalVocabularyStateReady',
+    missing: 'settings.personalVocabularyStateMissing',
+    invalid: 'settings.personalVocabularyStateInvalid',
+    unavailable: 'settings.personalVocabularyStateUnavailable'
+  })[snapshot?.state] || 'settings.personalVocabularyStateLoading';
+  return copyText(key);
+}
+
+function personalVocabularyErrorKey(value) {
+  return ({
+    validation: 'settings.personalVocabularyErrorValidation',
+    storage: 'settings.personalVocabularyErrorStorage',
+    confirmation: 'settings.personalVocabularyErrorConfirmation',
+    clear: 'settings.personalVocabularyErrorClear'
+  })[value] || 'settings.personalVocabularyErrorGeneric';
+}
+
+async function personalVocabularyCall(work) {
+  try {
+    const result = await work();
+    if (!result || typeof result !== 'object' || Array.isArray(result) || typeof result.ok !== 'boolean') {
+      return Object.freeze({ ok: false, error: 'generic' });
+    }
+    return result;
+  } catch {
+    return Object.freeze({ ok: false, error: 'generic' });
+  }
+}
+
+function updatePersonalVocabularyRegexFeedback() {
+  const feedback = $('#personal-vocabulary-regex-feedback');
+  if (!feedback) return null;
+  const pattern = String($('#personal-vocabulary-regex-pattern')?.value || '');
+  const flags = String($('#personal-vocabulary-regex-flags')?.value || 'i');
+  if (!pattern) {
+    feedback.textContent = copyText('settings.personalVocabularyRegexEmpty');
+    feedback.dataset.state = 'idle';
+    return null;
+  }
+  try {
+    const expression = safePersonalVocabularyRegex(pattern, flags);
+    const sample = String($('#personal-vocabulary-regex-sample')?.value || '').slice(0, 1024);
+    feedback.textContent = sample
+      ? `${copyText('settings.personalVocabularyRegexValid')} ${expression.test(sample) ? copyText('settings.personalVocabularySearchMatched') : copyText('settings.personalVocabularySearchEmpty')}`
+      : copyText('settings.personalVocabularyRegexValid');
+    feedback.dataset.state = 'ready';
+    return expression;
+  } catch (error) {
+    feedback.textContent = copyText('settings.personalVocabularyRegexInvalid');
+    feedback.dataset.state = 'invalid';
+    return null;
+  }
+}
+
+function personalVocabularySearchMatcher() {
+  const search = state.personalVocabularySearch;
+  const query = String(search.query || '').trim();
+  if (search.mode !== 'regex') {
+    return {
+      valid: true,
+      matches: (text) => !query || String(text || '').toLocaleLowerCase().includes(query.toLocaleLowerCase())
+    };
+  }
+  try {
+    const expression = safePersonalVocabularyRegex(query, String(search.flags || 'i'));
+    return { valid: true, matches: (text) => expression.test(String(text || '').slice(0, 2048)) };
+  } catch (error) {
+    return { valid: false, detail: copyText('settings.personalVocabularyRegexInvalid'), matches: () => true };
+  }
+}
+
+function renderPersonalVocabularySearch() {
+  const controls = $('#personal-vocabulary-action-controls');
+  const status = $('#personal-vocabulary-search-status');
+  if (!controls || !status) return;
+  const matcher = personalVocabularySearchMatcher();
+  const haystack = `${controls.dataset.personalVocabularySearch || ''} ${controls.textContent || ''}`;
+  const matches = matcher.matches(haystack);
+  controls.hidden = matcher.valid && !matches;
+  if (!matcher.valid) {
+    status.textContent = matcher.detail;
+    status.dataset.state = 'invalid';
+    return;
+  }
+  status.textContent = matches ? copyText('settings.personalVocabularySearchMatched') : copyText('settings.personalVocabularySearchEmpty');
+  status.dataset.state = matches ? 'ready' : 'empty';
+}
+
+function renderPersonalVocabulary() {
+  const snapshot = currentPersonalVocabulary();
+  const status = $('#personal-vocabulary-status');
+  const field = $('#personal-vocabulary-file-status');
+  const clear = $('#clear-personal-vocabulary-button');
+  const schoolActive = currentSchoolMode().effectiveSchoolMode === true;
+  const message = personalVocabularyStateCopy(snapshot);
+  if (status) {
+    status.textContent = message;
+    status.dataset.state = schoolActive ? 'suppressed' : (snapshot.state || 'not-loaded');
+  }
+  if (field) field.value = message;
+  if (clear) {
+    const enabled = !schoolActive && snapshot.state === 'ready' && snapshot.active === true;
+    clear.disabled = !enabled;
+    clear.title = enabled ? '' : message;
+  }
+  renderPersonalVocabularySearch();
+}
+
+function openPersonalVocabularyRegexBuilder() {
+  const builder = $('#personal-vocabulary-regex-builder');
+  const button = $('#personal-vocabulary-regex-builder-button');
+  if (!builder || !button) return;
+  const open = builder.hidden;
+  builder.hidden = !open;
+  button.setAttribute('aria-expanded', String(open));
+  if (open) {
+    $('#personal-vocabulary-regex-pattern')?.focus();
+    updatePersonalVocabularyRegexFeedback();
+  } else {
+    $('#personal-vocabulary-search')?.focus();
+  }
+}
+
+function insertPersonalVocabularyRegexToken(token) {
+  const input = $('#personal-vocabulary-regex-pattern');
+  if (!input || typeof token !== 'string') return;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.setRangeText(token, start, end, 'end');
+  input.focus();
+  updatePersonalVocabularyRegexFeedback();
+}
+
+function applyPersonalVocabularyRegexSearch() {
+  const pattern = String($('#personal-vocabulary-regex-pattern')?.value || '');
+  const flags = String($('#personal-vocabulary-regex-flags')?.value || 'i');
+  try {
+    safePersonalVocabularyRegex(pattern, flags);
+  } catch (error) {
+    const feedback = $('#personal-vocabulary-regex-feedback');
+    if (feedback) {
+      feedback.textContent = copyText('settings.personalVocabularyRegexInvalid');
+      feedback.dataset.state = 'invalid';
+    }
+    return;
+  }
+  state.personalVocabularySearch = { mode: 'regex', query: pattern, flags };
+  const search = $('#personal-vocabulary-search');
+  if (search) search.value = pattern;
+  renderPersonalVocabularySearch();
+}
+
+function clearPersonalVocabularySearch() {
+  state.personalVocabularySearch = { mode: 'plain', query: '', flags: 'i' };
+  const search = $('#personal-vocabulary-search');
+  const pattern = $('#personal-vocabulary-regex-pattern');
+  if (search) search.value = '';
+  if (pattern) pattern.value = '';
+  renderPersonalVocabularySearch();
+  updatePersonalVocabularyRegexFeedback();
+  search?.focus();
+}
+
+async function pickPersonalVocabulary() {
+  const result = await personalVocabularyCall(() => window.studio.pickPersonalVocabulary());
+  if (result.ok !== true) {
+    toast({ key: personalVocabularyErrorKey(result.error) }, 'error');
+    return;
+  }
+  if (!result.snapshot) return;
+  applyExperienceSnapshot(result.snapshot);
+  if (!result.canceled) toast({ key: 'toast.personalVocabularyImported' }, 'success');
+}
+
+async function requestPersonalVocabularyClear() {
+  const previewResult = await personalVocabularyCall(() => window.studio.personalVocabularyClearPreview());
+  if (previewResult.ok !== true) {
+    toast({ key: personalVocabularyErrorKey(previewResult.error) }, 'error');
+    return;
+  }
+  const preview = previewResult.preview;
+  if (!preview?.authority?.digest) return;
+  openDestructiveConfirmation({
+    title: copyText('settings.personalVocabularyClear'),
+    copy: copyText('settings.personalVocabularyClearHint'),
+    target: copyText('settings.personalVocabularyStatus'),
+    execute: async () => {
+      const result = await personalVocabularyCall(() => window.studio.clearPersonalVocabulary(destructiveConfirmationFor(preview)));
+      if (result.ok !== true) {
+        toast({ key: personalVocabularyErrorKey(result.error) }, 'error');
+        return;
+      }
+      if (!result.snapshot) return;
+      applyExperienceSnapshot(result.snapshot);
+      toast({ key: 'toast.personalVocabularyCleared' }, 'success');
+    }
+  });
 }
 
 function selectedServer() {
@@ -879,13 +1124,13 @@ function toast(message, kind = 'info') {
   $('#toast-region').append(item);
   const experienceCopy = window.StudioExperienceCopy;
   const levels = storedExperienceLocal().funnyLevels;
-  const englishPrefix = experienceCopy?.toastPrefix ? experienceCopy.toastPrefix('english', levels, kind) : kind;
-  const cantonesePrefix = experienceCopy?.toastPrefix ? experienceCopy.toastPrefix('cantonese', levels, kind) : kind;
+  const englishPrefix = experienceCopy?.toastPrefix ? experienceCopy.toastPrefix('english', levels, kind, activePersonalVocabularyCopy()) : kind;
+  const cantonesePrefix = experienceCopy?.toastPrefix ? experienceCopy.toastPrefix('cantonese', levels, kind, activePersonalVocabularyCopy()) : kind;
   const englishMessage = message && typeof message === 'object' && typeof message.key === 'string' && experienceCopy?.format
-    ? experienceCopy.format(message.key, 'english', message.values || {})
+    ? copyTextForLanguage(message.key, 'english', message.values || {})
     : messageValue;
   const cantoneseMessage = message && typeof message === 'object' && typeof message.key === 'string' && experienceCopy?.format
-    ? experienceCopy.format(message.key, 'cantonese', message.values || {})
+    ? copyTextForLanguage(message.key, 'cantonese', message.values || {})
     : messageValue;
   narrator?.narrate({
     category: `toast-${kind}`,
@@ -1164,10 +1409,13 @@ function setRegexStatus(key) {
 function renderPreferenceSearch() {
   const search = regexSearches.preferences;
   const cards = $$('[data-settings-card]');
+  const schoolActive = currentSchoolMode().effectiveSchoolMode === true;
   let matches = 0;
   for (const card of cards) {
-    const match = searchMatches('preferences', card.dataset.settingsSearch || card.textContent || '');
-    card.classList.toggle('search-filtered', !match);
+    const suppressed = schoolActive && card.hasAttribute('data-school-hidden');
+    const haystack = `${card.dataset.settingsSearch || ''} ${card.textContent || ''}`;
+    const match = !suppressed && searchMatches('preferences', haystack);
+    card.classList.toggle('search-filtered', !match || suppressed);
     if (match) matches += 1;
   }
   const status = $('#experience-settings-search-status');
@@ -1585,6 +1833,7 @@ function applyExperienceSnapshot(snapshot) {
   hydrateExperienceControls();
   renderNarrationScheduleControls(narratorSnapshot);
   renderLogoCustomization();
+  renderPersonalVocabulary();
   renderPreferenceSearch();
   renderServers();
   renderEditor();
@@ -1596,6 +1845,7 @@ function applyExperienceSnapshot(snapshot) {
 function openExperienceSettings() {
   hydrateExperienceControls();
   renderLogoCustomization();
+  renderPersonalVocabulary();
   const dialog = $('#experience-settings-dialog');
   if (dialog && !dialog.open) dialog.showModal();
 }
@@ -4007,11 +4257,19 @@ function commandPaletteEntry(input) {
 }
 
 function commandPaletteDestinationEntries() {
-  return COMMAND_PALETTE_DESTINATIONS.map((destination) => commandPaletteEntry({
-    ...destination,
-    category: 'Destination',
-    searchText: destination.title
-  }));
+  return COMMAND_PALETTE_DESTINATIONS
+    .filter((destination) => !destination.schoolSuppressed || !currentSchoolMode().effectiveSchoolMode)
+    .map((destination) => {
+      const title = destination.titleCopyKey ? copyText(destination.titleCopyKey) : destination.title;
+      const detail = destination.detailCopyKey ? copyText(destination.detailCopyKey) : destination.detail;
+      return commandPaletteEntry({
+        ...destination,
+        title,
+        detail,
+        category: 'Destination',
+        searchText: `${title} ${detail}`
+      });
+    });
 }
 
 function commandPaletteTabEntries() {
@@ -8446,6 +8704,19 @@ function bindEvents() {
   $$('.logo-regex-token-row [data-logo-regex-token]').forEach((button) => button.addEventListener('click', () => insertLogoRegexToken(button.dataset.logoRegexToken)));
   $('#logo-regex-apply-button').addEventListener('click', applyLogoRegexSearch);
   $('#logo-regex-copy-button').addEventListener('click', copyLogoRegexPattern);
+  $('#pick-personal-vocabulary-button')?.addEventListener('click', pickPersonalVocabulary);
+  $('#clear-personal-vocabulary-button')?.addEventListener('click', requestPersonalVocabularyClear);
+  $('#personal-vocabulary-search')?.addEventListener('input', (event) => {
+    state.personalVocabularySearch = { mode: 'plain', query: String(event.target.value || ''), flags: 'i' };
+    renderPersonalVocabularySearch();
+  });
+  $('#personal-vocabulary-regex-builder-button')?.addEventListener('click', openPersonalVocabularyRegexBuilder);
+  $('#personal-vocabulary-regex-pattern')?.addEventListener('input', updatePersonalVocabularyRegexFeedback);
+  $('#personal-vocabulary-regex-flags')?.addEventListener('change', updatePersonalVocabularyRegexFeedback);
+  $('#personal-vocabulary-regex-sample')?.addEventListener('input', updatePersonalVocabularyRegexFeedback);
+  $$('[data-personal-vocabulary-regex-token]').forEach((button) => button.addEventListener('click', () => insertPersonalVocabularyRegexToken(button.dataset.personalVocabularyRegexToken || '')));
+  $('#personal-vocabulary-regex-apply-button')?.addEventListener('click', applyPersonalVocabularyRegexSearch);
+  $('#personal-vocabulary-regex-clear-button')?.addEventListener('click', clearPersonalVocabularySearch);
   ['#logo-fit', '#logo-background-mode', '#logo-crop-x', '#logo-crop-y', '#logo-crop-zoom', '#logo-focal-x', '#logo-focal-y', '#logo-background-color', '#logo-background-hex'].forEach((selector) => {
     const control = $(selector);
     control?.addEventListener('input', previewLogoPresentation);

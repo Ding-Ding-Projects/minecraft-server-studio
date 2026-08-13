@@ -906,10 +906,10 @@ The backup/update candidate adds a bounded local snapshot lifecycle for world, c
 - The local-history and safe-export foundation still needs complete mutation coverage, accessibility/localization work, focused checks, packaged-runtime interaction, and real captures. Its append-only redacted journal is not a Git history, backup, snapshot, or restoration implementation.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.
-- The settings foundation now includes bounded narrator/schedule, authenticator/toy-lock, converter, local-model, appearance/tab, and `Ctrl+Shift+F` command-palette source modules, but does not yet complete universal localization, personal-vocabulary upload, every-element appearance editing, complete tab management/regex/palette coverage, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.
+- The settings foundation now includes bounded personal-vocabulary upload, narrator/schedule, authenticator/toy-lock, converter, local-model, appearance/tab, and `Ctrl+Shift+F` command-palette source modules, but does not yet complete universal localization, every-element appearance editing, complete tab management/regex/palette coverage, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.
 - The local Ollama foundation does not yet complete the exhaustive official Model Store, catalog pagination and revision evidence, hardware-fit assessment, batch pulls, streamed chat, capability-gated attachments, registered harness profiles, rollback, offline documentation/troubleshooting, or their required proof set.
 - The documentation destination bundles and renders the current feature-article inventory, and the bounded palette can reveal loaded documentation records, but local history, notification center, full localization, complete command-palette/tabs coverage, tests, packaged interaction, and captures remain pending.
-- Scheduled appearance values, validated external schedule sources, full narrator runtime evidence, broad local-model/converter workflows, universal localization, personal-vocabulary upload, history, exports, and packaged-runtime evidence remain open work. The bounded settings modules above do not stand in for those complete contracts.
+- Scheduled appearance values, validated external schedule sources, full narrator runtime evidence, broad local-model/converter workflows, universal localization, complete personal-vocabulary coverage and evidence, history, exports, and packaged-runtime evidence remain open work. The bounded settings modules above do not stand in for those complete contracts.
 
 ## Browser-local companion-site file converter
 
@@ -1060,3 +1060,65 @@ deployment, release publication, or real installer transfer ran in this
 source-only fast-delivery lane. A subsequent evidence pass must exercise the
 real user-initiated link and preserve the explicit browser-observability
 limitation before representing it as verified.
+## Desktop personal-vocabulary upload
+
+The desktop settings surface now has a bounded local JSON selection route for
+private replacement data. It accepts only a complete version-1 payload that
+passes strict byte, entry-count, nesting, key-length, value-length, duplicate,
+unknown-field, and unsafe-key validation. It has a localized settings card,
+its own anchored regular-expression discovery route, and command-palette
+registration. The shared School mode hides the control and returns affected
+copy to original shipped wording while active.
+
+Only validated local data is retained, and it is revalidated each time it is
+loaded. The renderer, IPC contracts, local history, safe exports, status
+records, logs, telemetry, and network routes do not receive replacement
+entries, cached payloads, source names, or source locations. An explicit clear
+purges the private local cache and immediately returns affected copy to
+original shipped wording. A rejected replacement selection does not apply
+partially and does not displace a prior valid selection.
+
+For its bounded safe text surface, the privileged process computes only a
+final display-copy projection for registered settings-card and related
+notification strings; the renderer never receives the replacement entries
+themselves.
+
+### Implementation seams
+
+- `src/main/personal-vocabulary-manager.cjs` validates the selected bytes,
+  revalidates the local cache, maintains generic status, issues an opaque
+  clear authority, and computes the bounded projection.
+- `src/main/personal-vocabulary-copy-catalog.cjs` is the fixed shipped-text
+  allowlist; it contains no user replacement data.
+- `src/main/main.cjs`, `src/main/preload.cjs`, and the preferences renderer
+  keep selection, generic result envelopes, School-mode suppression, and the
+  destructive clear route at the privileged boundary.
+- `src/renderer/experience-copy.js` and `src/renderer/renderer.js` consume
+  the final projection only at registered app-copy, accessible-name, toast,
+  settings-search, and palette boundaries.
+
+### Directly related documentation
+
+- `docs/features/personal-vocabulary-upload.md`: local behavior, validation
+  bounds, privacy boundary, recovery behavior, current scope, and verification
+  status.
+- `docs/features/README.md`, `README.md`, `ROADMAP.md`, `CHANGELOG.md`, and
+  `src/main/offline-docs.cjs`: feature index, current scope, handoff, release
+  record, and app-bundled document registration.
+
+### Verification boundary
+
+No tests, linting, type checks, independent review, build, package, runtime
+interaction, built-artifact interaction, or captures ran for this
+fast-delivery source and documentation lane. The completeness inventory must
+continue to show localization breadth, focused validation, packaged
+interaction, and capture evidence as pending.
+
+### Remaining work
+
+- Add broader user-facing localization, accessibility, narrow-layout, and
+  packaged-runtime evidence before treating the setting as complete.
+- Complete documented cross-application propagation and every-surface coverage
+  without exposing private replacement data or source metadata.
+- Preserve the strict all-or-nothing validation and local-only boundary for
+  every future schema or migration path.
