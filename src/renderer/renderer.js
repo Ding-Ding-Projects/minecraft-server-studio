@@ -9,6 +9,7 @@ const state = {
   localHistory: null,
   localHistoryResult: null,
   localHistoryFilterError: '',
+  externalEditor: null,
   buildToolsMetadata: null,
   buildToolsPlan: null,
   paperCliPlan: null,
@@ -2910,7 +2911,7 @@ function renderEditor() {
     $('#server-software').textContent = 'ON-DEVICE RECOVERY DESK';
     $('#server-status').textContent = 'Local only';
     $('#server-status').className = 'status-chip';
-    ['open-folder-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
+    ['open-folder-button', 'open-editor-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
     return;
   }
   if (state.workspaceDestination === 'authenticator') {
@@ -2922,7 +2923,7 @@ function renderEditor() {
     $('#server-software').textContent = 'PRIVATE LOCAL CODES AND TOY LOCKS';
     $('#server-status').textContent = 'Local only';
     $('#server-status').className = 'status-chip';
-    ['open-folder-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
+    ['open-folder-button', 'open-editor-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
     return;
   }
   authenticatorDestination.classList.add('hidden');
@@ -2934,7 +2935,7 @@ function renderEditor() {
     $('#server-software').textContent = copyText('heading.noServer');
     $('#server-status').textContent = 'Stopped';
     $('#server-status').className = 'status-chip status-stopped';
-    ['open-folder-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
+    ['open-folder-button', 'open-editor-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
     return;
   }
   empty.classList.add('hidden');
@@ -2944,6 +2945,7 @@ function renderEditor() {
   $('#server-status').textContent = server.status[0].toUpperCase() + server.status.slice(1);
   $('#server-status').className = `status-chip status-${server.status}`;
   $('#open-folder-button').disabled = false;
+  $('#open-editor-button').disabled = !externalEditorIsReady();
   $('#setup-button').disabled = false;
   $('#start-button').disabled = server.status === 'running';
   $('#stop-button').disabled = server.status !== 'running';
@@ -3881,10 +3883,136 @@ async function relockToyLock(lockId) {
   await refreshToyLocks();
 }
 
+function externalEditorIsReady() {
+  return state.externalEditor?.state === 'ready' && Boolean(state.externalEditor.selection?.id);
+}
+
+function renderExternalEditor() {
+  const snapshot = state.externalEditor;
+  const status = $('#external-editor-status');
+  const picker = $('#external-editor-candidate');
+  const server = selectedServer();
+  const ready = externalEditorIsReady();
+  if (status) {
+    status.textContent = snapshot?.detail || 'External editor availability has not loaded.';
+    status.dataset.state = snapshot?.state || 'unavailable';
+  }
+  if (picker) {
+    picker.replaceChildren();
+    const candidates = Array.isArray(snapshot?.candidates) ? snapshot.candidates : [];
+    const selected = snapshot?.selection || null;
+    if (!candidates.length) {
+      const unavailable = document.createElement('option');
+      unavailable.value = '';
+      unavailable.textContent = selected ? `${selected.label} — unavailable` : 'No local editor detected';
+      picker.append(unavailable);
+    } else {
+      for (const candidate of candidates) {
+        const option = document.createElement('option');
+        option.value = candidate.id;
+        option.textContent = `${candidate.label} · ${candidate.source}`;
+        picker.append(option);
+      }
+      if (selected && !candidates.some((candidate) => candidate.id === selected.id)) {
+        const saved = document.createElement('option');
+        saved.value = selected.id;
+        saved.textContent = `${selected.label} — saved selection`;
+        picker.append(saved);
+      }
+    }
+    picker.value = selected?.id || '';
+    picker.disabled = candidates.length === 0;
+  }
+  const refresh = $('#refresh-external-editors-button');
+  const automatic = $('#use-automatic-external-editor-button');
+  const openRoot = $('#open-server-root-in-editor-button');
+  const openRecord = $('#open-editor-handoff-record-button');
+  const openTopbar = $('#open-editor-button');
+  if (refresh) refresh.disabled = false;
+  if (automatic) automatic.disabled = false;
+  if (openRoot) {
+    openRoot.disabled = !server || !ready;
+    openRoot.title = !server
+      ? 'Choose a local server before opening its root in an editor.'
+      : ready
+        ? 'Open the selected server root with the configured local editor.'
+        : (snapshot?.detail || 'Choose a local editor before opening a server root.');
+  }
+  if (openRecord) {
+    openRecord.disabled = !server || !ready;
+    openRecord.title = !server
+      ? 'Choose a local server before creating a safe handoff record.'
+      : ready
+        ? 'Generate a path-redacted app-private handoff record and open it in the configured editor.'
+        : (snapshot?.detail || 'Choose a local editor before opening a handoff record.');
+  }
+  if (openTopbar) {
+    openTopbar.disabled = !server || !ready;
+    openTopbar.title = !server
+      ? 'Choose a local server before opening it in an editor.'
+      : ready
+        ? 'Open the selected server root with the configured local editor.'
+        : (snapshot?.detail || 'Choose a local editor before opening a server root.');
+  }
+}
+
+async function refreshExternalEditor(options = {}) {
+  const snapshot = await safely(() => options.refresh === true
+    ? window.studio.refreshExternalEditors()
+    : window.studio.externalEditorSnapshot());
+  if (!snapshot) return;
+  state.externalEditor = snapshot;
+  renderExternalEditor();
+  await refreshLocalHistory();
+}
+
+async function chooseExternalEditorExecutable() {
+  const snapshot = await safely(() => window.studio.chooseExternalEditorExecutable());
+  if (!snapshot) return;
+  state.externalEditor = snapshot;
+  renderExternalEditor();
+  await refreshLocalHistory();
+}
+
+async function chooseExternalEditorFolder() {
+  const snapshot = await safely(() => window.studio.chooseExternalEditorFolder());
+  if (!snapshot) return;
+  state.externalEditor = snapshot;
+  renderExternalEditor();
+  await refreshLocalHistory();
+}
+
+async function selectExternalEditor() {
+  const candidateId = $('#external-editor-candidate')?.value || '';
+  if (!candidateId) return;
+  const snapshot = await safely(() => window.studio.selectExternalEditor(candidateId));
+  if (!snapshot) return;
+  state.externalEditor = snapshot;
+  renderExternalEditor();
+  await refreshLocalHistory();
+}
+
+async function useAutomaticExternalEditor() {
+  const snapshot = await safely(() => window.studio.useAutomaticExternalEditor());
+  if (!snapshot) return;
+  state.externalEditor = snapshot;
+  renderExternalEditor();
+  await refreshLocalHistory();
+}
+
+async function openExternalEditorTarget(targetKind) {
+  const server = selectedServer();
+  if (!server) return toast('Choose a local server before opening an external-editor target.', 'error');
+  const opened = await safely(() => window.studio.openExternalEditorTarget(server.id, targetKind));
+  if (opened) toast(opened.detail, 'success');
+  await refreshExternalEditor();
+}
+
 function renderAll() {
   renderServers();
   renderDependencies();
   renderEditor();
+  renderExternalEditor();
   renderBuildToolsPlan();
   renderAuthenticator();
   renderToyLocks();
@@ -5402,6 +5530,7 @@ function bindEvents() {
   $('#create-form').addEventListener('change', () => { state.unsaved.createDraft = true; });
   $('#create-dialog').addEventListener('close', () => { state.unsaved.createDraft = false; });
   const markSettingsDraft = (event) => {
+    if (event.target.closest('.external-editor-card')) return;
     const panel = event.target.closest('[data-panel]')?.dataset.panel;
     if (panel === 'status') {
       state.unsaved.statusHubBridge = true;
@@ -5605,7 +5734,15 @@ function bindEvents() {
   $('#copy-command-button').addEventListener('click', async () => { const command = $('#command-raw-tokens').value.trim() || buildStructuredCommand(currentCommandAction()); if (!command) return; try { await navigator.clipboard.writeText(`/${command}`); toast('Composed Minecraft command copied.', 'success'); } catch { toast('Clipboard access was unavailable. Select the preview text instead.', 'error'); } });
   $('#refresh-command-center-button').addEventListener('click', collectCommandDiscovery);
   $('#open-folder-button').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
+  $('#open-editor-button').addEventListener('click', () => openExternalEditorTarget('server-root'));
   $('#edit-open-folder').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
+  $('#refresh-external-editors-button').addEventListener('click', () => refreshExternalEditor({ refresh: true }));
+  $('#choose-external-editor-executable-button').addEventListener('click', chooseExternalEditorExecutable);
+  $('#choose-external-editor-folder-button').addEventListener('click', chooseExternalEditorFolder);
+  $('#external-editor-candidate').addEventListener('change', selectExternalEditor);
+  $('#use-automatic-external-editor-button').addEventListener('click', useAutomaticExternalEditor);
+  $('#open-server-root-in-editor-button').addEventListener('click', () => openExternalEditorTarget('server-root'));
+  $('#open-editor-handoff-record-button').addEventListener('click', () => openExternalEditorTarget('handoff-record'));
   $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (server.software === 'spigot') { setActiveTab('buildtools'); return toast('Spigot setup is unavailable in this build. Review the typed BuildTools plan-only preview; no executor is registered.', 'error'); } await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });
   $('#start-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.start(server.id), 'Server start requested.'); });
   $('#stop-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.stop(server.id), 'Graceful server stop requested.'); });
@@ -5664,7 +5801,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
   renderCommandCenter();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });

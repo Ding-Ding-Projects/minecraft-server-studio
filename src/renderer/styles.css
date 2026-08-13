@@ -137,6 +137,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .switch-field strong { display: block; color: var(--on-surface); font-size: .9rem; }
 .switch-field small { display: block; margin-top: 3px; }
 
+.external-editor-card { display: grid; gap: 14px; padding: 18px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
+.external-editor-card h4 { margin-top: 4px; }
+.external-editor-card p:not(.eyebrow) { margin-top: 6px; color: var(--on-surface-variant); line-height: 1.45; }
+.external-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 .plugin-install-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, .9fr); gap: 22px; padding: 20px; border: 1px solid var(--outline-variant); border-radius: 20px; background: #151922; }
 .plugin-install-card p { margin-top: 7px; color: var(--on-surface-variant); line-height: 1.45; }
 .plugin-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 8px; }
