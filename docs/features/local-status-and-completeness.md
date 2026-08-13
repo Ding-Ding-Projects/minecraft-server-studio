@@ -1,6 +1,6 @@
 # Local status and desktop completeness
 
-`src/main/desktop-status-model.cjs` defines a dependency-free, local-only data model for a future desktop status destination and its completeness inventory. It is a pure CommonJS module: it does not import a package, read or write a file, start a process, call a Minecraft server, invoke a command, or make a network request.
+`src/main/desktop-status-model.cjs` defines a dependency-free, local-only data model for a desktop status destination and its completeness inventory. It is a pure CommonJS module: it does not import a package, read or write a file, start a process, call a Minecraft server, invoke a command, or make a network request.
 
 ## Local status snapshot
 
@@ -16,11 +16,11 @@
 | `nextSteps` | Explicit next actions, blockers, and evidence identifiers. |
 | `bridgeBoundary` | The declared boundary for chat, remote execution, network, and an external Status Hub. |
 
-The boundary is intentionally exact:
+The boundary is intentionally exact for this local model:
 
-> No chat bridge or external Status Hub bridge exists: this model is an in-process, local-only record and does not send, receive, poll, synchronize, or execute through a network, chat service, or external Hub.
+> No chat bridge or external Status Hub bridge exists in this model: it is an in-process, local-only record and does not send, receive, poll, synchronize, or execute through a network, chat service, or external Hub.
 
-Rendering this snapshot in the desktop application does not mean that a button sends a message, that an external status service receives data, or that a server operation was run. A separate, explicitly designed and protected integration would be required for any of those behaviors.
+Rendering this snapshot in the desktop application does not mean that a button sends a message, that an external status service receives data, or that a server operation was run. The optional [Shared Status Hub bridge](shared-status-hub-bridge.md) in `src/main/shared-status-hub-client.cjs` is a separate main-process integration with its own endpoint validation, protected credential boundary, explicit state machine, and evidence record. It does not change this module into a network client.
 
 ## Desktop completeness inventory
 
@@ -42,6 +42,7 @@ The template includes these desktop surface rows:
 | Identifier | Surface |
 | --- | --- |
 | `status-destination` | Local status destination |
+| `status-hub-bridge` | Optional external Status Hub bridge |
 | `server-creation` | Server creation |
 | `dependency-bootstrap` | Automatic dependency bootstrap |
 | `paper` | Paper setup |
@@ -66,14 +67,17 @@ The dependency-bootstrap row explicitly covers automatic installation rather tha
 
 The module is only a schema and evaluator. It is not source evidence that any server action, installer, converter, authenticator, or local model manager exists. A caller must populate implementation and documentation paths, then attach evidence for the exact desktop surface it has implemented.
 
-The status snapshot accepts only local status data supplied by its caller. It rejects web-style URLs and UNC paths from local-path fields, does not resolve paths, and does not inspect their contents. Evidence records should avoid credentials, RCON passwords, authentication secrets, server-world contents, and other sensitive data.
+The status snapshot accepts only local status data supplied by its caller. It rejects web-style URLs and UNC paths from local-path fields, does not resolve paths, and does not inspect their contents. Evidence records should avoid credentials, RCON passwords, authentication secrets, server-world contents, raw Status Hub replies, and other sensitive data.
+
+The optional bridge record is incomplete unless its implementation and documentation paths are present and its localization, test, capture, and interaction evidence are independently verified. A configured endpoint, attempted connection, or accepted registration cannot verify the unrelated local-status row or any other desktop surface.
 
 ## Verification status
 
-This feature record was added during the active speed-delivery workflow. Tests, linting, review, built-artifact interaction, runtime verification, and captures are intentionally recorded as **pending** rather than claimed. No build, package, deployment, commit, release, or external Status Hub verification is asserted by this documentation.
+This feature record was added during the active speed-delivery workflow. Tests, linting, review, built-artifact interaction, runtime verification, and captures are intentionally recorded as **pending** rather than claimed. No build, package, deployment, commit, release, or external Status Hub registration/update/poll/reply acceptance is asserted by this documentation alone.
 
 ## Suggested related articles
 
 - [Server orchestration](server-orchestration.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)
 - [Spigot BuildTools adapter](spigot-buildtools.md)
+- [Shared Status Hub bridge](shared-status-hub-bridge.md)

@@ -15,7 +15,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Use the CLI for setup, foreground operation, RCON commands, plugin installation, and configuration automation.
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
 - Use the capability-first Command Center for structured command families, source badges, typed controls, tokenized Minecraft-only raw fallback, and guarded consequential operations.
-- Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory without a chat or external status-service bridge.
+- Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory. An optional main-process Status Hub bridge can be configured separately; it keeps the local destination as the fallback and never reports registration, update, inbox-poll, or reply delivery without an accepted transport response.
 
 ## Desktop workflow
 
@@ -72,6 +72,7 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 - Spigot setup uses a dedicated BuildTools workspace and a preflight-driven stage/swap/rollback plan. Java and Git are automatically detected and installable from the app.
 - The management protocol is TLS-first and stores any bearer credential reference through protected storage. The generic WebSocket transport does not invent a provider-specific bearer handshake; it never enables methods before `rpc.discover` advertises them and is not a Paper HTTP API.
 - RCON passwords and management bearer credentials are stored through the operating system protected-storage boundary and omitted from the local registry, exports, and console logs. Minecraft still requires its active RCON password in its local configuration; treat the server folder as sensitive.
+- The optional Status Hub bridge is HTTPS-only except for an explicitly enabled HTTP development route at the exact numeric loopback host `127.0.0.1` or `::1`. Once an eligible endpoint and vault enrollment token are available, the main process generates and stores a fresh session key through `CredentialVault`; it is not returned by the Hub. Enrollment tokens and session keys are not accepted by renderer forms, placed in exports, or copied into local status history. An attempted connection does not claim external delivery.
 - Plugins are local JARs selected through the operating-system file picker. Minecraft Server Studio does not claim to audit third-party plugin safety.
 
 ## Companion Sites source
@@ -86,6 +87,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Spigot BuildTools planning](docs/features/spigot-buildtools.md)
 - [Command Center](docs/features/command-center.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
+- [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
 - [Feature documentation index](docs/features/README.md)
 - [Changelog](CHANGELOG.md)
 - [Handoff](HANDOFF.md)

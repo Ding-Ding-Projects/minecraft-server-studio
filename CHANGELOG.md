@@ -14,6 +14,7 @@
 - Official Spigot metadata and BuildTools preflight source, safe workspace planning, structured flag composer, generated configuration preservation, plugin metadata inspection, and staged JAR rollback plan.
 - Protected main-process credential-vault source for RCON and management-protocol credentials.
 - Independent local desktop status destination and browser-local public-site status destination, both with explicit no-external-bridge boundaries and incomplete-evidence disclosure.
+- Optional desktop Status Hub bridge contract with HTTPS-only endpoint rules, protected enrollment/session credentials, explicit connection states, local-status fallback, and no claim of external registration, updates, inbox polls, or replies until each action receives an accepted transport response.
 - Pages-ready public marketing source with `contract.js` loaded before its browser-local interaction engine.
 - Windows-only GitHub Actions release workflow source for every push and manual dispatch: unsigned Squirrel.Windows packaging, artifact-set and `NotSigned` verification, safe package-evidence upload, line-count release notes, and a rerun-unique non-draft GitHub Release when the workflow reaches publication. The workflow intentionally has no test or lint jobs.
 - Original vector application mark, multi-resolution Windows ICO, local executable icon wiring, and immutable Squirrel icon metadata source.

@@ -8,6 +8,7 @@ The application source provides a Windows Electron control center, shared CLI, s
 
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
 - `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules.
+- `docs/features/shared-status-hub-bridge.md` and `docs/features/local-status-and-completeness.md`: an opt-in external Status Hub documentation boundary. It requires explicit transport acceptance before claiming registration, update, inbox polling, or reply delivery; raw replies and credentials remain outside the renderer, history, exports, and logs.
 - `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
 - `src/cli/mss.cjs`: shared local CLI.
@@ -24,5 +25,6 @@ This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime int
 
 - The dedicated Java runtime-manager now owns strict Paper/Spigot compatibility policy, direct Java probes, bounded configured/PATH/JAVA_HOME discovery, explicit package-manager plans, optional configured portable-source handling, and direct-argv launch preflight. Tests, runtime interaction, and captures remain unrun under the speed-delivery boundary.
 - Add a provider-specific authenticated WebSocket connector before treating a stored management bearer credential as transmitted authentication.
+- The optional Status Hub bridge still needs its complete independent proof set: localized copy, focused tests, built-artifact interaction, real capture, and actual accepted external registration/update/poll/reply evidence. Local status remains the required fallback if it is unconfigured or unavailable.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.

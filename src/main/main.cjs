@@ -2,11 +2,18 @@ const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('ele
 const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
+const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 let CredentialVault;
+let SharedStatusHubClient;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
 } catch {
   CredentialVault = null;
+}
+try {
+  ({ SharedStatusHubClient } = require('./shared-status-hub-client.cjs'));
+} catch {
+  SharedStatusHubClient = null;
 }
 
 app.setName('Minecraft Server Studio');
@@ -14,6 +21,7 @@ app.setName('Minecraft Server Studio');
 let mainWindow;
 let serverManager;
 let credentialVault;
+let statusHubBridge;
 
 function rconPacket(id, type, body) {
   const payload = Buffer.from(String(body), 'utf8');
@@ -82,6 +90,36 @@ function sendToRenderer(event) {
   mainWindow.webContents.send('studio:event', event);
 }
 
+function unavailableBridgeStatus() {
+  return {
+    state: 'failed',
+    endpoint: '',
+    allowInsecureLoopback: false,
+    localFallback: true,
+    detail: 'The optional Status Hub bridge is unavailable in this app build. Local status remains available.',
+    inboxState: 'not-polled',
+    observedReplyCount: 0,
+    latestReplySequence: null,
+    lastFailureCode: 'BRIDGE_UNAVAILABLE'
+  };
+}
+
+function requireStatusHubBridge() {
+  if (!statusHubBridge) throw new Error('The optional Status Hub bridge is unavailable in this app build. Local status remains available.');
+  return statusHubBridge;
+}
+
+async function localStatusWithBridge() {
+  const localStatus = await requireManager().localStatusSnapshot();
+  return {
+    ...localStatus,
+    snapshot: createLocalStatusSnapshot({
+      ...localStatus.snapshot,
+      statusHubBridge: statusHubBridge ? statusHubBridge.getStatus() : unavailableBridgeStatus()
+    })
+  };
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -107,6 +145,18 @@ app.whenReady().then(() => {
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
   }) : null;
+  try {
+    statusHubBridge = SharedStatusHubClient ? new SharedStatusHubClient({
+      dataDir: path.join(app.getPath('userData'), 'status-hub-bridge'),
+      credentialVault,
+      sessionTitle: 'Minecraft Server Studio desktop status',
+      repository: 'Ding-Ding-Projects/minecraft-server-studio',
+      agentLabel: 'minecraft-server-studio-desktop',
+      onStateChange: (bridge) => sendToRenderer({ type: 'status-hub-bridge', bridge })
+    }) : null;
+  } catch {
+    statusHubBridge = null;
+  }
   serverManager = new ServerManager({
     dataDir: path.join(app.getPath('userData'), 'servers'),
     credentialSecretProvider: async (kind, serverId) => {
@@ -178,7 +228,20 @@ ipcMain.handle('studio:open-folder', async (_event, folder) => {
   if (error) throw new Error(error);
 });
 ipcMain.handle('studio:data-directory', () => path.join(app.getPath('userData'), 'servers'));
-ipcMain.handle('studio:local-status', () => requireManager().localStatusSnapshot());
+ipcMain.handle('studio:local-status', () => localStatusWithBridge());
+ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
+  status: statusHubBridge.getStatus(),
+  configuration: statusHubBridge.getConfigurationForRenderer()
+} : {
+  status: unavailableBridgeStatus(),
+  configuration: { endpoint: '', allowInsecureLoopback: false }
+});
+ipcMain.handle('studio:configure-status-hub-bridge', (_event, configuration) => requireStatusHubBridge().configure(configuration));
+ipcMain.handle('studio:sync-status-hub-bridge', async () => {
+  const localStatus = await requireManager().localStatusSnapshot();
+  await requireStatusHubBridge().synchronize(localStatus.snapshot);
+  return localStatusWithBridge();
+});
 ipcMain.handle('studio:refresh-spigot-versions', () => requireManager().refreshSpigotVersionMetadata());
 ipcMain.handle('studio:buildtools-preflight', (_event, id, input) => requireManager().buildToolsPreflight(id, input));
 ipcMain.handle('studio:execute-buildtools-plan', (_event, id, confirmation) => requireManager().executeBuildToolsPlan(id, confirmation));

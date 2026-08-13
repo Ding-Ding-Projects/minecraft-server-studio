@@ -5,6 +5,7 @@ const state = {
   dependencyErrors: {},
   logs: [],
   localStatus: null,
+  statusHubBridge: null,
   buildToolsMetadata: null,
   buildToolsPlan: null,
   activeTab: 'general',
@@ -477,6 +478,43 @@ function statusRecord(title, detail, state = 'idle') {
   return record;
 }
 
+function bridgeStateLabel(value) {
+  return ({
+    'unconfigured': 'Unconfigured',
+    'credential-unavailable': 'Credential unavailable',
+    'connecting': 'Connecting',
+    'connected': 'Connected',
+    'failed': 'Failed'
+  })[value] || 'Unconfigured';
+}
+
+function bridgeActivity(bridge) {
+  if (!bridge) return 'No accepted external registration, update, inbox poll, or reply delivery has been observed.';
+  const details = [];
+  if (bridge.lastAcceptedRegistrationAt) details.push(`Registration accepted ${new Date(bridge.lastAcceptedRegistrationAt).toLocaleString()}.`);
+  if (bridge.lastAcceptedUpdateAt) details.push(`Status update accepted ${new Date(bridge.lastAcceptedUpdateAt).toLocaleString()}.`);
+  if (bridge.lastAcceptedPollAt) {
+    const replySummary = bridge.inboxState === 'replies-observed'
+      ? `${bridge.observedReplyCount || 0} reply metadata item(s) observed; no chat delivery route exists.`
+      : 'No reply metadata was observed.';
+    details.push(`Inbox poll accepted ${new Date(bridge.lastAcceptedPollAt).toLocaleString()}. ${replySummary}`);
+  }
+  return details.length ? details.join(' ') : 'No accepted external registration, update, inbox poll, or reply delivery has been observed.';
+}
+
+function renderStatusHubBridge(bridge = state.statusHubBridge) {
+  const source = bridge || { state: 'unconfigured', endpoint: '', allowInsecureLoopback: false, detail: 'Local status remains available.', inboxState: 'not-polled' };
+  const endpoint = $('#status-hub-endpoint');
+  const loopback = $('#status-hub-allow-loopback');
+  if (endpoint && document.activeElement !== endpoint) endpoint.value = source.endpoint || '';
+  if (loopback && document.activeElement !== loopback) loopback.checked = source.allowInsecureLoopback === true;
+  const record = $('#status-hub-bridge-state')?.closest('.status-record');
+  if (record) record.dataset.state = source.state === 'connected' ? 'complete' : source.state === 'credential-unavailable' ? 'blocked' : source.state || 'idle';
+  $('#status-hub-bridge-state').textContent = `Bridge state: ${bridgeStateLabel(source.state)}`;
+  $('#status-hub-bridge-detail').textContent = source.detail || 'Local status remains available.';
+  $('#status-hub-bridge-activity').textContent = bridgeActivity(source);
+}
+
 function renderLocalStatus() {
   const status = state.localStatus;
   const current = $('#local-status-current');
@@ -486,16 +524,19 @@ function renderLocalStatus() {
     $('#local-status-updated').textContent = 'Refresh to inspect local state';
     $('#local-status-completeness').textContent = 'No inventory loaded';
     $('#local-status-boundary').textContent = 'No local status snapshot has been loaded.';
+    renderStatusHubBridge();
     ['#local-status-operations', '#local-status-evidence', '#local-status-next-steps', '#local-status-inventory'].forEach((selector) => $(selector).replaceChildren());
     return;
   }
   const snapshot = status.snapshot;
+  state.statusHubBridge = snapshot.statusHubBridge || state.statusHubBridge;
   const completeness = status.completeness || {};
   current.textContent = String(snapshot.currentState || 'idle').replace(/-/g, ' ');
   $('#local-status-updated').textContent = snapshot.lastUpdated ? new Date(snapshot.lastUpdated).toLocaleString() : 'No timestamp';
   const summary = completeness.summary || {};
   $('#local-status-completeness').textContent = `${summary.completeRows || 0}/${summary.totalRows || 0} rows fully evidenced`;
   $('#local-status-boundary').textContent = snapshot.bridgeBoundary?.exactBoundary || 'This local status view has no external bridge.';
+  renderStatusHubBridge();
   const renderList = (selector, records, mapper, empty) => {
     const container = $(selector);
     container.replaceChildren();
@@ -687,8 +728,59 @@ async function refreshLocalStatus() {
   const status = await safely(() => window.studio.localStatus());
   if (status) {
     state.localStatus = status;
+    state.statusHubBridge = status.snapshot?.statusHubBridge || state.statusHubBridge;
     renderLocalStatus();
   }
+}
+
+async function refreshStatusHubBridgeConfiguration() {
+  const bridge = await safely(() => window.studio.statusHubBridge());
+  if (!bridge) return;
+  state.statusHubBridge = bridge.status || state.statusHubBridge;
+  const endpoint = $('#status-hub-endpoint');
+  const loopback = $('#status-hub-allow-loopback');
+  if (endpoint && document.activeElement !== endpoint) endpoint.value = bridge.configuration?.endpoint || '';
+  if (loopback && document.activeElement !== loopback) loopback.checked = bridge.configuration?.allowInsecureLoopback === true;
+  renderStatusHubBridge(state.statusHubBridge);
+}
+
+async function saveStatusHubBridgeSettings() {
+  const bridge = await safely(() => window.studio.configureStatusHubBridge({
+    endpoint: $('#status-hub-endpoint').value.trim(),
+    allowInsecureLoopback: $('#status-hub-allow-loopback').checked
+  }));
+  if (!bridge) return;
+  state.statusHubBridge = bridge;
+  renderStatusHubBridge(bridge);
+  if (bridge.state === 'credential-unavailable') {
+    toast('Bridge settings were saved, but a protected enrollment credential is unavailable. No external request was sent.');
+  } else {
+    toast('Bridge settings were saved. Local status remains the fallback until an accepted transport response arrives.');
+  }
+  await refreshLocalStatus();
+}
+
+async function synchronizeStatusHubBridge() {
+  const status = await safely(() => window.studio.syncStatusHubBridge());
+  if (!status) return;
+  state.localStatus = status;
+  state.statusHubBridge = status.snapshot?.statusHubBridge || state.statusHubBridge;
+  renderLocalStatus();
+  const bridge = state.statusHubBridge;
+  if (bridge?.state === 'connected') {
+    toast('The Status Hub accepted the bridge response. Raw replies were not delivered to chat.');
+  } else {
+    toast(bridge?.detail || 'The bridge did not report an accepted external response.', bridge?.state === 'failed' ? 'error' : 'info');
+  }
+}
+
+async function clearStatusHubBridgeSettings() {
+  const bridge = await safely(() => window.studio.configureStatusHubBridge({ endpoint: '', allowInsecureLoopback: false }));
+  if (!bridge) return;
+  state.statusHubBridge = bridge;
+  renderStatusHubBridge(bridge);
+  toast('Bridge settings were removed. Local status remains available.');
+  await refreshLocalStatus();
 }
 
 async function refreshVersions() {
@@ -970,6 +1062,11 @@ function openCommandConfirmation(payload) {
 }
 
 function logEvent(event) {
+  if (event.type === 'status-hub-bridge' && event.bridge) {
+    state.statusHubBridge = event.bridge;
+    renderStatusHubBridge(event.bridge);
+    return;
+  }
   const prefix = new Date(event.at || Date.now()).toLocaleTimeString();
   const label = event.serverId ? `[${event.serverId.slice(0, 8)}] ` : '';
   if (event.message) state.logs.push(`${prefix} ${label}${event.message}`);
@@ -994,6 +1091,9 @@ function bindEvents() {
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
+  $('#save-status-hub-bridge-button').addEventListener('click', saveStatusHubBridgeSettings);
+  $('#sync-status-hub-bridge-button').addEventListener('click', synchronizeStatusHubBridge);
+  $('#clear-status-hub-bridge-button').addEventListener('click', clearStatusHubBridgeSettings);
   $('#install-dependencies-button').addEventListener('click', async () => {
     const missing = Object.values(state.dependencies?.dependencies || {}).filter((item) => !item.available).map((item) => item.id);
     if (!missing.length) return toast('All required tools are already available.', 'success');
@@ -1055,7 +1155,7 @@ async function initialize() {
   window.studio.onEvent(logEvent);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration()]);
   renderCommandCenter();
 }
 
