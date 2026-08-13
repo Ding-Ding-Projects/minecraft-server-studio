@@ -1,6 +1,5 @@
 'use strict';
 
-const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -365,66 +364,10 @@ function exportProjection(entry) {
   });
 }
 
-function knownVsCodeCandidates() {
-  const candidates = [];
-  if (process.platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA;
-    const programFiles = process.env.ProgramFiles;
-    const programFilesX86 = process.env['ProgramFiles(x86)'];
-    if (localAppData) candidates.push(path.join(localAppData, 'Programs', 'Microsoft VS Code', 'Code.exe'));
-    if (programFiles) candidates.push(path.join(programFiles, 'Microsoft VS Code', 'Code.exe'));
-    if (programFilesX86) candidates.push(path.join(programFilesX86, 'Microsoft VS Code', 'Code.exe'));
-    if (localAppData) candidates.push(path.join(localAppData, 'Programs', 'Microsoft VS Code Insiders', 'Code - Insiders.exe'));
-    if (programFiles) candidates.push(path.join(programFiles, 'Microsoft VS Code Insiders', 'Code - Insiders.exe'));
-    if (programFilesX86) candidates.push(path.join(programFilesX86, 'Microsoft VS Code Insiders', 'Code - Insiders.exe'));
-  }
-  return candidates;
-}
-
-function fileIfRegular(candidate) {
-  if (typeof candidate !== 'string' || !candidate || /[\u0000-\u001f\u007f]/.test(candidate)) return null;
-  try {
-    return fs.statSync(candidate).isFile() ? candidate : null;
-  } catch {
-    return null;
-  }
-}
-
-function resolveVsCodeExecutable(candidate) {
-  const direct = fileIfRegular(candidate);
-  if (!direct) return null;
-  if (path.extname(direct).toLowerCase() === '.exe') return direct;
-  if (process.platform !== 'win32' || !/\.cmd$/i.test(direct)) return null;
-  const programDirectory = path.resolve(path.dirname(direct), '..');
-  return fileIfRegular(path.join(programDirectory, 'Code.exe'))
-    || fileIfRegular(path.join(programDirectory, 'Code - Insiders.exe'));
-}
-
-function findVsCode() {
-  for (const candidate of knownVsCodeCandidates()) {
-    const executable = resolveVsCodeExecutable(candidate);
-    if (executable) return { command: executable, source: 'installed-app' };
-  }
-  try {
-    const commands = process.platform === 'win32' ? ['code', 'code-insiders'] : ['code'];
-    for (const command of commands) {
-      const lookup = process.platform === 'win32'
-        ? childProcess.spawnSync('where.exe', [command], { encoding: 'utf8', windowsHide: true, timeout: 750 })
-        : childProcess.spawnSync('which', [command], { encoding: 'utf8', timeout: 750 });
-      const first = String(lookup.stdout || '').split(/\r?\n/).map((item) => item.trim()).find(Boolean);
-      const executable = lookup.status === 0 ? resolveVsCodeExecutable(first) : null;
-      if (executable) return { command: executable, source: 'path' };
-    }
-  } catch {
-    // Detection remains unavailable; opening another editor would be dishonest.
-  }
-  return null;
-}
-
 class LocalHistoryService {
   constructor(options = {}) {
     if (!isPlainRecord(options)) throw historyError('HISTORY_INVALID_OPTIONS', 'Local history options are invalid.');
-    const allowed = new Set(['dataDir', 'onChange']);
+    const allowed = new Set(['dataDir', 'onChange', 'externalEditor']);
     for (const key of Object.keys(options)) {
       if (!allowed.has(key)) throw historyError('HISTORY_INVALID_OPTIONS', 'Local history options contain an unsupported field.');
     }
@@ -435,6 +378,9 @@ class LocalHistoryService {
     this.journalPath = path.join(this.dataDir, 'records.jsonl');
     this.exportsDir = path.join(this.dataDir, 'exports');
     this.onChange = typeof options.onChange === 'function' ? options.onChange : null;
+    this.externalEditor = options.externalEditor && typeof options.externalEditor.availability === 'function' && typeof options.externalEditor.openTrustedFile === 'function'
+      ? options.externalEditor
+      : null;
     this.records = [];
     this.journalState = 'not-loaded';
     this.journalDetail = 'The local history journal has not been loaded.';
@@ -458,7 +404,7 @@ class LocalHistoryService {
   }
 
   status() {
-    const vscode = findVsCode();
+    const vscode = this.externalEditor?.availability() || { state: 'unavailable', detail: 'The shared local external-editor service is unavailable in this app build.' };
     return Object.freeze({
       schemaVersion: HISTORY_SCHEMA_VERSION,
       journal: Object.freeze({
@@ -475,9 +421,7 @@ class LocalHistoryService {
       exports: Object.freeze({
         lastExport: exportProjection(this.lastExport),
         formats: Object.freeze(Object.entries(EXPORT_FORMATS).map(([id, definition]) => Object.freeze({ id, label: definition.label }))),
-        vscode: Object.freeze(vscode
-          ? { state: 'available', detail: 'VS Code is available for a real exported file.' }
-          : { state: 'unavailable', detail: 'VS Code was not detected. Create an export first, then install or configure VS Code before using this handoff.' })
+        vscode: Object.freeze(vscode)
       }),
       boundary: OMITTED_DATA_NOTICE
     });
@@ -617,26 +561,15 @@ class LocalHistoryService {
     } catch {
       throw historyError('HISTORY_EXPORT_MISSING', 'The selected export no longer exists in the app-private export area.');
     }
-    const vscode = findVsCode();
-    if (!vscode) throw historyError('HISTORY_VSCODE_UNAVAILABLE', 'VS Code was not detected. Install or configure VS Code before opening this export.');
-    return new Promise((resolve, reject) => {
-      let processHandle;
-      try {
-        processHandle = childProcess.spawn(vscode.command, [destination], {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true
-        });
-      } catch {
-        reject(historyError('HISTORY_VSCODE_OPEN_FAILED', 'VS Code could not be started for the selected exported file.'));
-        return;
-      }
-      processHandle.once('error', () => reject(historyError('HISTORY_VSCODE_OPEN_FAILED', 'VS Code could not be started for the selected exported file.')));
-      processHandle.once('spawn', () => {
-        processHandle.unref();
-        resolve(Object.freeze({ opened: true, fileName: exportRecord.fileName }));
-      });
-    });
+    if (!this.externalEditor || this.externalEditor.availability().state !== 'available') {
+      throw historyError('HISTORY_VSCODE_UNAVAILABLE', 'Choose an available local Visual Studio Code executable before opening this export.');
+    }
+    try {
+      await this.externalEditor.openTrustedFile(destination);
+      return Object.freeze({ opened: true, fileName: exportRecord.fileName });
+    } catch {
+      throw historyError('HISTORY_VSCODE_OPEN_FAILED', 'The configured local editor could not be started for the selected exported file.');
+    }
   }
 
   _loadJournal() {

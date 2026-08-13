@@ -14,6 +14,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Start and stop a local Java process safely without a shell, read live output, and send console commands.
 - Inspect, dependency-plan, stage, and atomically promote local Paper/Spigot plugin JARs through a file picker without acquiring third-party downloads.
 - Inspect local files through a bounded byte-based file-converter queue and review an honest offline adapter catalog. The current package lists unavailable PDF, image, audio, video, archive, structured-data, text, and binary adapters without claiming a conversion engine is bundled.
+- Open a validated selected server folder or an existing application-created export in a discovered Visual Studio Code candidate or an explicitly selected local executable. Visual Studio Code is the preferred generated-export handoff; the application uses direct local process arguments and does not claim cloud editing, a guessed output path, or an editor save.
 - Use the CLI for setup, foreground operation, protected loopback RCON commands, plugin installation, and configuration automation.
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
@@ -118,6 +119,7 @@ The companion site also independently provides a deliberately bounded local conv
 - [Windows release packaging metadata](docs/features/release-packaging.md)
 - [Local file-converter foundation](docs/features/file-converter.md)
 - [Browser-local companion-site file converter](docs/features/browser-local-file-converter.md)
+- [External editor integration](docs/features/external-editor-integration.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Local history and safe exports](docs/features/local-history-and-safe-exports.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)

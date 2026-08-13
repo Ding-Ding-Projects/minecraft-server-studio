@@ -502,3 +502,52 @@ bridge, shell, server action, or download-location tracking exists.
 - The fast-delivery lane has not provided tests, linting, independent review,
   build/package verification, runtime interaction, or captures for this
   browser-local feature.
+
+## External editor integration
+
+The external-editor foundation is owned by
+`src/main/external-editor-service.cjs`. It discovers bounded local Visual Studio
+Code candidates, including supported `PATH`, standard, current-user,
+machine-wide, Insiders, and portable layouts. The compact preference surface
+can refresh discovery, choose a local `.exe` or folder through native pickers,
+reset to automatic selection, and open the current validated server root.
+
+The service stores only a validated executable path in an app-private atomic
+JSON record and derives its display label locally. Before a handoff it rechecks
+a canonical absolute `.exe`, existing file identity, bounded strings, and the
+selected target. It uses direct
+arguments with `shell: false`; no arbitrary command text, flags, environment
+expansion, URL, or script is accepted.
+
+Visual Studio Code is the shared route for a selected server root, a
+path-redacted app-private handoff record, and an existing verified local-history
+export. The service creates the handoff record only in its fixed app-private
+area and never guesses a user target path. Launch and validation errors remain
+concise and omit server and editor paths from logs and local history. The
+feature does not install an editor, contact a network service, transfer files,
+or claim that the external editor saved or applied a change.
+
+### Directly related documentation
+
+- `docs/features/external-editor-integration.md`: behavior, selection and
+  validation boundary, direct-launch behavior, recovery states, local-only
+  privacy boundary, incomplete-export boundary, and verification status.
+- `docs/features/README.md`, `README.md`, `ROADMAP.md`, and `CHANGELOG.md`:
+  indexed public feature record and current scope.
+
+### Verification boundary
+
+No tests, linting, type checks, independent review, build, package, runtime
+interaction, built-artifact interaction, capture, release, or deployment ran
+for this fast-delivery source and documentation lane. The completion inventory
+must keep localization, focused verification, packaged interaction, and capture
+evidence pending until independently recorded.
+
+### Remaining work
+
+- Add complete application-wide export coverage before representing every
+  record as editor-openable.
+- Add localized recovery copy, focused verification, packaged interaction, and
+  real capture evidence.
+- Keep editor discovery limited to the documented local executable routes and
+  preserve the direct non-shell launch boundary.
