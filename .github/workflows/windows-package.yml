@@ -219,21 +219,84 @@ jobs:
           if ($verified.isDraft -or $verified.targetCommitish -ne $env:GITHUB_SHA) {
             throw "Release verification failed for $tag."
           }
-          $expectedAssetNames = @($assets | ForEach-Object { [IO.Path]::GetFileName($_) } | Select-Object -Unique)
-          $publishedAssets = @{}
-          foreach ($asset in @($verified.assets)) {
-            $publishedAssets[$asset.name] = $asset
+          function Get-SetupAssetEquivalenceKey {
+            param([Parameter(Mandatory)][string] $Name)
+
+            $baseName = [IO.Path]::GetFileName($Name)
+            if (-not [string]::Equals($baseName, $Name, [StringComparison]::Ordinal)) {
+              return $null
+            }
+            $extension = [IO.Path]::GetExtension($baseName)
+            if (-not [string]::Equals($extension, '.exe', [StringComparison]::OrdinalIgnoreCase)) {
+              return $null
+            }
+            $stem = [IO.Path]::GetFileNameWithoutExtension($baseName)
+            if ([string]::IsNullOrWhiteSpace($stem)) {
+              return $null
+            }
+
+            # GitHub may replace literal space runs in release asset names with dots.
+            # The whole basename stem is compared; this is not a substring or wildcard match.
+            return ($stem -replace '[ .]+', '.')
           }
-          $missingAssets = @($expectedAssetNames | Where-Object { -not $publishedAssets.ContainsKey($_) })
-          if ($missingAssets.Count -gt 0) {
-            throw "Release $tag is missing required assets: $($missingAssets -join ', ')."
+
+          function Test-SetupAssetNameEquivalent {
+            param(
+              [Parameter(Mandatory)][string] $ExpectedName,
+              [Parameter(Mandatory)][string] $PublishedName
+            )
+
+            $expectedExtension = [IO.Path]::GetExtension($ExpectedName)
+            $publishedExtension = [IO.Path]::GetExtension($PublishedName)
+            if (-not [string]::Equals($expectedExtension, '.exe', [StringComparison]::OrdinalIgnoreCase) -or
+                -not [string]::Equals($expectedExtension, $publishedExtension, [StringComparison]::OrdinalIgnoreCase)) {
+              return $false
+            }
+            $expectedKey = Get-SetupAssetEquivalenceKey -Name $ExpectedName
+            $publishedKey = Get-SetupAssetEquivalenceKey -Name $PublishedName
+            return $null -ne $expectedKey -and $null -ne $publishedKey -and
+              [string]::Equals($expectedKey, $publishedKey, [StringComparison]::OrdinalIgnoreCase)
           }
-          $unavailableAssets = @($expectedAssetNames | Where-Object {
-            $asset = $publishedAssets[$_]
-            $asset.size -le 0 -or [string]::IsNullOrWhiteSpace($asset.downloadUrl)
+
+          $expectedLocalAssets = @($assets | ForEach-Object {
+            $assetName = [IO.Path]::GetFileName($_)
+            [pscustomobject]@{
+              Path = $_
+              Name = $assetName
+              SetupKey = Get-SetupAssetEquivalenceKey -Name $assetName
+            }
+          })
+          $expectedSetupAssets = @($expectedLocalAssets | Where-Object { $null -ne $_.SetupKey })
+          if ($expectedSetupAssets.Count -ne 1) {
+            throw "Expected exactly one local Setup.exe asset, found $($expectedSetupAssets.Count)."
+          }
+          $expectedSetupAsset = $expectedSetupAssets[0]
+          $expectedExactAssets = @($expectedLocalAssets | Where-Object { $_.Path -ne $expectedSetupAsset.Path })
+          $publishedAssets = @($verified.assets)
+
+          $publishedSetupMatches = @($publishedAssets | Where-Object {
+            Test-SetupAssetNameEquivalent -ExpectedName $expectedSetupAsset.Name -PublishedName ([string]$_.name)
+          })
+          if ($publishedSetupMatches.Count -ne 1) {
+            throw "Release $tag must contain exactly one Setup.exe asset equivalent to $($expectedSetupAsset.Name); found $($publishedSetupMatches.Count)."
+          }
+
+          $resolvedPublishedAssets = @($publishedSetupMatches[0])
+          foreach ($expectedAsset in $expectedExactAssets) {
+            $exactMatches = @($publishedAssets | Where-Object {
+              [string]::Equals([string]$_.name, $expectedAsset.Name, [StringComparison]::Ordinal)
+            })
+            if ($exactMatches.Count -ne 1) {
+              throw "Release $tag must contain exactly one asset named $($expectedAsset.Name); found $($exactMatches.Count)."
+            }
+            $resolvedPublishedAssets += $exactMatches[0]
+          }
+
+          $unavailableAssets = @($resolvedPublishedAssets | Where-Object {
+            ([int64]$_.size) -le 0 -or [string]::IsNullOrWhiteSpace([string]$_.downloadUrl)
           })
           if ($unavailableAssets.Count -gt 0) {
-            throw "Release $tag has missing or non-downloadable assets: $($unavailableAssets -join ', ')."
+            throw "Release $tag has missing or non-downloadable assets: $($unavailableAssets.name -join ', ')."
           }
           @(
             '## Windows package release',
