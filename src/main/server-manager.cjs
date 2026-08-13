@@ -21,6 +21,7 @@ const {
   presentRegistry,
   ROUTES
 } = require('./command-center-registry.cjs');
+const { discoverySnapshotStatus } = require('./minecraft-management-protocol.cjs');
 const javaRuntime = require('./java-runtime-manager.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
@@ -103,7 +104,7 @@ const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'paper': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection and setup source is registered; verification remains pending.' } },
   'spigot-buildtools': { implementationPath: ['src/main/buildtools-adapter.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/spigot-buildtools.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'BuildTools preflight and rich-control source is registered; verification remains pending.' } },
   'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, direct probes, and launch preflight source are registered; verification remains pending.' } },
-  'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Capability-first protocol discovery is being integrated.' } },
+  'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Endpoint-bound, time-limited discovery metadata and the provider-authentication boundary are registered; verification remains pending.' } },
   'command-center': { implementationPath: ['src/main/command-center-registry.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/command-center.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Registry and renderer integration are being completed.' } },
   'plugins': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Plugin staging is present; manifest inspection is being integrated.' } },
   'configuration': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'verified', detail: 'Rich server, world, gameplay, network, and advanced property controls are registered.' } },
@@ -390,6 +391,125 @@ async function downloadFile(url, destination, expectedSha256, emit) {
   emit?.(`Saved ${path.basename(destination)} (${Math.ceil(bytes.length / 1024 / 1024)} MB).`);
 }
 
+function owns(record, key) {
+  return Boolean(record) && Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function plainManagementRecord(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function discoveryStatusForManagement(management) {
+  const endpoint = stringValue(management?.endpoint).trim();
+  if (!endpoint) return { state: 'missing', snapshot: null };
+  return discoverySnapshotStatus(management?.discovery, endpoint, {
+    allowInsecureLoopback: Boolean(management?.allowInsecureLoopback)
+  });
+}
+
+function managementStateFor({ endpoint, credentialConfigured, discoveryState }) {
+  if (!endpoint) return 'not-configured';
+  if (credentialConfigured) return 'authentication-adapter-required';
+  if (discoveryState === 'ready') return 'ready';
+  if (discoveryState === 'expired') return 'discovery-expired';
+  if (discoveryState === 'endpoint-mismatch') return 'discovery-endpoint-changed';
+  if (discoveryState === 'invalid') return 'discovery-invalid';
+  return 'configured';
+}
+
+function copyDiscoverySnapshot(snapshot, state = null) {
+  if (!snapshot) return null;
+  const copy = {
+    schemaVersion: snapshot.schemaVersion,
+    protocol: snapshot.protocol,
+    version: snapshot.version,
+    discoveredAt: snapshot.discoveredAt,
+    expiresAt: snapshot.expiresAt,
+    methods: snapshot.methods.map((method) => ({ ...method })),
+    capabilities: [...snapshot.capabilities]
+  };
+  if (state) copy.state = state;
+  return copy;
+}
+
+function normalizeManagementForStorage(currentValue, patchValue) {
+  const current = plainManagementRecord(currentValue);
+  const patch = plainManagementRecord(patchValue);
+  const endpoint = owns(patch, 'endpoint')
+    ? stringValue(patch.endpoint).trim()
+    : stringValue(current.endpoint).trim();
+  const allowInsecureLoopback = owns(patch, 'allowInsecureLoopback')
+    ? Boolean(patch.allowInsecureLoopback)
+    : Boolean(current.allowInsecureLoopback);
+  const credentialConfigured = owns(patch, 'credentialConfigured')
+    ? Boolean(patch.credentialConfigured)
+    : Boolean(current.credentialConfigured);
+  const endpointChanged = endpoint !== stringValue(current.endpoint).trim()
+    || allowInsecureLoopback !== Boolean(current.allowInsecureLoopback);
+
+  let snapshot = null;
+  let discoveryState = 'missing';
+  if (owns(patch, 'discovery')) {
+    if (!endpoint) throw new Error('A management endpoint is required before discovery metadata can be stored.');
+    const status = discoverySnapshotStatus(patch.discovery, endpoint, { allowInsecureLoopback });
+    if (status.state !== 'ready') {
+      throw new Error('Only a current, endpoint-matching rpc.discover allowlist may be stored for a management connection.');
+    }
+    snapshot = status.snapshot;
+    discoveryState = status.state;
+  } else if (!endpointChanged && current.discovery) {
+    const status = discoveryStatusForManagement({ endpoint, allowInsecureLoopback, discovery: current.discovery });
+    if (status.state === 'ready' || status.state === 'expired') snapshot = status.snapshot;
+    discoveryState = status.state;
+  }
+
+  return {
+    endpoint,
+    allowInsecureLoopback,
+    credentialConfigured,
+    state: managementStateFor({ endpoint, credentialConfigured, discoveryState }),
+    discoveredAt: snapshot?.discoveredAt || null,
+    expiresAt: snapshot?.expiresAt || null,
+    capabilities: discoveryState === 'ready' ? snapshot.methods.map((method) => method.name) : [],
+    discovery: snapshot ? copyDiscoverySnapshot(snapshot) : null
+  };
+}
+
+function copyPublicManagement(server) {
+  const stored = plainManagementRecord(server.management);
+  const endpoint = stringValue(stored.endpoint).trim();
+  const allowInsecureLoopback = Boolean(stored.allowInsecureLoopback);
+  const credentialConfigured = Boolean(stored.credentialConfigured);
+  const discoveryStatus = discoveryStatusForManagement({
+    endpoint,
+    allowInsecureLoopback,
+    discovery: stored.discovery
+  });
+  const state = managementStateFor({
+    endpoint,
+    credentialConfigured,
+    discoveryState: discoveryStatus.state
+  });
+  const discovery = copyDiscoverySnapshot(discoveryStatus.snapshot, discoveryStatus.state);
+  const readyForInvocation = state === 'ready' && discoveryStatus.state === 'ready';
+  return {
+    endpoint,
+    allowInsecureLoopback,
+    state,
+    discoveredAt: discovery?.discoveredAt || null,
+    expiresAt: discovery?.expiresAt || null,
+    capabilities: readyForInvocation ? discovery.methods.map((method) => method.name) : [],
+    discovery,
+    authentication: {
+      state: credentialConfigured ? 'provider-adapter-required' : 'no-provider-adapter',
+      credentialConfigured,
+      message: credentialConfigured
+        ? 'A protected credential is stored, but this build has no documented provider-specific authentication adapter and will not send it.'
+        : 'No provider-specific authentication adapter is configured. Endpoints that require authentication are unavailable in this build.'
+    }
+  };
+}
+
 function copyPublicServer(server) {
   return {
     id: server.id,
@@ -403,13 +523,7 @@ function copyPublicServer(server) {
     rconSecretConfigured: Boolean(server.rconSecretConfigured),
     eulaAccepted: Boolean(server.eulaAccepted),
     gameRules: { ...normalizeGameRules(server.gameRules) },
-    management: {
-      endpoint: server.management?.endpoint || '',
-      allowInsecureLoopback: Boolean(server.management?.allowInsecureLoopback),
-      discoveredAt: server.management?.discoveredAt || null,
-      state: server.management?.state || 'not-configured',
-      capabilities: Array.isArray(server.management?.capabilities) ? [...server.management.capabilities] : []
-    },
+    management: copyPublicManagement(server),
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     settings: { ...server.settings }
@@ -663,8 +777,10 @@ class ServerManager {
       rconAvailable: toBoolean(server.settings?.['enable-rcon']) && Boolean(server.rconSecretConfigured),
       hostLifecycleAvailable: true
     };
-    const rpcDiscover = server.management?.capabilities?.length
-      ? { methods: server.management.capabilities }
+    const management = plainManagementRecord(server.management);
+    const discoveryStatus = discoveryStatusForManagement(management);
+    const rpcDiscover = !management.credentialConfigured && discoveryStatus.state === 'ready'
+      ? { methods: discoveryStatus.snapshot.methods }
       : undefined;
     const plugins = await this.pluginDescriptors(server);
     return createCommandCenterRegistry({ runtime, rpcDiscover, plugins });
@@ -780,8 +896,12 @@ class ServerManager {
       management: {
         endpoint: '',
         allowInsecureLoopback: false,
+        credentialConfigured: false,
         state: 'not-configured',
-        capabilities: []
+        discoveredAt: null,
+        expiresAt: null,
+        capabilities: [],
+        discovery: null
       },
       createdAt: now,
       updatedAt: now
@@ -829,16 +949,7 @@ class ServerManager {
     if (patch.settings) existing.settings = normalizeProperties({ ...existing.settings, ...patch.settings });
     if (patch.gameRules) existing.gameRules = normalizeGameRules({ ...existing.gameRules, ...patch.gameRules });
     if (patch.management) {
-      existing.management = {
-        ...existing.management,
-        endpoint: stringValue(patch.management.endpoint ?? existing.management?.endpoint).trim(),
-        allowInsecureLoopback: Boolean(patch.management.allowInsecureLoopback ?? existing.management?.allowInsecureLoopback),
-        state: stringValue(patch.management.state ?? existing.management?.state ?? 'not-configured'),
-        discoveredAt: patch.management.discoveredAt ?? existing.management?.discoveredAt ?? null,
-        capabilities: Array.isArray(patch.management.capabilities)
-          ? patch.management.capabilities.filter((method) => /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(method)).slice(0, 1024)
-          : (existing.management?.capabilities || [])
-      };
+      existing.management = normalizeManagementForStorage(existing.management, patch.management);
     }
     existing.updatedAt = new Date().toISOString();
     await this.writeServerFiles(existing);

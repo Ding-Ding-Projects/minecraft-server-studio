@@ -68,13 +68,48 @@ function sendVaultBackedRconCommand({ host, port, password, command }) {
   });
 }
 
-async function managementClientFor(server) {
+function managementCredentialIsStored(serverId) {
+  if (!credentialVault) return false;
+  try {
+    return credentialVault.has(credentialVault.createKey('minecraft-server-studio', `management:${serverId}`));
+  } catch {
+    return false;
+  }
+}
+
+function managementAuthenticationBlocker(server, serverId) {
+  if (!server.management?.credentialConfigured && !managementCredentialIsStored(serverId)) return null;
+  return 'A protected management credential is stored, but this build has no documented provider-specific authentication adapter. The generic WebSocket client intentionally will not send it. Clear the credential or use an endpoint that does not require authentication.';
+}
+
+async function managementClientFor(server, options = {}) {
   const endpoint = server.management?.endpoint;
   if (!endpoint) throw new Error('Configure a Minecraft Server Management Protocol endpoint before discovery.');
-  return new MinecraftManagementProtocolClient({
+  const authenticationBlocker = managementAuthenticationBlocker(server, options.serverId || server.id);
+  if (authenticationBlocker) throw new Error(authenticationBlocker);
+  const client = new MinecraftManagementProtocolClient({
     endpoint,
     allowInsecureLoopback: Boolean(server.management?.allowInsecureLoopback)
   });
+  if (options.restoreDiscovery === true) client.restoreDiscovery(server.management?.discovery);
+  return client;
+}
+
+function publicServerWithManagementCredentialState(server) {
+  if (!server || server.management?.authentication?.credentialConfigured || !managementCredentialIsStored(server.id)) return server;
+  return {
+    ...server,
+    management: {
+      ...server.management,
+      state: 'authentication-adapter-required',
+      capabilities: [],
+      authentication: {
+        state: 'provider-adapter-required',
+        credentialConfigured: true,
+        message: 'A protected credential is stored, but this build has no documented provider-specific authentication adapter and will not send it.'
+      }
+    }
+  };
 }
 
 function sendToRenderer(event) {
@@ -130,7 +165,7 @@ function requireManager() {
   return serverManager;
 }
 
-ipcMain.handle('studio:list-servers', () => requireManager().listServers());
+ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
 ipcMain.handle('studio:create-server', (_event, draft) => requireManager().createServer(draft));
 ipcMain.handle('studio:update-server', async (_event, id, patch) => {
   const safePatch = patch && typeof patch === 'object' ? { ...patch } : patch;
@@ -191,39 +226,55 @@ ipcMain.handle('studio:pick-java', async () => {
 });
 ipcMain.handle('studio:runtime-inventory', async (_event, id) => requireManager().runtimeInventory(id));
 ipcMain.handle('studio:configure-management', async (_event, id, configuration) => {
-  const token = String(configuration?.token || '');
+  const input = configuration && typeof configuration === 'object' ? configuration : {};
+  const server = await requireManager().getServer(id);
+  const endpoint = input.endpoint === undefined || input.endpoint === null || String(input.endpoint).trim() === ''
+    ? (server.management?.endpoint || '')
+    : String(input.endpoint).trim();
+  const allowInsecureLoopback = input.allowInsecureLoopback === undefined
+    ? Boolean(server.management?.allowInsecureLoopback)
+    : Boolean(input.allowInsecureLoopback);
+  if (endpoint) {
+    const client = new MinecraftManagementProtocolClient({ endpoint, allowInsecureLoopback });
+    client.validateEndpoint();
+  }
+
+  const token = String(input.token || '');
+  const clearCredential = input.clearCredential === true;
+  const existingCredential = Boolean(server.management?.credentialConfigured) || managementCredentialIsStored(id);
+  if (token && clearCredential) throw new Error('Save or clear the protected management credential, not both in the same request.');
   if (token) {
     if (!credentialVault) throw new Error('The protected credential vault is unavailable in this app build.');
     credentialVault.save(credentialVault.createKey('minecraft-server-studio', `management:${id}`), token);
   }
-  const server = await requireManager().getServer(id);
-  const client = configuration?.endpoint
-    ? new MinecraftManagementProtocolClient({ endpoint: configuration.endpoint, allowInsecureLoopback: Boolean(configuration.allowInsecureLoopback) })
-    : null;
-  if (client) client.validateEndpoint();
+  if (clearCredential) {
+    if (!credentialVault) throw new Error('The protected credential vault is unavailable in this app build.');
+    credentialVault.delete(credentialVault.createKey('minecraft-server-studio', `management:${id}`));
+  }
   return requireManager().updateServer(id, {
     management: {
-      endpoint: configuration?.endpoint || server.management?.endpoint || '',
-      allowInsecureLoopback: Boolean(configuration?.allowInsecureLoopback),
-      state: configuration?.endpoint ? 'configured' : 'not-configured'
+      endpoint,
+      allowInsecureLoopback,
+      credentialConfigured: token ? true : (clearCredential ? false : existingCredential)
     }
   });
 });
 ipcMain.handle('studio:discover-management', async (_event, id) => {
   const server = await requireManager().getServer(id);
-  const discovery = await (await managementClientFor(server)).discover();
+  const client = await managementClientFor(server, { serverId: id });
+  await client.discover();
+  const discovery = client.getDiscoverySnapshot();
   return requireManager().updateServer(id, {
     management: {
-      state: 'ready',
-      discoveredAt: new Date().toISOString(),
-      capabilities: discovery.methods
+      discovery
     }
   });
 });
 ipcMain.handle('studio:invoke-management', async (_event, id, method, params) => {
   const server = await requireManager().getServer(id);
-  if (!server.management?.capabilities?.includes(method)) throw new Error(`The selected server did not advertise '${method}'.`);
-  return (await managementClientFor(server)).invokeDiscovered(method, params || {});
+  const client = await managementClientFor(server, { serverId: id, restoreDiscovery: true });
+  if (!client.hasDiscoveredMethod(method)) throw new Error(`The selected server did not advertise '${method}'.`);
+  return client.invokeDiscovered(method, params || {});
 });
 ipcMain.handle('studio:command-catalog', async (_event, id) => requireManager().commandCatalog(id));
 ipcMain.handle('studio:command-plan', async (_event, id, request) => requireManager().commandPlan(id, request));
