@@ -33,10 +33,10 @@
               Minecraft Server Studio guides people from an empty folder to a configured Paper or Spigot server, with the controls they need close at hand and the technical work explained in plain language.
             </p>
             <div class="hero-actions">
-              <a class="secondary-button" data-mss-verified-installer="true" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.52.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" aria-describedby="download-status" rel="noopener">Download Windows x64 installer (v0.1.0)</a>
+              <a class="secondary-button" data-mss-verified-installer="true" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.65.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" aria-describedby="download-status" rel="noopener">Download Windows x64 installer (v0.1.0)</a>
               <a class="secondary-button" href="#feature-destinations">Explore feature previews</a>
             </div>
-            <p class="availability-note" id="download-status">Verified release <a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.52.1" rel="noopener">v0.1.0-build.52.1</a> provides the Windows x64 installer. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.</p>
+            <p class="availability-note" id="download-status">Verified release <a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.65.1" rel="noopener">v0.1.0-build.65.1</a> provides the Windows x64 installer. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning.</p>
           </div>
 
           <figure class="illustration-card">
@@ -122,7 +122,7 @@
             <p data-contract-hook="status-summary">This status panel reports browser-local page state and the static verified release metadata embedded in this page. It does not inspect a server, desktop app, release workflow, installer download, local runtime, or user account.</p>
             <div class="download-state-grid" aria-label="Browser-local status summary">
               <article data-contract-hook="status-current-state"><strong>Current state</strong><output role="status" aria-live="polite" aria-atomic="true">Ready — a static direct link points to a verified published installer; no transfer is running from this page.</output></article>
-              <article data-contract-hook="status-last-updated"><strong>Published release</strong><span>v0.1.0-build.52.1 · Windows x64 · unsigned installer</span></article>
+              <article data-contract-hook="status-last-updated"><strong>Published release</strong><span>v0.1.0-build.65.1 · Windows x64 · unsigned installer</span></article>
               <article data-contract-hook="status-no-bridge"><strong>No chat bridge</strong><span>No chat bridge or backend is connected. Nothing on this page can send status outside this browser.</span></article>
             </div>
             <div class="auth-layout">
@@ -132,17 +132,29 @@
             <div class="local-boundary-card" data-contract-hook="status-next-steps"><strong>Next step</strong><span>Download the verified Windows x64 installer using the direct link below. Installation and server management remain desktop-app tasks.</span></div>
           </article>
 
-          <article class="preview-panel" id="settings-preview" data-contract-surface="settings" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Settings and appearance</p><h2>Personalize the installed app</h2></div><span class="preview-status">Browser-local preview</span></div>
-            <p>These visible source hooks model settings that belong to the installed desktop app. No selection on this page is saved or sent.</p>
+          <article class="preview-panel" id="settings-preview" data-contract-surface="settings" tabindex="-1" aria-labelledby="settings-preview-heading">
+            <div class="panel-heading"><div><p class="eyebrow" data-mss-copy="settings-eyebrow">Settings and appearance</p><h2 id="settings-preview-heading" data-mss-copy="settings-title">Personalize this public page</h2></div><span class="preview-status" data-mss-copy="settings-status">Browser-local preferences</span></div>
+            <p data-mss-copy="settings-description">These visible controls persist bounded preferences for this public page in this browser only. They are not sent to a server or desktop application, and they do not change an installed app.</p>
             <div class="control-grid">
-              <label data-contract-hook="language-mode"><span>Language mode</span><select><option>English</option><option>Playful Hong Kong-style Cantonese</option><option>Bilingual</option></select></label>
-              <label data-contract-hook="english-funny-level"><span>English tone</span><input type="range" min="1" max="5" value="3" /><output>3 of 5</output></label>
-              <label data-contract-hook="cantonese-funny-level"><span>Cantonese tone</span><input type="range" min="1" max="5" value="3" /><output>3 of 5</output></label>
+              <label data-contract-hook="language-mode" data-mss-suppressed-by-school="true"><span data-mss-copy="language-label">Language mode</span><select aria-describedby="language-mode-help"><option value="english">English</option><option value="cantonese">Playful Hong Kong-style Cantonese</option><option value="bilingual">Bilingual</option></select><small id="language-mode-help" data-mss-copy="language-help">Choose how this public page presents its browser-local controls.</small></label>
+              <label data-contract-hook="english-funny-level" data-mss-suppressed-by-school="true"><span data-mss-copy="english-funny-label">English tone</span><input type="range" min="1" max="5" value="2" aria-describedby="english-funny-help" /><output aria-live="polite">2 of 5</output><small id="english-funny-help" data-mss-copy="english-funny-help">1 is fully serious; 5 is maximum playfulness. Warnings stay factual at every level.</small></label>
+              <label data-contract-hook="cantonese-funny-level" data-mss-suppressed-by-school="true"><span data-mss-copy="cantonese-funny-label">Cantonese tone</span><input type="range" min="1" max="5" value="2" aria-describedby="cantonese-funny-help" /><output aria-live="polite">2 of 5</output><small id="cantonese-funny-help" data-mss-copy="cantonese-funny-help">This independent setting changes Cantonese presentation only.</small></label>
+              <label data-contract-hook="emoji-toggle"><span data-mss-copy="emoji-label">Show emojis in browser-local notices</span><input type="checkbox" checked /><small data-mss-copy="emoji-help">Emojis decorate notices only; labels, actions, and factual messages stay unchanged.</small></label>
               <label data-contract-hook="appearance-theme"><span>Theme</span><select><option>System default</option><option>Light</option><option>Dark</option></select></label>
               <label data-contract-hook="app-logo-upload"><span>Custom app logo</span><input type="file" accept="image/*" /><small>Preview input only; no image leaves this page.</small></label>
-              <label data-contract-hook="personal-vocabulary-upload"><span>Personal vocabulary JSON</span><input type="file" accept="application/json,.json" /><small>Preview input only; no vocabulary is loaded here.</small></label>
+              <label data-contract-hook="personal-vocabulary-upload" data-mss-suppressed-by-school="true"><span data-mss-copy="vocabulary-label">Personal vocabulary JSON</span><input type="file" accept="application/json,.json" aria-describedby="personal-vocabulary-help" /><small id="personal-vocabulary-help" data-mss-copy="vocabulary-help">Version 1 JSON is checked locally before a bounded cache can be applied. The source file name and path are not retained.</small><button type="button" data-mss-vocabulary-clear="true">Clear local vocabulary</button><output data-mss-vocabulary-status="true" aria-live="polite">No validated vocabulary JSON is loaded in this browser.</output></label>
             </div>
+            <section class="school-mode-card" data-contract-hook="school-mode" aria-labelledby="school-mode-heading">
+              <div><p class="eyebrow" data-mss-copy="school-eyebrow">Browser-local presentation lock</p><h3 id="school-mode-heading"><span data-mss-school-name="true">School mode</span></h3></div>
+              <p data-mss-school-summary="true">This browser-local mode temporarily forces English and hides the language, funny-level, and personal-vocabulary controls. It is a user-experience lock, not security protection.</p>
+              <div class="school-mode-grid" data-mss-school-setup="true">
+                <label><span data-mss-copy="school-name-label">Mode name</span><input type="text" maxlength="80" data-mss-school-name-input="true" value="School mode" /><small data-mss-copy="school-name-help">This exact name replaces the shipped name after you save it.</small></label>
+                <label><span data-mss-copy="school-credential-label">Browser-local unlock code</span><input type="password" minlength="4" maxlength="64" autocomplete="new-password" data-mss-school-credential-setup="true" /><small data-mss-copy="school-credential-help">A one-way local verifier is stored only in this browser. The code itself is never stored or exported.</small></label>
+              </div>
+              <div class="inline-controls school-mode-actions"><button type="button" data-mss-school-save-name="true">Save mode name</button><button type="button" data-mss-school-enable="true">Configure and enable School mode</button><label data-mss-school-unlock="true" hidden><span>Unlock code</span><input type="password" minlength="4" maxlength="64" autocomplete="current-password" data-mss-school-credential-unlock="true" /></label><button type="button" data-mss-school-disable="true" hidden>Turn off School mode</button><button type="button" data-mss-school-reset="true" hidden>Reset browser-local lock</button></div>
+              <output data-mss-school-status="true" role="status" aria-live="polite">Set a browser-local unlock code before enabling this mode.</output>
+              <p class="school-mode-boundary" data-mss-school-boundary="true">If the code is forgotten, clear this site's storage in your browser. That resets this page's local preferences, vocabulary cache, local lock metadata, and this mode; it does not change desktop-app or server data.</p>
+            </section>
             <div class="inline-controls" data-contract-hook="scheduled-settings"><button type="button" disabled>Schedule a setting in the desktop app</button><button type="button" disabled>Open appearance editor in the desktop app</button><span>All actions are unavailable on this static page.</span></div>
             <div class="preview-search" data-contract-hook="settings-search-regex"><label><span>Find a setting</span><input type="search" placeholder="Search settings" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
           </article>
@@ -194,21 +206,21 @@
           <article class="preview-panel" id="notifications-preview" data-contract-surface="notification-center" tabindex="-1">
             <div class="panel-heading"><div><p class="eyebrow">Notification center</p><h2>See status without a blocking prompt</h2></div><span class="preview-status">Preview only</span></div>
             <p>The desktop app maintains its notification center locally. This static page only documents its non-blocking notification behavior.</p>
-            <ul class="notification-list" data-contract-hook="notification-history"><li><span class="notification-dot notification-dot--info"></span><div><strong>Verified installer link</strong><small>Release v0.1.0-build.52.1 provides a Windows x64 installer. The asset is unsigned, and Windows may show an unknown-publisher or SmartScreen warning.</small></div></li><li><span class="notification-dot notification-dot--quiet"></span><div><strong>No server activity is connected</strong><small>This browser page does not start, stop, or observe a server.</small></div></li></ul>
+            <ul class="notification-list" data-contract-hook="notification-history"><li><span class="notification-dot notification-dot--info"></span><div><strong>Verified installer link</strong><small>Release v0.1.0-build.65.1 provides a Windows x64 installer. The asset is unsigned, and Windows may show an unknown-publisher or SmartScreen warning.</small></div></li><li><span class="notification-dot notification-dot--quiet"></span><div><strong>No server activity is connected</strong><small>This browser page does not start, stop, or observe a server.</small></div></li></ul>
             <div class="inline-controls" data-contract-hook="notification-bulk-actions"><button type="button" disabled>Manage notifications in desktop app</button><span>Nothing is dismissed or saved here.</span></div>
           </article>
 
           <article class="preview-panel" id="downloads-preview" data-contract-surface="download-flow" tabindex="-1">
             <div class="panel-heading"><div><p class="eyebrow">Downloads and releases</p><h2>Installer status stays factual</h2></div><span class="preview-status">Verified v0.1.0 · Windows x64</span></div>
             <p>A start, progress, and completion flow belongs to the installed app and its browser-extension integration. This public landing page provides a static direct link to a published asset; it does not simulate a transfer, observe download progress, or confirm a download or installation.</p>
-            <div class="download-state-grid" data-contract-hook="download-states"><article><strong>Start</strong><span><a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.52.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" rel="noopener">Direct installer link available</a> for Windows x64 version 0.1.0.</span></article><article><strong>Progress</strong><span>No transfer is in progress or monitored on this static page.</span></article><article><strong>Completion</strong><span>This page cannot confirm whether a download or installation completed.</span></article></div>
-            <a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.52.1" rel="noopener">View release v0.1.0-build.52.1</a>
+            <div class="download-state-grid" data-contract-hook="download-states"><article><strong>Start</strong><span><a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.65.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" rel="noopener">Direct installer link available</a> for Windows x64 version 0.1.0.</span></article><article><strong>Progress</strong><span>No transfer is in progress or monitored on this static page.</span></article><article><strong>Completion</strong><span>This page cannot confirm whether a download or installation completed.</span></article></div>
+            <a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.65.1" rel="noopener">View release v0.1.0-build.65.1</a>
           </article>
         </section>
 
         <section class="install-section" id="install">
-          <div><p class="eyebrow">Installer availability</p><h2>The Windows x64 desktop installer is available.</h2><p>Release v0.1.0-build.52.1 contains the version 0.1.0 Setup.exe. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning. This page provides the direct asset link but does not monitor or confirm the download or installation.</p></div>
-          <div class="install-actions"><a class="secondary-button" data-mss-verified-installer="true" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.52.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" aria-describedby="release-status" rel="noopener">Download Windows x64 installer (v0.1.0)</a><a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.52.1" rel="noopener">View release v0.1.0-build.52.1</a><p id="release-status">Verified asset: Minecraft.Server.Studio-0.1.0-x64-Setup.exe · Windows x64 · unsigned.</p></div>
+          <div><p class="eyebrow">Installer availability</p><h2>The Windows x64 desktop installer is available.</h2><p>Release v0.1.0-build.65.1 contains the version 0.1.0 Setup.exe. It is unsigned, so Windows may show an unknown-publisher or SmartScreen warning. This page provides the direct asset link but does not monitor or confirm the download or installation.</p></div>
+          <div class="install-actions"><a class="secondary-button" data-mss-verified-installer="true" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.65.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" aria-describedby="release-status" rel="noopener">Download Windows x64 installer (v0.1.0)</a><a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.65.1" rel="noopener">View release v0.1.0-build.65.1</a><p id="release-status">Verified asset: Minecraft.Server.Studio-0.1.0-x64-Setup.exe · Windows x64 · unsigned.</p></div>
         </section>
       </main>
 
@@ -220,6 +232,6 @@
     </div>
     <div data-mss-live-region role="status" aria-live="polite" aria-atomic="true"></div>
     <script src="contract.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
