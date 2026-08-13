@@ -30,6 +30,7 @@
     regexSampleCharacters: 16 * 1024,
     regexMatches: 200,
     vocabularyBytes: 64 * 1024,
+    vocabularyNestingDepth: 3,
     vocabularyEntries: 250,
     vocabularyKeyCharacters: 128,
     vocabularyValueCharacters: 512
@@ -382,7 +383,8 @@
   }
 
   function normalizeVocabularyPayload(raw) {
-    if (!isPlainObject(raw) || hasUnsafeKeys(raw) || raw.version !== 1 || !Array.isArray(raw.replacements)) {
+    const rootKeys = isPlainObject(raw) ? Object.keys(raw).sort() : [];
+    if (!isPlainObject(raw) || hasUnsafeKeys(raw) || rootKeys.length !== 2 || rootKeys[0] !== "replacements" || rootKeys[1] !== "version" || raw.version !== 1 || !Array.isArray(raw.replacements)) {
       return null;
     }
     if (raw.replacements.length > LIMITS.vocabularyEntries) {
@@ -398,9 +400,9 @@
       if (keys.length !== 2 || keys[0] !== "from" || keys[1] !== "to") {
         return null;
       }
-      const from = boundedText(replacement.from, LIMITS.vocabularyKeyCharacters, "");
-      const to = boundedText(replacement.to, LIMITS.vocabularyValueCharacters, "");
-      if (!from || from.length !== replacement.from.length || to.length !== replacement.to.length || seen.has(from)) {
+      const from = replacement.from;
+      const to = replacement.to;
+      if (typeof from !== "string" || typeof to !== "string" || Array.from(from).length === 0 || Array.from(from).length > LIMITS.vocabularyKeyCharacters || Array.from(to).length > LIMITS.vocabularyValueCharacters || seen.has(from)) {
         return null;
       }
       seen.add(from);
@@ -1404,6 +1406,11 @@
     let cursor = 0;
     const source = String(text);
     function whitespace() { while (/\s/.test(source[cursor] || "")) cursor += 1; }
+    function assertNestingDepth(depth) {
+      if (depth > LIMITS.vocabularyNestingDepth) {
+        throw new Error(`Vocabulary JSON nesting exceeds the supported maximum of ${LIMITS.vocabularyNestingDepth} levels.`);
+      }
+    }
     function stringToken() {
       const start = cursor;
       if (source[cursor] !== '"') throw new Error("Expected a JSON string.");
@@ -1419,18 +1426,19 @@
       }
       throw new Error("Unterminated JSON string.");
     }
-    function value() {
+    function value(depth) {
       whitespace();
       const character = source[cursor];
-      if (character === "{") return object();
-      if (character === "[") return array();
+      if (character === "{") return object(depth + 1);
+      if (character === "[") return array(depth + 1);
       if (character === '"') return stringToken();
       const primitive = /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(source.slice(cursor));
       if (!primitive) throw new Error("Invalid JSON value.");
       cursor += primitive[0].length;
       return undefined;
     }
-    function object() {
+    function object(depth) {
+      assertNestingDepth(depth);
       const keys = new Set();
       cursor += 1;
       whitespace();
@@ -1443,7 +1451,7 @@
         whitespace();
         if (source[cursor] !== ":") throw new Error("Expected a colon after a JSON key.");
         cursor += 1;
-        value();
+        value(depth);
         whitespace();
         if (source[cursor] === "}") { cursor += 1; return {}; }
         if (source[cursor] !== ",") throw new Error("Expected a comma between JSON fields.");
@@ -1451,12 +1459,13 @@
       }
       throw new Error("Unterminated JSON object.");
     }
-    function array() {
+    function array(depth) {
+      assertNestingDepth(depth);
       cursor += 1;
       whitespace();
       if (source[cursor] === "]") { cursor += 1; return []; }
       while (cursor < source.length) {
-        value();
+        value(depth);
         whitespace();
         if (source[cursor] === "]") { cursor += 1; return []; }
         if (source[cursor] !== ",") throw new Error("Expected a comma between JSON values.");
@@ -1464,15 +1473,37 @@
       }
       throw new Error("Unterminated JSON array.");
     }
-    value();
+    value(0);
     whitespace();
     if (cursor !== source.length) throw new Error("Unexpected content after JSON data.");
     return JSON.parse(source);
   }
 
+  function utf8ByteLength(text) {
+    const source = String(text);
+    let bytes = 0;
+    for (let index = 0; index < source.length; index += 1) {
+      const code = source.charCodeAt(index);
+      if (code <= 0x7f) bytes += 1;
+      else if (code <= 0x7ff) bytes += 2;
+      else if (code >= 0xd800 && code <= 0xdbff && index + 1 < source.length) {
+        const next = source.charCodeAt(index + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) {
+          bytes += 4;
+          index += 1;
+        } else {
+          bytes += 3;
+        }
+      } else {
+        bytes += 3;
+      }
+    }
+    return bytes;
+  }
+
   function loadPersonalVocabulary(text) {
     if (typeof text !== "string") return { ok: false, error: "Choose a JSON file before loading vocabulary replacements." };
-    if (text.length > LIMITS.vocabularyBytes) return { ok: false, error: `Vocabulary files are limited to ${LIMITS.vocabularyBytes} bytes.` };
+    if (utf8ByteLength(text) > LIMITS.vocabularyBytes) return { ok: false, error: `Vocabulary files are limited to ${LIMITS.vocabularyBytes} bytes.` };
     let parsed;
     try {
       parsed = parseJsonWithDuplicateKeyGuard(text);
