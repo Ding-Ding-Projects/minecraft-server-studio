@@ -101,7 +101,8 @@ const RECORDS = [
   ["v0.1.0-build.102.1", "2026-08-13", "ee80688a2ded6aa331d7c9d9172ae560a086a6dd", "docs: clarify BuildTools plan-only boundary"],
   ["v0.1.0-build.104.1", "2026-08-13", "371858e62b159c7519bb6b9736e3384705da88a3", "feat: add desktop tab workspace"],
   ["v0.1.0-build.105.1", "2026-08-13", "3ad97337eaf85e227e7b5ba5a30cb14f9d903c42", "docs(site): refresh verified installer link"],
-  ["v0.1.0-build.106.1", "2026-08-13", "6cd9588b5e9508517aa730ea9303b06e92d0cda6", "fix: validate runtime Squirrel update versions"]
+  ["v0.1.0-build.106.1", "2026-08-13", "6cd9588b5e9508517aa730ea9303b06e92d0cda6", "fix: validate runtime Squirrel update versions"],
+  ["v0.1.0-build.107.1", "2026-08-13", "e0ef104a09db5f06aee0728141f0487cddbd64fe", "release: select unused dim-sum catalog metadata"]
 ];
 
 export const STATIC_CHANGELOG_CATALOG = Object.freeze(RECORDS.map(function (record) {
