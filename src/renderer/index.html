@@ -81,6 +81,55 @@
           </div>
         </section>
 
+        <section class="file-converter-card" id="file-converter-destination" aria-labelledby="file-converter-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LOCAL-ONLY CONVERTER FOUNDATION</p>
+              <h3 id="file-converter-title">Local file converter</h3>
+              <p class="muted">Choose a local file for a bounded byte inspection. This build keeps every known adapter visible, but only enables an adapter after a verified bundled offline engine exists. No source file leaves this device or changes during inspection.</p>
+            </div>
+            <button id="refresh-converter-button" type="button" class="outlined-action">Refresh converter</button>
+          </div>
+          <div class="converter-source-row">
+            <label class="field wide"><span>Source file</span><div class="browse-row"><input id="converter-source-path" type="text" readonly placeholder="Choose a local file to inspect"><button id="browse-converter-source-button" type="button" class="primary-action">Choose file</button></div><small>The file picker is the only source-selection route. The app reads at most 64 KiB to classify it and does not inspect by filename extension alone.</small></label>
+            <section id="converter-source-summary" class="status-record" data-state="idle" aria-live="polite"><strong>No local source file selected</strong><span>Choose a file to record an inspection-only queue item. No conversion can start until a future verified bundled adapter is available.</span></section>
+          </div>
+          <div class="converter-search-row">
+            <label class="field"><span>Find an adapter</span><input id="converter-adapter-search" type="search" maxlength="128" placeholder="Search name, source, or target" autocomplete="off"></label>
+            <label class="switch-field converter-regex-switch"><input id="converter-regex-mode" type="checkbox"><span><strong>Use regular expression</strong><small>Plain-text search is the default.</small></span></label>
+            <button id="converter-regex-builder-button" type="button" class="outlined-action" aria-controls="converter-regex-builder" aria-expanded="false">Build pattern</button>
+          </div>
+          <section id="converter-regex-builder" class="converter-regex-builder" aria-labelledby="converter-regex-builder-title" hidden>
+            <div>
+              <p class="eyebrow">ADJACENT REGEX BUILDER</p>
+              <h4 id="converter-regex-builder-title">ECMAScript pattern helper</h4>
+              <p class="muted">Patterns and samples stay local. This bounded helper accepts a maximum 128-character pattern and evaluates only the visible catalog records.</p>
+            </div>
+            <div class="regex-token-row" aria-label="Regex construction tokens">
+              <button type="button" class="outlined-action" data-converter-regex-token="[A-Za-z]">Character class</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="^">Anchor</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="()">Group</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="|">Alternation</button>
+              <button type="button" class="outlined-action" data-converter-regex-token="*">Quantifier</button>
+            </div>
+            <div class="settings-grid">
+              <label class="field wide"><span>Raw pattern</span><input id="converter-regex-pattern" type="text" maxlength="128" placeholder="Pattern mirrors the adapter search field"></label>
+              <label class="switch-field"><input id="converter-regex-flag-ignore-case" type="checkbox" checked><span><strong>Ignore case</strong><small>Uses the ECMAScript <code>i</code> flag.</small></span></label>
+              <label class="switch-field"><input id="converter-regex-flag-multiline" type="checkbox"><span><strong>Multiline anchors</strong><small>Uses the ECMAScript <code>m</code> flag.</small></span></label>
+              <label class="field wide"><span>Sample text</span><input id="converter-regex-sample" type="text" maxlength="512" placeholder="Optional local sample for pattern feedback"></label>
+              <p id="converter-regex-feedback" class="wide muted" aria-live="polite">Plain-text search is active. Enable regular-expression mode to apply a pattern.</p>
+            </div>
+          </section>
+          <section class="converter-catalog-section" aria-labelledby="converter-catalog-title">
+            <div><h4 id="converter-catalog-title">Adapter catalog</h4><p id="converter-catalog-summary" class="muted">Loading the local adapter registry…</p></div>
+            <div id="converter-adapter-catalog" class="converter-adapter-catalog" aria-live="polite"></div>
+          </section>
+          <section class="converter-queue-section" aria-labelledby="converter-queue-title">
+            <div><h4 id="converter-queue-title">Persistent inspection queue</h4><p class="muted">The queue is app-private and records inspection-only items. It does not copy, upload, convert, or alter the selected source.</p></div>
+            <div id="converter-queue" class="converter-queue" aria-live="polite"></div>
+          </section>
+        </section>
+
         <section class="empty-state" id="empty-state">
           <div class="empty-glyph" aria-hidden="true">▦</div>
           <h3 data-i18n="empty.title">Build a local server, not a pile of terminal commands.</h3>

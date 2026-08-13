@@ -83,6 +83,18 @@ latest-release path; a visitor or desktop user cannot provide another feed URL.
 See [Unsigned automatic updates](unsigned-automatic-updates.md) for the state
 and recovery contract.
 
+## File-converter inventory boundary
+
+The `file-converter` row now names the registered source paths for the native
+source picker, bounded byte-inspection module, local queue skeleton, disabled
+adapter catalog, and renderer destination. That row remains incomplete: source
+registration is not evidence that a PDF, image, audio, video, archive,
+spreadsheet, text, or binary conversion ran. No output adapter is enabled until
+its exact bundled offline dependency, resource bounds, output validator,
+localization, tests, built-artifact interaction, and capture evidence are
+independently supplied. See [Local file-converter foundation](file-converter.md)
+for the present local-only boundary.
+
 ## Source and evidence boundaries
 
 The module is only a schema and evaluator. It is not source evidence that any server action, installer, converter, authenticator, or local model manager exists. A caller must populate implementation and documentation paths, then attach evidence for the exact desktop surface it has implemented.
@@ -103,3 +115,4 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
+- [Local file-converter foundation](file-converter.md)

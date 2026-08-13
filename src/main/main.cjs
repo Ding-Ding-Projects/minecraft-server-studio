@@ -6,6 +6,7 @@ const { MinecraftManagementProtocolClient } = require('./minecraft-management-pr
 const { StudioSettingsService } = require('./studio-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
+const { FileConverter } = require('./file-converter.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
@@ -33,6 +34,7 @@ const MAX_RCON_PACKET_BYTES = 256 * 1024;
 const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 let statusHubBridge;
 let updateController;
+let fileConverter;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -339,6 +341,11 @@ app.whenReady().then(async () => {
     },
     onEvent: sendToRenderer
   });
+  fileConverter = new FileConverter({
+    dataDir: path.join(app.getPath('userData'), 'file-converter'),
+    onEvent: sendToRenderer
+  });
+  await fileConverter.initialize();
   updateController = new UpdateController({
     app,
     autoUpdater,
@@ -372,6 +379,11 @@ function requireManager() {
 function requireUpdater() {
   if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
   return updateController;
+}
+
+function requireFileConverter() {
+  if (!fileConverter) throw new Error('Minecraft Server Studio local converter controls are still starting.');
+  return fileConverter;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -476,6 +488,13 @@ ipcMain.handle('studio:pick-plugin', async () => {
     filters: [{ name: 'Java archive', extensions: ['jar'] }]
   });
   return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('studio:converter-snapshot', () => requireFileConverter().snapshot());
+ipcMain.handle('studio:pick-converter-source', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile']
+  });
+  return result.canceled ? null : requireFileConverter().inspectSource(result.filePaths[0]);
 });
 ipcMain.handle('studio:open-folder', async (_event, folder) => {
   const error = await shell.openPath(folder);

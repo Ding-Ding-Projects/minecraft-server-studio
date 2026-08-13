@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('studio', {
   promoteStagedPlugins: (id) => ipcRenderer.invoke('studio:promote-staged-plugins', id),
   pickFolder: () => ipcRenderer.invoke('studio:pick-folder'),
   pickPlugin: () => ipcRenderer.invoke('studio:pick-plugin'),
+  converterSnapshot: () => ipcRenderer.invoke('studio:converter-snapshot'),
+  pickConverterSource: () => ipcRenderer.invoke('studio:pick-converter-source'),
   openFolder: (folder) => ipcRenderer.invoke('studio:open-folder', folder),
   dataDirectory: () => ipcRenderer.invoke('studio:data-directory'),
   localStatus: () => ipcRenderer.invoke('studio:local-status'),
