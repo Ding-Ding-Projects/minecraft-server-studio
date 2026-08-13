@@ -20,7 +20,9 @@ Open **Studio preferences** and use **Appearance and tabs foundation** to apply 
 | Active tab | Persists the currently selected server-settings tab after a short local debounce. |
 | Direct target editor | Applies and persists color and corner-radius overrides for the app shell, server-settings tab strip, and primary actions. Reset restores a target to the active theme's inherited values. |
 
-The server-settings strip, including the Paper JAR CLI tab, has a working all-tabs overflow list and a local tab search. Both the tab search and the appearance-settings search keep plain text as their default and expose an anchored regex builder with raw patterns, flags, construction tokens, local sample text, live match counts, and capture-group feedback. An invalid regex leaves all entries visible and reports the error instead of applying a partial filter.
+The server-settings strip, including the Paper JAR CLI tab, has a working all-tabs overflow list, local tab search, persisted ordering, pinning, grouping, and protected bulk-close controls. The advanced workspace remains intentionally limited to the current desktop window. It does not claim multi-window tab discovery or control. See [Desktop tab workspace](desktop-tab-workspace.md) for its persistence, search, grouping, accessible-orientation, and protected-close boundaries.
+
+The current-strip, group, and master tab searches keep plain text as their default and expose separate anchored regex builders with raw patterns, flags, construction tokens, local sample text, live match counts, and capture-group feedback. An invalid regex leaves all entries visible and reports the error instead of applying a partial filter.
 
 Each query and pattern is limited to 256 characters and is evaluated only against the small local tab/control labels owned by this desktop surface. The builder does not send the query or sample labels to a network service.
 
@@ -49,7 +51,7 @@ The following remain incomplete and visibly identified as such in the preference
 - installed-font enumeration, variable-font axes, and word-processor-depth typography;
 - an infinite color picker, color-space translator, contrast audit, and per-property locks;
 - per-element editors for every dialog, menu, control, state, and pseudo-state;
-- tab pinning, reordering, grouping, cross-window discovery, and bulk tab actions;
+- cross-window tab discovery or a multi-window tab workspace;
 - a full command palette; and
 - full application-wide localization and every-search-surface regex coverage.
 

@@ -55,6 +55,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('appearance-and-tabs', 'appearance-and-tabs.md', 'Appearance and tab-navigation foundation', 'Minecraft Server Studio now has a bounded, local desktop appearance and tab-navigation foundation.'),
   entry('site-logo-customization', 'site-logo-customization.md', 'Browser-local companion-site logo customization', 'Choose a shipped browser-rendered mark or a bounded local PNG/JPEG display representation for the companion site.'),
   entry('desktop-command-palette', 'desktop-command-palette.md', 'Desktop command palette foundation', 'Find real local renderer destinations and non-secret controls with Ctrl+Shift+F.'),
+  entry('desktop-tab-workspace', 'desktop-tab-workspace.md', 'Desktop tab workspace', 'Manage the current window\'s server-settings tabs with local persistence, search, grouping, pinning, and protected bulk-close boundaries.'),
   entry('local-status-and-completeness', 'local-status-and-completeness.md', 'Local status and desktop completeness', 'Read the local status surface and evidence inventory.'),
   entry('local-history-and-safe-exports', 'local-history-and-safe-exports.md', 'Local history and safe exports', 'Browse bounded redacted event metadata and create safe structured exports.'),
   entry('desktop-notifications-and-destructive-confirmation', 'desktop-notifications-and-destructive-confirmation.md', 'Desktop notifications and destructive confirmation', 'Review bounded local notification history and the two-control, full-slider destructive-action decision boundary.'),

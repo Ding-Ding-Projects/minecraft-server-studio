@@ -61,6 +61,25 @@ fast-delivery lane. Localization breadth, accessible interaction, notification
 actions, durable-storage exercise, built-site interaction, and capture evidence
 remain unverified.
 
+## Desktop tab workspace documentation candidate
+
+The desktop documentation now describes a one-window server-settings tab workspace. It persists tab order, pin state, group membership/order, collapsed groups, active selection, and dock edge in the strict local appearance/navigation record. It has current-strip, group, and master searches with separate local anchored regular-expression builders, an overflow route, dock-aware tab-list orientation and arrow-key navigation, and bulk-close previews that exclude pinned and locked tabs by default. The workspace neither discovers nor manages tabs outside the current desktop window.
+
+### Directly related paths
+
+- `docs/features/desktop-tab-workspace.md`
+- `docs/features/appearance-and-tabs.md`
+- `docs/features/local-status-and-completeness.md`
+- `docs/features/README.md`
+- `src/main/offline-docs.cjs`
+- `README.md`
+- `ROADMAP.md`
+- `CHANGELOG.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, runtime interaction, accessibility validation, or screenshots were run or claimed for this documentation lane under the active fast-delivery workflow. The local completeness inventory keeps localization, test, capture, and interaction evidence pending.
+
 ## Public companion-site appearance and tab-navigation documentation candidate
 
 The public companion site now has documentation and a per-surface inventory entry for a browser-local appearance and tab-navigation foundation. Its independent local state covers system/light/dark theme, density, accent, safe typography, bounded appearance-target controls, left/right/top/bottom tab docking, active/order/pin/group state, overflow, and separate current-strip, group, and master tab searches with anchored regular-expression builders. It remains a page-local feature only: it does not alter the installed application, operate a Minecraft server, manage an installer transfer, send an account request, or contact a backend.
