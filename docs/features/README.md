@@ -13,3 +13,4 @@
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
 - [Local status and completeness](local-status-and-completeness.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
+- [Offline documentation browser](offline-documentation-browser.md)

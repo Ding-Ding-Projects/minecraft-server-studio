@@ -13,6 +13,12 @@ const state = {
   restorePlan: null,
   paperUpdatePlan: null,
   paperRollbackPlan: null,
+  offlineDocumentation: null,
+  offlineDocument: null,
+  documentationOpen: false,
+  documentationQuery: '',
+  documentationRegex: { enabled: false, pattern: '', flags: '' },
+  documentationPendingAnchor: '',
   activeTab: 'general',
   pluginPath: '',
   experience: null,
@@ -1199,6 +1205,11 @@ function renderEditor() {
   const server = selectedServer();
   const editor = $('#server-editor');
   const empty = $('#empty-state');
+  if (state.documentationOpen) {
+    editor.classList.add('hidden');
+    empty.classList.add('hidden');
+    return;
+  }
   if (!server) {
     editor.classList.add('hidden');
     empty.classList.remove('hidden');
@@ -1276,6 +1287,344 @@ function rconConsoleLine(value) {
   return `${prefix}: ${response.text || '(no response)'}`;
 }
 
+const DOCUMENTATION_REGEX_TOKENS = Object.freeze({
+  literal: 'text',
+  class: '[A-Za-z]',
+  anchor: '^$',
+  group: '(pattern)',
+  alternation: 'left|right',
+  quantifier: '+'
+});
+
+function documentationDocuments() {
+  return Array.isArray(state.offlineDocumentation?.documents) ? state.offlineDocumentation.documents : [];
+}
+
+function documentationSearchText(record) {
+  return [record?.title, record?.summary, record?.searchText]
+    .filter((value) => typeof value === 'string')
+    .join('\n')
+    .slice(0, 20 * 1024);
+}
+
+function normalizedDocumentationFlags(value) {
+  const flags = String(value || '').split('').filter((flag, index, source) => source.indexOf(flag) === index).join('');
+  return /^[ims]*$/.test(flags) ? flags.split('').sort().join('') : '';
+}
+
+function documentationRegexInput() {
+  const pattern = String($('#documentation-regex-pattern')?.value || state.documentationRegex.pattern || '').trim();
+  const flags = normalizedDocumentationFlags([
+    $('#documentation-regex-flag-i')?.checked ? 'i' : '',
+    $('#documentation-regex-flag-m')?.checked ? 'm' : '',
+    $('#documentation-regex-flag-s')?.checked ? 's' : ''
+  ].join(''));
+  return { pattern, flags };
+}
+
+function documentationRegexSafetyIssue(pattern) {
+  if (!pattern) return 'Enter a pattern before enabling regex search.';
+  if (pattern.length > 256) return 'Regex patterns are limited to 256 characters.';
+  if (/[\u0000-\u001f\u007f]/.test(pattern)) return 'Regex patterns cannot contain control characters.';
+  if (/(?:\((?:[^()\\]|\\.){0,160}(?:[+*]|\{\d+(?:,\d*)?\})[^)]*\))(?:[+*]|\{\d+(?:,\d*)?\})/.test(pattern)) {
+    return 'Nested repeating groups are rejected to keep local search responsive.';
+  }
+  return '';
+}
+
+function createDocumentationRegex(pattern, flags) {
+  const safetyIssue = documentationRegexSafetyIssue(pattern);
+  if (safetyIssue) return { regex: null, error: safetyIssue };
+  try {
+    return { regex: new RegExp(pattern, normalizedDocumentationFlags(flags)), error: '' };
+  } catch (error) {
+    return { regex: null, error: `Regex syntax is invalid: ${String(error?.message || 'unknown error').slice(0, 180)}` };
+  }
+}
+
+function currentDocumentationRegex() {
+  if (!state.documentationRegex.enabled) return { regex: null, error: '', enabled: false };
+  const result = createDocumentationRegex(state.documentationRegex.pattern, state.documentationRegex.flags);
+  return { ...result, enabled: true };
+}
+
+function filteredDocumentationDocuments() {
+  const documents = documentationDocuments();
+  const regex = currentDocumentationRegex();
+  if (regex.enabled) {
+    if (regex.error) return { documents, regex };
+    return { documents: documents.filter((record) => regex.regex.test(documentationSearchText(record))), regex };
+  }
+  const query = String(state.documentationQuery || '').trim().toLocaleLowerCase();
+  return {
+    documents: query
+      ? documents.filter((record) => documentationSearchText(record).toLocaleLowerCase().includes(query))
+      : documents,
+    regex
+  };
+}
+
+function slugifyDocumentationHeading(value) {
+  return String(value || '')
+    .toLocaleLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 128);
+}
+
+function normalizeDocumentationAnchor(value) {
+  if (typeof value !== 'string' || value.length > 256) return '';
+  try {
+    return slugifyDocumentationHeading(decodeURIComponent(value.replace(/^#/, '')));
+  } catch {
+    return '';
+  }
+}
+
+function resolveOfflineDocumentationLink(href) {
+  if (typeof href !== 'string' || href.length > 256 || /[\\\u0000-\u001f\u007f]/.test(href)) return null;
+  const value = href.trim();
+  if (!value || /^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(value)) return null;
+  const [rawFileName, rawAnchor = ''] = value.split('#', 2);
+  const fileName = rawFileName || state.offlineDocument?.fileName || '';
+  if (!/^(?:README|[a-z0-9][a-z0-9-]*)\.md$/i.test(fileName)) return null;
+  const document = documentationDocuments().find((record) => record.fileName.toLocaleLowerCase() === fileName.toLocaleLowerCase());
+  if (!document) return null;
+  return { id: document.id, anchor: normalizeDocumentationAnchor(rawAnchor) };
+}
+
+function focusDocumentationAnchor(anchor) {
+  const normalized = normalizeDocumentationAnchor(anchor);
+  if (!normalized) return;
+  requestAnimationFrame(() => {
+    const container = $('#documentation-markdown');
+    const headings = container ? [...container.querySelectorAll('h1, h2, h3, h4, h5, h6')] : [];
+    const heading = headings
+      .find((element) => element.id === `documentation-heading-${normalized}`);
+    if (!heading) return;
+    heading.setAttribute('tabindex', '-1');
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+    heading.scrollIntoView({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' });
+    heading.focus({ preventScroll: true });
+  });
+}
+
+function renderDocumentationArticle() {
+  const title = $('#documentation-article-title');
+  const summary = $('#documentation-article-summary');
+  const source = $('#documentation-article-source');
+  const container = $('#documentation-markdown');
+  if (!title || !summary || !source || !container) return;
+  const article = state.offlineDocument;
+  if (!article?.markdown) {
+    source.textContent = 'BUNDLED ARTICLE';
+    title.textContent = 'Choose an article';
+    summary.textContent = 'Select a listed article to read its local documentation.';
+    container.replaceChildren(Object.assign(document.createElement('p'), { className: 'muted', textContent: 'No article is selected.' }));
+    return;
+  }
+  source.textContent = `BUNDLED ARTICLE · ${article.fileName}`;
+  title.textContent = article.title || 'Untitled documentation article';
+  summary.textContent = article.summary || 'This bundled article has no summary.';
+  const markdownRenderer = window.StudioMarkdownRenderer;
+  if (!markdownRenderer || typeof markdownRenderer.render !== 'function') {
+    container.replaceChildren(Object.assign(document.createElement('p'), {
+      className: 'muted',
+      textContent: 'The local Markdown renderer is unavailable. This app will not fall back to raw Markdown or a remote documentation page.'
+    }));
+    return;
+  }
+  markdownRenderer.render(container, article.markdown, {
+    resolveInternalLink: resolveOfflineDocumentationLink,
+    onInternalLink: (target) => {
+      state.documentationPendingAnchor = target?.anchor || '';
+      readOfflineDocument(target?.id);
+    }
+  });
+  const usedAnchors = new Set();
+  container.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((heading) => {
+    const base = slugifyDocumentationHeading(heading.textContent) || 'section';
+    let slug = base;
+    let count = 2;
+    while (usedAnchors.has(slug)) {
+      slug = `${base}-${count}`;
+      count += 1;
+    }
+    usedAnchors.add(slug);
+    heading.id = `documentation-heading-${slug}`;
+  });
+  if (state.documentationPendingAnchor) {
+    const anchor = state.documentationPendingAnchor;
+    state.documentationPendingAnchor = '';
+    focusDocumentationAnchor(anchor);
+  }
+}
+
+function renderDocumentationRegexStatus() {
+  const status = $('#documentation-regex-status');
+  if (!status) return;
+  const input = documentationRegexInput();
+  const result = createDocumentationRegex(input.pattern, input.flags);
+  const sample = String($('#documentation-regex-sample')?.value || '').slice(0, 4096);
+  if (!state.documentationRegex.enabled) {
+    status.textContent = result.error && input.pattern
+      ? result.error
+      : 'Regex mode is off. Plain-text search is active.';
+    status.dataset.state = result.error && input.pattern ? 'invalid' : 'idle';
+    return;
+  }
+  if (result.error) {
+    status.textContent = result.error;
+    status.dataset.state = 'invalid';
+    return;
+  }
+  status.textContent = sample
+    ? (result.regex.test(sample) ? 'Regex mode is active. The local sample contains a match.' : 'Regex mode is active. The local sample has no match.')
+    : 'Regex mode is active. Add local sample text to preview matches.';
+  status.dataset.state = 'active';
+}
+
+function renderDocumentationArticleList() {
+  const list = $('#documentation-article-list');
+  const boundary = $('#documentation-bundle-boundary');
+  if (!list || !boundary) return;
+  list.replaceChildren();
+  const bundle = state.offlineDocumentation;
+  if (!bundle) {
+    boundary.textContent = 'Loading bundled documentation inventory…';
+    return;
+  }
+  boundary.textContent = bundle.boundary || 'This app reads only its bundled documentation directory.';
+  const { documents, regex } = filteredDocumentationDocuments();
+  renderDocumentationRegexStatus();
+  if (regex.enabled && regex.error) {
+    const notice = document.createElement('p');
+    notice.className = 'muted';
+    notice.textContent = 'The invalid regex did not replace the current documentation list. Fix it or return to plain-text search.';
+    list.append(notice);
+  }
+  if (!documents.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = regex.enabled ? 'No bundled articles match the current regex.' : 'No bundled articles match the current plain-text search.';
+    list.append(empty);
+    return;
+  }
+  documents.forEach((record) => {
+    const item = document.createElement('article');
+    item.className = 'documentation-article-item';
+    item.setAttribute('role', 'listitem');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `documentation-article-button${state.offlineDocument?.id === record.id ? ' selected' : ''}`;
+    const heading = document.createElement('strong');
+    heading.textContent = record.title;
+    const detail = document.createElement('span');
+    detail.textContent = record.summary;
+    button.append(heading, detail);
+    button.addEventListener('click', () => readOfflineDocument(record.id));
+    item.append(button);
+    list.append(item);
+  });
+}
+
+function renderDocumentationDestination() {
+  const destination = $('#documentation-destination');
+  if (!destination) return;
+  destination.hidden = !state.documentationOpen;
+  document.body.classList.toggle('documentation-open', state.documentationOpen);
+  if (!state.documentationOpen) return;
+  renderDocumentationArticleList();
+  renderDocumentationArticle();
+}
+
+async function refreshOfflineDocumentation() {
+  const bundle = await safely(() => window.studio.offlineDocs());
+  if (!bundle) return;
+  state.offlineDocumentation = bundle;
+  const documents = documentationDocuments();
+  if (!documents.some((record) => record.id === state.offlineDocument?.id)) state.offlineDocument = null;
+  renderDocumentationDestination();
+  if (!state.offlineDocument && documents.length) await readOfflineDocument(documents[0].id);
+}
+
+async function readOfflineDocument(id) {
+  if (typeof id !== 'string' || !id) return;
+  const article = await safely(() => window.studio.offlineDoc(id));
+  if (!article?.document) return;
+  state.offlineDocument = article.document;
+  renderDocumentationDestination();
+}
+
+async function openOfflineDocumentation() {
+  state.documentationOpen = true;
+  renderAll();
+  if (!state.offlineDocumentation) await refreshOfflineDocumentation();
+  $('#documentation-search')?.focus();
+}
+
+function closeOfflineDocumentation() {
+  state.documentationOpen = false;
+  renderAll();
+  $('#server-search')?.focus();
+}
+
+function openDocumentationRegexBuilder() {
+  const builder = $('#documentation-regex-builder');
+  if (!builder) return;
+  builder.hidden = false;
+  $('#open-documentation-regex-button').setAttribute('aria-expanded', 'true');
+  $('#documentation-regex-pattern').value = state.documentationRegex.pattern;
+  $('#documentation-regex-flag-i').checked = state.documentationRegex.flags.includes('i');
+  $('#documentation-regex-flag-m').checked = state.documentationRegex.flags.includes('m');
+  $('#documentation-regex-flag-s').checked = state.documentationRegex.flags.includes('s');
+  renderDocumentationRegexStatus();
+  $('#documentation-regex-pattern').focus();
+}
+
+function closeDocumentationRegexBuilder() {
+  const builder = $('#documentation-regex-builder');
+  if (!builder) return;
+  builder.hidden = true;
+  $('#open-documentation-regex-button').setAttribute('aria-expanded', 'false');
+  $('#documentation-search').focus();
+}
+
+function insertDocumentationRegexToken(token) {
+  const input = $('#documentation-regex-pattern');
+  const value = DOCUMENTATION_REGEX_TOKENS[token];
+  if (!input || !value) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  input.value = `${input.value.slice(0, start)}${value}${input.value.slice(end)}`.slice(0, 256);
+  const cursor = Math.min(start + value.length, input.value.length);
+  input.setSelectionRange(cursor, cursor);
+  input.focus();
+  renderDocumentationRegexStatus();
+}
+
+function applyDocumentationRegex() {
+  const input = documentationRegexInput();
+  const result = createDocumentationRegex(input.pattern, input.flags);
+  if (result.error) {
+    renderDocumentationRegexStatus();
+    return toast(result.error, 'error');
+  }
+  state.documentationRegex = { enabled: true, pattern: input.pattern, flags: input.flags };
+  renderDocumentationArticleList();
+}
+
+function resetDocumentationRegex() {
+  state.documentationRegex = { enabled: false, pattern: '', flags: '' };
+  $('#documentation-regex-pattern').value = '';
+  $('#documentation-regex-flag-i').checked = false;
+  $('#documentation-regex-flag-m').checked = false;
+  $('#documentation-regex-flag-s').checked = false;
+  renderDocumentationArticleList();
+}
+
 function renderAll() {
   renderServers();
   renderDependencies();
@@ -1284,6 +1633,7 @@ function renderAll() {
   renderLocalStatus();
   renderBackupLifecycle();
   renderApplicationUpdate();
+  renderDocumentationDestination();
   setActiveTab(state.activeTab);
 }
 
@@ -2063,6 +2413,25 @@ function bindEvents() {
   $('#create-memory').addEventListener('input', () => { $('#create-memory-output').value = $('#create-memory').value; });
   $('#server-search').addEventListener('input', renderServers);
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
+  $('#open-documentation-button').addEventListener('click', openOfflineDocumentation);
+  $('#close-documentation-button').addEventListener('click', closeOfflineDocumentation);
+  $('#documentation-search').addEventListener('input', () => {
+    state.documentationQuery = $('#documentation-search').value.slice(0, 256);
+    if (state.documentationRegex.enabled) state.documentationRegex = { enabled: false, pattern: '', flags: '' };
+    renderDocumentationArticleList();
+  });
+  $('#open-documentation-regex-button').addEventListener('click', openDocumentationRegexBuilder);
+  $('#close-documentation-regex-button').addEventListener('click', closeDocumentationRegexBuilder);
+  $('#documentation-regex-pattern').addEventListener('input', renderDocumentationRegexStatus);
+  $('#documentation-regex-sample').addEventListener('input', renderDocumentationRegexStatus);
+  ['#documentation-regex-flag-i', '#documentation-regex-flag-m', '#documentation-regex-flag-s'].forEach((selector) => {
+    $(selector).addEventListener('change', renderDocumentationRegexStatus);
+  });
+  $$('[data-documentation-regex-token]').forEach((button) => {
+    button.addEventListener('click', () => insertDocumentationRegexToken(button.dataset.documentationRegexToken));
+  });
+  $('#apply-documentation-regex-button').addEventListener('click', applyDocumentationRegex);
+  $('#reset-documentation-regex-button').addEventListener('click', resetDocumentationRegex);
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
   $('#save-status-hub-bridge-button').addEventListener('click', saveStatusHubBridgeSettings);
@@ -2215,7 +2584,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOfflineDocumentation()]);
   renderCommandCenter();
 }
 

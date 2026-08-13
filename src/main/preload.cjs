@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('studio', {
   pickPlugin: () => ipcRenderer.invoke('studio:pick-plugin'),
   openFolder: (folder) => ipcRenderer.invoke('studio:open-folder', folder),
   dataDirectory: () => ipcRenderer.invoke('studio:data-directory'),
+  offlineDocs: () => ipcRenderer.invoke('studio:offline-docs'),
+  offlineDoc: (id) => ipcRenderer.invoke('studio:offline-doc', id),
   localStatus: () => ipcRenderer.invoke('studio:local-status'),
   statusHubBridge: () => ipcRenderer.invoke('studio:status-hub-bridge'),
   configureStatusHubBridge: (configuration) => ipcRenderer.invoke('studio:configure-status-hub-bridge', configuration),

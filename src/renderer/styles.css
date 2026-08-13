@@ -173,12 +173,62 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .status-record[data-state="failed"], .status-record[data-state="blocked"] { border-color: var(--error); }
 .status-record[data-state="complete"], .status-record[data-state="verified"] { border-color: #4f9d75; }
 
+body.documentation-open .topbar,
+body.documentation-open .dependency-card,
+body.documentation-open .application-update-card { display: none; }
+.documentation-destination { display: grid; gap: 18px; }
+.documentation-heading { padding: 20px 22px; border: 1px solid var(--outline-variant); border-radius: 24px; background: var(--surface-container); }
+.documentation-heading p:not(.eyebrow) { max-width: 720px; margin-top: 7px; line-height: 1.5; }
+.documentation-layout { display: grid; grid-template-columns: minmax(270px, .7fr) minmax(0, 1.45fr); gap: 18px; align-items: start; }
+.documentation-browser, .documentation-reader { display: grid; gap: 14px; min-width: 0; padding: 18px; border: 1px solid var(--outline-variant); border-radius: 22px; background: var(--surface-container); }
+.documentation-browser { position: sticky; top: 18px; max-height: calc(100vh - 64px); overflow: auto; }
+.documentation-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.documentation-search-row .icon-action { min-width: 44px; font-family: "Cascadia Mono", Consolas, monospace; font-size: .9rem; }
+.documentation-regex-builder { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--outline); border-radius: 16px; background: #151922; }
+.documentation-regex-builder .panel-heading { align-items: start; }
+.documentation-regex-builder .panel-heading p { margin-top: 4px; }
+.documentation-regex-flags { display: flex; flex-wrap: wrap; gap: 10px 14px; margin: 0; padding: 10px 0 0; border: 0; color: var(--on-surface-variant); font-size: .82rem; }
+.documentation-regex-flags legend { padding: 0; color: var(--on-surface); font-weight: 700; }
+.documentation-regex-flags label { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; }
+.documentation-regex-flags input { width: 18px; height: 18px; accent-color: var(--primary); }
+.documentation-regex-tools, .documentation-regex-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.documentation-regex-tools .outlined-action { min-height: 36px; padding-inline: 12px; font-size: .78rem; }
+.documentation-regex-status { min-height: 42px; margin: 0; padding: 10px 12px; border: 1px solid var(--outline-variant); border-radius: 12px; color: var(--on-surface-variant); background: var(--surface-container); font-size: .8rem; line-height: 1.4; }
+.documentation-regex-status[data-state="invalid"] { border-color: var(--error); color: var(--error); }
+.documentation-regex-status[data-state="active"] { border-color: #4f9d75; color: var(--success); }
+.documentation-article-list { display: grid; gap: 8px; }
+.documentation-article-item { margin: 0; }
+.documentation-article-button { display: grid; gap: 4px; width: 100%; min-height: 64px; padding: 12px; border: 1px solid var(--outline-variant); border-radius: 14px; color: var(--on-surface); background: #151922; text-align: left; }
+.documentation-article-button:hover { border-color: var(--primary); background: var(--surface-container-high); }
+.documentation-article-button.selected { border-color: var(--primary); background: var(--primary-container); }
+.documentation-article-button strong { color: inherit; font-size: .88rem; }
+.documentation-article-button span { color: var(--on-surface-variant); font-size: .77rem; line-height: 1.35; }
+.documentation-article-button.selected span { color: var(--on-primary-container); }
+.documentation-reader { min-height: 560px; }
+.documentation-reader > header { display: grid; gap: 7px; padding-bottom: 14px; border-bottom: 1px solid var(--outline-variant); }
+.documentation-markdown { min-width: 0; color: var(--on-surface); line-height: 1.65; overflow-wrap: anywhere; }
+.documentation-markdown > :first-child { margin-top: 0; }
+.documentation-markdown h1, .documentation-markdown h2, .documentation-markdown h3, .documentation-markdown h4, .documentation-markdown h5, .documentation-markdown h6 { margin: 1.45em 0 .55em; color: var(--on-surface); scroll-margin-top: 18px; }
+.documentation-markdown h1 { font-size: 1.65rem; }
+.documentation-markdown h2 { font-size: 1.35rem; }
+.documentation-markdown h3 { font-size: 1.12rem; }
+.documentation-markdown p, .documentation-markdown li { color: var(--on-surface-variant); }
+.documentation-markdown p { margin: .75em 0; }
+.documentation-markdown ul, .documentation-markdown ol { display: grid; gap: .35em; margin: .75em 0; padding-left: 1.45rem; }
+.documentation-markdown a { color: var(--primary); text-underline-offset: 3px; }
+.documentation-markdown code { padding: .1em .32em; border-radius: 5px; color: #d9f5e3; background: #090c11; font-family: "Cascadia Mono", Consolas, monospace; }
+.documentation-markdown pre { max-width: 100%; overflow: auto; margin: .9em 0; padding: 14px; border: 1px solid #313847; border-radius: 14px; background: #090c11; }
+.documentation-markdown pre code { padding: 0; background: transparent; white-space: pre; }
+.markdown-renderer-notice { margin: 14px 0 0; padding: 12px; border: 1px solid var(--warning); border-radius: 12px; color: var(--warning); background: #352715; font-size: .82rem; }
+
 @media (max-width: 850px) {
   .live-resource-grid { grid-template-columns: 1fr; }
   .status-summary-grid, .status-detail-card { grid-template-columns: 1fr; }
   .runtime-requirement-card, .guarded-action-card, .capability-card { align-items: stretch; flex-direction: column; }
   .capability-list { justify-content: flex-start; }
   .live-connection-actions { align-items: stretch; flex-wrap: wrap; }
+  .documentation-layout { grid-template-columns: 1fr; }
+  .documentation-browser { position: static; max-height: none; }
 }
 
 dialog { width: min(800px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; border: 1px solid var(--outline); border-radius: 28px; padding: 0; color: var(--on-surface); background: var(--surface-container-high); box-shadow: 0 20px 70px #0009; }

@@ -6,6 +6,7 @@ const { MinecraftManagementProtocolClient } = require('./minecraft-management-pr
 const { StudioSettingsService } = require('./studio-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
+const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
@@ -33,6 +34,7 @@ const MAX_RCON_PACKET_BYTES = 256 * 1024;
 const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 let statusHubBridge;
 let updateController;
+let offlineDocumentation;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -345,6 +347,7 @@ app.whenReady().then(async () => {
     dataDir: path.join(app.getPath('userData'), 'updates'),
     onStateChange: (update) => sendToRenderer({ type: 'application-update', update })
   });
+  offlineDocumentation = new OfflineDocumentationLibrary({ appPath: app.getAppPath() });
   await updateController.initialize();
   createWindow();
   serverManager.revalidateManagedJavaInventory().catch((error) => {
@@ -372,6 +375,11 @@ function requireManager() {
 function requireUpdater() {
   if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
   return updateController;
+}
+
+function requireOfflineDocumentation() {
+  if (!offlineDocumentation) throw new Error('Offline documentation is still starting.');
+  return offlineDocumentation;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -482,6 +490,8 @@ ipcMain.handle('studio:open-folder', async (_event, folder) => {
   if (error) throw new Error(error);
 });
 ipcMain.handle('studio:data-directory', () => path.join(app.getPath('userData'), 'servers'));
+ipcMain.handle('studio:offline-docs', () => requireOfflineDocumentation().list());
+ipcMain.handle('studio:offline-doc', (_event, id) => requireOfflineDocumentation().read(id));
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
 ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
   status: statusHubBridge.getStatus(),
