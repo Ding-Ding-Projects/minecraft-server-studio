@@ -15,7 +15,7 @@ The desktop app exposes structured controls instead of requiring a configuration
 - Boolean properties use named switches with explanations.
 - Long message values use text areas only where multiline text is meaningful.
 
-The app writes `server.properties` and `eula.txt` atomically before setup or startup. It allows only the documented property key set managed by the GUI; arbitrary shell arguments are never accepted.
+The app updates `server.properties` through a bounded lossless line model: GUI-managed keys can change, while comments, unknown keys, original line endings, and file layout are retained. It writes the completed file through a same-directory atomic rename. The detailed [configuration and plugin safety article](configuration-and-plugin-safety.md) describes the preservation and failure boundaries. Arbitrary shell arguments are never accepted.
 
 ## Paper setup
 
@@ -39,7 +39,7 @@ The generic client is TLS-first. It permits an insecure connection only for an e
 
 ## Plugin installation
 
-The Plugins tab accepts a user-selected local `.jar` file and copies it into the selected server's `plugins` directory. Command discovery can inspect bounded `plugin.yml` metadata without extracting arbitrary plugin files. The app does not claim that a third-party plugin is compatible or safe. Restart the server after installing a plugin; ordinary plugin reload is not the update path.
+The Plugins tab accepts a user-selected local `.jar` file only. Before staging it, the app checks a bounded JAR signature, SHA-256, manifest, Bukkit or Paper descriptor identity, declared dependencies, aliases, API target, destination collision, and load-order cycle plan. A running managed server receives the JAR only in app-managed staging outside `plugins`; promotion is revalidated, atomic, and only permitted while stopped. The app does not claim that a third-party plugin is compatible, trusted, or safe beyond that local descriptor evidence. Restart the server after promotion; ordinary plugin reload is not the update path.
 
 ## Failure modes
 

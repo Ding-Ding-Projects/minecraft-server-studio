@@ -1,6 +1,7 @@
 # Feature documentation
 
 - [Server orchestration](server-orchestration.md)
+- [Configuration and plugin safety](configuration-and-plugin-safety.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)
 - [Version-aware Java runtime and launch profiles](java-runtime-and-launch.md)
 - [Spigot BuildTools planning](spigot-buildtools.md)

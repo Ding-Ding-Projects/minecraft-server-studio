@@ -322,6 +322,25 @@ ipcMain.handle('studio:provision', (_event, id) => requireManager().provisionSer
 ipcMain.handle('studio:start', (_event, id) => requireManager().startServer(id));
 ipcMain.handle('studio:stop', (_event, id) => requireManager().stopServer(id));
 ipcMain.handle('studio:console', (_event, id, command) => requireManager().sendConsoleCommand(id, command));
+ipcMain.handle('studio:apply-gamerules', async (_event, id, gameRules) => {
+  const manager = requireManager();
+  const server = await manager.getServer(id);
+  if (manager.isServerRunning(id)) return manager.applyGameRules(id, gameRules);
+  if (!server.settings?.['enable-rcon'] || server.settings['enable-rcon'] !== 'true' || !credentialVault) {
+    return manager.applyGameRules(id, gameRules);
+  }
+  const password = credentialVault.read(credentialVault.createKey('minecraft-server-studio', `rcon:${id}`));
+  if (!password) return manager.applyGameRules(id, gameRules);
+  return manager.applyGameRules(id, gameRules, {
+    transport: 'rcon',
+    sendCommand: async (command) => sendVaultBackedRconCommand({
+      host: '127.0.0.1',
+      port: Number(server.settings['rcon.port']),
+      password,
+      command
+    })
+  });
+});
 ipcMain.handle('studio:rcon', async (_event, id, command) => {
   const server = await requireManager().getServer(id);
   if (!server.settings?.['enable-rcon'] || server.settings['enable-rcon'] !== 'true') throw new Error('Enable RCON in the Network tab before using remote CLI commands.');
@@ -331,7 +350,9 @@ ipcMain.handle('studio:rcon', async (_event, id, command) => {
   return sendVaultBackedRconCommand({ host: '127.0.0.1', port: Number(server.settings['rcon.port']), password, command });
 });
 ipcMain.handle('studio:list-plugins', (_event, id) => requireManager().listPlugins(id));
+ipcMain.handle('studio:plan-plugin-install', (_event, id, sourcePath) => requireManager().planPluginInstallation(id, sourcePath));
 ipcMain.handle('studio:install-plugin', (_event, id, sourcePath) => requireManager().installPlugin(id, sourcePath));
+ipcMain.handle('studio:promote-staged-plugins', (_event, id) => requireManager().promoteStagedPlugins(id));
 ipcMain.handle('studio:pick-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
   return result.canceled ? null : result.filePaths[0];
