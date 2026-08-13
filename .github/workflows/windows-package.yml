@@ -386,9 +386,15 @@ jobs:
             npm = (npm --version)
           }
           $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidenceRoot 'build-context.json') -Encoding utf8
-          $squirrelOutput = Join-Path $env:GITHUB_WORKSPACE 'dist\squirrel-windows'
+          $squirrelOutput = $env:SQUIRREL_OUTPUT
+          if ([string]::IsNullOrWhiteSpace($squirrelOutput)) {
+            $squirrelOutput = Join-Path $env:GITHUB_WORKSPACE 'dist\squirrel-windows'
+          }
           if (Test-Path -LiteralPath $squirrelOutput -PathType Container) {
-            Copy-Item -LiteralPath (Join-Path $squirrelOutput '*') -Destination $artifactRoot -Recurse -Force
+            $squirrelItems = @(Get-ChildItem -LiteralPath $squirrelOutput -Force)
+            if ($squirrelItems.Count -gt 0) {
+              Copy-Item -LiteralPath $squirrelItems.FullName -Destination $artifactRoot -Recurse -Force
+            }
           }
 
       - name: Upload package evidence
