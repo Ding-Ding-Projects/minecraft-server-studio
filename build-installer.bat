@@ -25,7 +25,7 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
-set "MSS_SETUP=dist\squirrel-windows\Minecraft Server Studio-0.1.0-x64-Setup.exe"
+set "MSS_SETUP=dist\squirrel-windows\Minecraft.Server.Studio-0.1.0-x64-Setup.exe"
 if not exist "%MSS_SETUP%" (
   echo ERROR: Expected installer was not found at %MSS_SETUP%.
   popd
