@@ -46,6 +46,7 @@ implementation lane.
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
 - `src/main/command-runtime-discovery.cjs`: bounded selected-JAR `--help`/`--version` evidence and fixed-query loopback-RCON discovery adapter; it never opens a shell or starts a server lifecycle operation.
 - `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules, including persistent app-managed Java inventory and official Adoptium metadata selection for portable recovery.
+- `src/main/buildtools-orchestration.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: separate typed BuildTools plan-only controller and renderer surface. It previews Java/Git readiness, a controlled workspace/output directory, and direct argv only; it does not download BuildTools, start a process, write a JAR, promote a JAR, or acquire a plugin.
 - `src/main/config-plugin-safety.cjs`: lossless `server.properties` updates, Minecraft 1.21.9+ game-rule delivery state, bounded local plugin JAR inspection, dependency/cycle planning, staging, atomic promotion, and rollback records.
 - `src/main/server-backup-manager.cjs`: bounded local snapshot inventory, manifest hashing, stopped-server restore staging, official stable Paper update staging, and retained-JAR rollback helpers.
 - `docs/features/shared-status-hub-bridge.md` and `docs/features/local-status-and-completeness.md`: an opt-in external Status Hub documentation boundary. It requires explicit transport acceptance before claiming registration, update, inbox polling, or reply delivery; raw replies and credentials remain outside the renderer, history, exports, and logs.
@@ -63,6 +64,39 @@ implementation lane.
 - `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. It does not assert a dim sum code name or photo unless a separately verified catalog asset is available.
 - `assets/minecraft-server-studio.svg`, `assets/minecraft-server-studio.ico`, and `scripts/generate-app-icon.ps1`: original vector master and reproducible multi-resolution Windows icon source.
 - `package.json`: local Windows executable icon plus an immutable commit-pinned Squirrel icon metadata URL.
+
+## BuildTools plan-only orchestration
+
+The BuildTools tab now calls `studio:plan-buildtools`, which is backed by the
+new `BuildToolsOrchestrationController`. Its input contract is typed and
+bounded: revision, compile target, workspace, derived output-directory name,
+final name, compile-if-changed, do-not-update, remapped/source/docs/
+experimental/development switches, and an optional positive pull-request
+number. It emits an exact direct-argv record with `shell: false`, never a
+copy-paste shell string.
+
+The controller consults the existing ServerManager Java and Git discovery APIs
+only to surface readiness. It has no downloader, installer, workspace writer,
+process runner, JAR validator, promotion/rollback implementation, or plugin
+acquisition path. The renderer disables execution and names that state plainly.
+Both `--disable-certificate-check` and `--disable-java-check` are rejected;
+there is no future-consequence path that makes either bypass acceptable.
+
+### Directly related documentation
+
+- `docs/features/buildtools-orchestration.md`: typed input, Java/Git matrix,
+  controlled workspace/output layout, direct-argv presentation, execution
+  boundary, and failure recovery.
+- `docs/features/spigot-buildtools.md`, `docs/features/server-orchestration.md`,
+  and `docs/features/local-status-and-completeness.md`: existing BuildTools and
+  completeness documentation now identifies this plan-only surface separately.
+
+### Verification boundary
+
+No tests, linting, build, package, runtime interaction, capture, BuildTools
+download, Java/Git installation, process execution, JAR creation, or release
+operation ran for this source-only candidate. The `spigot-buildtools` inventory
+row retains pending localization, test, capture, and evidence proof records.
 
 ## Unsigned Squirrel application-update controller
 

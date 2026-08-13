@@ -9,6 +9,7 @@ const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { FileConverter } = require('./file-converter.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
+const { BuildToolsOrchestrationController } = require('./buildtools-orchestration.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
 try {
@@ -37,6 +38,7 @@ let statusHubBridge;
 let updateController;
 let ollamaSuite;
 let fileConverter;
+let buildToolsController;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -343,6 +345,10 @@ app.whenReady().then(async () => {
     },
     onEvent: sendToRenderer
   });
+  buildToolsController = new BuildToolsOrchestrationController({
+    serverManager,
+    repositoryRoots: [app.getAppPath()]
+  });
   fileConverter = new FileConverter({
     dataDir: path.join(app.getPath('userData'), 'file-converter'),
     onEvent: sendToRenderer
@@ -395,6 +401,11 @@ function requireOllamaSuite() {
 function requireFileConverter() {
   if (!fileConverter) throw new Error('Minecraft Server Studio local converter controls are still starting.');
   return fileConverter;
+}
+
+function requireBuildToolsController() {
+  if (!buildToolsController) throw new Error('BuildTools planning controls are still starting.');
+  return buildToolsController;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -553,6 +564,7 @@ ipcMain.handle('studio:pick-paper-cli-path', async (_event, kind) => {
   const result = await dialog.showOpenDialog(mainWindow, definition);
   return result.canceled ? null : result.filePaths[0];
 });
+ipcMain.handle('studio:plan-buildtools', (_event, id, input) => requireBuildToolsController().createPlan(id, input));
 ipcMain.handle('studio:pick-java', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],

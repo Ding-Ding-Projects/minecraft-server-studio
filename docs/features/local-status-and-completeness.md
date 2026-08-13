@@ -77,6 +77,14 @@ completed. Its three world-changing upgrade/cache/region options remain
 disabled until a stored exact launch preflight is wired to the existing
 two-key destructive confirmation flow.
 
+## BuildTools plan inventory boundary
+
+The `spigot-buildtools` row includes both the existing BuildTools adapter and the
+separate typed plan-only orchestration controller. The plan-only controller
+surfaces a Java/Git requirement matrix, controlled workspace and output paths,
+and a direct-argv preview, but leaves execution unavailable. It is not evidence
+that BuildTools downloaded, executed, or produced a server JAR.
+
 ## Application-update inventory boundary
 
 The `application-updates` row is separate from server backups, server rollback,
@@ -144,6 +152,7 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Server orchestration](server-orchestration.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)
 - [Spigot BuildTools adapter](spigot-buildtools.md)
+- [BuildTools plan-only orchestration](buildtools-orchestration.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)

@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('studio', {
   paperCliPreflight: (id, profile) => ipcRenderer.invoke('studio:paper-cli-preflight', id, profile),
   collectPaperCliJarEvidence: (id) => ipcRenderer.invoke('studio:paper-cli-probe', id),
   pickPaperCliPath: (kind) => ipcRenderer.invoke('studio:pick-paper-cli-path', kind),
+  planBuildTools: (id, input) => ipcRenderer.invoke('studio:plan-buildtools', id, input),
   pickJava: () => ipcRenderer.invoke('studio:pick-java'),
   runtimeInventory: (id) => ipcRenderer.invoke('studio:runtime-inventory', id),
   configureManagement: (id, configuration) => ipcRenderer.invoke('studio:configure-management', id, configuration),
