@@ -76,6 +76,7 @@ const state = {
     restoreFocus: true,
     catalogOverflow: false
   },
+  pendingServerTabId: null,
   unsaved: {
     settings: false,
     createDraft: false,
@@ -231,7 +232,7 @@ const DEFAULT_APPEARANCE_NAVIGATION = Object.freeze({
     density: 'comfortable',
     seedColor: '#6750A4',
     typography: Object.freeze({ family: 'system-ui', scale: 1, weight: 400 }),
-    tabs: Object.freeze({ dock: 'left', activeTab: 'general' }),
+    tabs: Object.freeze({ dock: 'left', activeTab: 'general', order: Object.freeze([...SERVER_TAB_IDS]), pinned: Object.freeze([]), groups: Object.freeze([]), closed: Object.freeze([]) }),
     elementOverrides: Object.freeze({
       shell: Object.freeze({ surface: null, onSurface: null, radius: null }),
       tabStrip: Object.freeze({ surface: null, onSurface: null, radius: null }),
@@ -262,7 +263,14 @@ const appearanceContextSearches = {
   tab: { mode: 'plain', query: '', pattern: '', flags: { i: true, m: false, u: true } },
   appearance: { mode: 'plain', query: '', pattern: '', flags: { i: true, m: false, u: true } }
 };
+const TAB_WORKSPACE_SEARCH_IDS = Object.freeze(['group', 'master', 'bulk', 'menu', 'picker']);
+const tabWorkspaceSearches = Object.fromEntries(TAB_WORKSPACE_SEARCH_IDS.map((id) => [id, {
+  mode: 'plain', query: '', pattern: '', flags: { i: true, m: false, u: true }
+}]));
 let tabPersistenceTimer = null;
+let tabWorkspaceContextId = null;
+let tabWorkspacePickerTabId = null;
+let tabWorkspacePickerReturnFocus = null;
 
 const FALLBACK_EXPERIENCE = Object.freeze({
   local: Object.freeze({ language: 'english', funnyLevels: Object.freeze({ english: 2, cantonese: 3 }), dialogEmoji: true, displayName: 'Minecraft Server Studio' }),
@@ -737,7 +745,13 @@ function applyAppearanceNavigation() {
   if (editor) editor.dataset.tabDock = dock;
   if (navigation) navigation.dataset.dock = dock;
   if (strip) strip.setAttribute('aria-orientation', ['left', 'right'].includes(dock) ? 'vertical' : 'horizontal');
-  if (SERVER_TAB_IDS.includes(tabs.activeTab) && tabs.activeTab !== state.activeTab) setActiveTab(tabs.activeTab, { persist: false });
+  const workspace = tabWorkspaceSettings();
+  const requestedActiveTab = SERVER_TAB_IDS.includes(tabs.activeTab) ? tabs.activeTab : workspace.order[0];
+  const requestedGroup = groupForTab(requestedActiveTab, workspace);
+  const activeTab = workspace.closed.includes(requestedActiveTab) || (requestedGroup?.collapsed && !workspace.pinned.includes(requestedActiveTab))
+    ? (workspace.order.find((tabId) => !workspace.closed.includes(tabId) && (workspace.pinned.includes(tabId) || !groupForTab(tabId, workspace)?.collapsed)) || requestedActiveTab)
+    : requestedActiveTab;
+  if (activeTab !== state.activeTab) setActiveTab(activeTab, { persist: false });
   hydrateAppearanceNavigationControls();
   applyAppearanceContextSearch('tab');
   applyAppearanceContextSearch('appearance');
@@ -4991,6 +5005,7 @@ async function refreshToyLocks() {
     state.toyLockStatus = snapshot.status || state.toyLockStatus;
   }
   renderToyLocks();
+  renderTabWorkspace();
 }
 
 async function createAuthenticatorEntry(event) {
@@ -5060,6 +5075,7 @@ function openToyLockUnlockDialog(lock) {
 function closeToyLockUnlockDialog() {
   state.activeToyLockId = null;
   state.pendingAuthenticatorDestination = false;
+  state.pendingServerTabId = null;
   state.unsaved.toyLockUnlock = false;
   $('#toy-lock-unlock-dialog').close();
 }
@@ -5072,8 +5088,10 @@ async function submitToyLockUnlock(event) {
   if (!unlocked) return;
   $('#toy-lock-unlock-credential').value = '';
   const shouldOpenAuthenticator = state.pendingAuthenticatorDestination && unlocked.targetType === 'tab' && unlocked.targetId === 'authenticator';
+  const pendingServerTabId = state.pendingServerTabId;
   state.activeToyLockId = null;
   state.pendingAuthenticatorDestination = false;
+  state.pendingServerTabId = null;
   state.unsaved.toyLockUnlock = false;
   $('#toy-lock-unlock-dialog').close();
   await refreshToyLocks();
@@ -5081,6 +5099,9 @@ async function submitToyLockUnlock(event) {
     state.workspaceDestination = 'authenticator';
     renderAll();
     await refreshAuthenticator();
+  }
+  if (pendingServerTabId && SERVER_TAB_IDS.includes(pendingServerTabId)) {
+    await selectServerWorkspaceTab(pendingServerTabId, { focus: true });
   }
 }
 
@@ -5335,11 +5356,367 @@ function renderAppearanceContextSearchFeedback(id, matcher, matches, firstCaptur
   }
 }
 
+function tabWorkspaceSettings() {
+  const tabs = currentAppearanceSettings().tabs || DEFAULT_APPEARANCE_NAVIGATION.settings.tabs;
+  const order = Array.isArray(tabs.order) && tabs.order.length === SERVER_TAB_IDS.length && SERVER_TAB_IDS.every((tab) => tabs.order.includes(tab))
+    ? [...tabs.order]
+    : [...SERVER_TAB_IDS];
+  const known = new Set(SERVER_TAB_IDS);
+  const pinned = Array.isArray(tabs.pinned) ? tabs.pinned.filter((tab, index, values) => known.has(tab) && values.indexOf(tab) === index) : [];
+  const closed = Array.isArray(tabs.closed) ? tabs.closed.filter((tab, index, values) => known.has(tab) && values.indexOf(tab) === index) : [];
+  const assigned = new Set();
+  const groups = Array.isArray(tabs.groups)
+    ? tabs.groups.filter((group) => group && typeof group.id === 'string' && typeof group.name === 'string').map((group) => ({
+      id: group.id,
+      name: group.name,
+      color: /^#[0-9a-f]{6}$/i.test(group.color || '') ? group.color.toUpperCase() : '#6750A4',
+      collapsed: Boolean(group.collapsed),
+      tabIds: Array.isArray(group.tabIds) ? group.tabIds.filter((tab) => known.has(tab) && !assigned.has(tab) && (assigned.add(tab), true)) : []
+    }))
+    : [];
+  return {
+    dock: ['left', 'right', 'top', 'bottom'].includes(tabs.dock) ? tabs.dock : 'left',
+    activeTab: known.has(tabs.activeTab) ? tabs.activeTab : order[0],
+    order,
+    pinned,
+    groups,
+    closed
+  };
+}
+
+function cloneTabWorkspace(workspace = tabWorkspaceSettings()) {
+  return {
+    dock: workspace.dock,
+    activeTab: workspace.activeTab,
+    order: [...workspace.order],
+    pinned: [...workspace.pinned],
+    groups: workspace.groups.map((group) => ({ ...group, tabIds: [...group.tabIds] })),
+    closed: [...workspace.closed]
+  };
+}
+
+function tabButtonForId(tabId) {
+  return $$('#server-editor .tab[data-tab]').find((button) => button.dataset.tab === tabId) || null;
+}
+
+function tabLabel(tabId) {
+  return String(tabButtonForId(tabId)?.textContent || tabId).replace(/\s+/g, ' ').trim();
+}
+
+function groupForTab(tabId, workspace = tabWorkspaceSettings()) {
+  return workspace.groups.find((group) => group.tabIds.includes(tabId)) || null;
+}
+
+function toyLockForServerTab(tabId) {
+  return (state.toyLocks?.locks || []).find((lock) => lock?.targetType === 'tab'
+    && lock?.state === 'locked'
+    && (lock.targetId === tabId || lock.targetId === `server.${tabId}`)) || null;
+}
+
+function tabWorkspaceDescriptor(tabId, workspace = tabWorkspaceSettings()) {
+  const group = groupForTab(tabId, workspace);
+  const pinned = workspace.pinned.includes(tabId);
+  const closed = workspace.closed.includes(tabId);
+  const lock = toyLockForServerTab(tabId);
+  return {
+    id: tabId,
+    label: tabLabel(tabId),
+    group,
+    pinned,
+    closed,
+    lock,
+    searchText: [tabLabel(tabId), group?.name || 'Ungrouped', pinned ? 'Pinned' : '', closed ? 'Closed' : 'Open', lock ? 'Locked toy lock' : 'Unlocked'].filter(Boolean).join(' ')
+  };
+}
+
+function tabWorkspaceSearchControls(id) {
+  return {
+    host: $(`#tab-${id}-search-host`),
+    input: $(`#tab-${id}-search`),
+    toggle: $(`#tab-${id}-search-regex-toggle`),
+    builder: $(`#tab-${id}-search-regex-builder`),
+    pattern: $(`#tab-${id}-search-pattern`),
+    sample: $(`#tab-${id}-search-sample`),
+    feedback: $(`#tab-${id}-search-regex-feedback`),
+    captures: $(`#tab-${id}-search-regex-captures`),
+    flags: ['i', 'm', 'u'].reduce((result, flag) => ({ ...result, [flag]: $(`#tab-${id}-search-flag-${flag}`) }), {})
+  };
+}
+
+function tabWorkspaceSearchFlags(id) {
+  const controls = tabWorkspaceSearchControls(id);
+  return ['i', 'm', 'u'].filter((flag) => controls.flags[flag]?.checked).join('');
+}
+
+function buildTabWorkspaceMatcher(id) {
+  const search = tabWorkspaceSearches[id];
+  const controls = tabWorkspaceSearchControls(id);
+  const query = String(controls.input?.value || search?.query || '').slice(0, 256);
+  if (!search) return { kind: 'plain', query: '', detail: 'Plain-text matching with no query shows every item.', test: () => ({ matches: true, captures: [] }) };
+  search.query = query;
+  if (search.mode !== 'regex') {
+    const normalized = query.trim().toLocaleLowerCase();
+    return {
+      kind: 'plain',
+      query,
+      detail: normalized ? `Plain-text matching for “${query.trim()}”.` : 'Plain-text matching with no query shows every item.',
+      test: (label) => ({ matches: !normalized || String(label).toLocaleLowerCase().includes(normalized), captures: [] })
+    };
+  }
+  const pattern = String(controls.pattern?.value ?? search.pattern ?? '').slice(0, 256);
+  search.pattern = pattern;
+  search.query = pattern;
+  const flags = tabWorkspaceSearchFlags(id);
+  try {
+    const expression = new RegExp(pattern, flags);
+    return {
+      kind: 'regex',
+      query: pattern,
+      detail: pattern ? `Regex /${pattern}/${flags} is active.` : `Regex /(?:)/${flags} is active and matches every item.`,
+      test: (label) => {
+        const match = String(label).match(expression);
+        return { matches: Boolean(match), captures: match ? match.slice(1) : [] };
+      }
+    };
+  } catch (error) {
+    return {
+      kind: 'invalid',
+      query: pattern,
+      detail: `Regex is invalid: ${error?.message || 'pattern could not be compiled.'}`,
+      test: () => ({ matches: true, captures: [] })
+    };
+  }
+}
+
+function updateTabWorkspaceSearchFeedback(id, matcher, firstCapture = null) {
+  const controls = tabWorkspaceSearchControls(id);
+  if (controls.feedback) {
+    controls.feedback.dataset.state = matcher.kind;
+    controls.feedback.textContent = matcher.detail;
+  }
+  if (controls.captures) {
+    const sample = String(controls.sample?.value || '').slice(0, 512);
+    const result = matcher.kind === 'regex' && sample ? matcher.test(sample) : null;
+    const captures = result?.captures?.length ? result.captures : firstCapture;
+    controls.captures.textContent = matcher.kind === 'regex'
+      ? (sample
+        ? (result?.matches ? `Sample matches. Capture groups: ${captures?.map((value, index) => `$${index + 1}=${value || '∅'}`).join(' · ') || 'none'}` : 'Sample does not match the current pattern.')
+        : (captures?.length ? `First matching capture groups: ${captures.map((value, index) => `$${index + 1}=${value || '∅'}`).join(' · ')}` : 'Add sample text to inspect captures.'))
+      : 'Regex is off. Plain-text search is active.';
+  }
+}
+
+function createTabWorkspaceSearch(id) {
+  const controls = tabWorkspaceSearchControls(id);
+  const host = controls.host;
+  if (!host || host.dataset.ready === 'true') return;
+  const labelText = host.dataset.searchLabel || 'Search workspace';
+  const placeholder = host.dataset.searchPlaceholder || 'Find an item';
+  const search = tabWorkspaceSearches[id];
+  const wrapper = document.createElement('div');
+  wrapper.className = 'anchored-search tab-workspace-anchored-search';
+  const label = document.createElement('label');
+  label.className = 'field search-field';
+  label.htmlFor = `tab-${id}-search`;
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'sr-only';
+  labelSpan.textContent = labelText;
+  const input = document.createElement('input');
+  input.id = `tab-${id}-search`;
+  input.type = 'search';
+  input.maxLength = 256;
+  input.autocomplete = 'off';
+  input.placeholder = placeholder;
+  label.append(labelSpan, input);
+  const toggle = document.createElement('button');
+  toggle.id = `tab-${id}-search-regex-toggle`;
+  toggle.className = 'icon-action regex-toggle';
+  toggle.type = 'button';
+  toggle.textContent = '.*';
+  toggle.setAttribute('aria-label', `Open ${labelText.toLocaleLowerCase()} regex builder`);
+  toggle.setAttribute('aria-expanded', 'false');
+  const builder = document.createElement('section');
+  builder.id = `tab-${id}-search-regex-builder`;
+  builder.className = 'appearance-regex-builder tab-workspace-regex-builder';
+  builder.hidden = true;
+  builder.setAttribute('aria-label', `${labelText} regex builder`);
+  const grid = document.createElement('div');
+  grid.className = 'settings-grid';
+  const patternLabel = document.createElement('label');
+  patternLabel.className = 'field';
+  const patternTitle = document.createElement('span');
+  patternTitle.textContent = 'Pattern';
+  const pattern = document.createElement('input');
+  pattern.id = `tab-${id}-search-pattern`;
+  pattern.type = 'text';
+  pattern.maxLength = 256;
+  pattern.autocomplete = 'off';
+  pattern.spellcheck = false;
+  pattern.placeholder = 'Plain text is the default';
+  patternLabel.append(patternTitle, pattern);
+  const sampleLabel = document.createElement('label');
+  sampleLabel.className = 'field wide';
+  const sampleTitle = document.createElement('span');
+  sampleTitle.textContent = 'Sample text';
+  const sample = document.createElement('input');
+  sample.id = `tab-${id}-search-sample`;
+  sample.type = 'text';
+  sample.maxLength = 512;
+  sample.autocomplete = 'off';
+  sample.placeholder = 'Inspect a local sample';
+  sampleLabel.append(sampleTitle, sample);
+  grid.append(patternLabel, sampleLabel);
+  const flags = document.createElement('fieldset');
+  flags.className = 'regex-flags';
+  const legend = document.createElement('legend');
+  legend.textContent = 'Regex flags';
+  flags.append(legend);
+  [['i', 'Ignore case', true], ['m', 'Multiline', false], ['u', 'Unicode', true]].forEach(([flag, text, checked]) => {
+    const flagLabel = document.createElement('label');
+    const flagInput = document.createElement('input');
+    flagInput.id = `tab-${id}-search-flag-${flag}`;
+    flagInput.type = 'checkbox';
+    flagInput.checked = checked;
+    flagLabel.append(flagInput, document.createTextNode(` ${text}`));
+    flags.append(flagLabel);
+  });
+  const tokens = document.createElement('div');
+  tokens.className = 'regex-token-row';
+  tokens.setAttribute('role', 'group');
+  tokens.setAttribute('aria-label', 'Regex construction tokens');
+  [['[A-Za-z]', 'Class'], ['^$', 'Anchor'], ['()', 'Group'], ['|', 'Either'], ['+', 'Repeat']].forEach(([token, labelValue]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.tabWorkspaceRegexToken = token;
+    button.textContent = labelValue;
+    tokens.append(button);
+  });
+  const plain = document.createElement('button');
+  plain.type = 'button';
+  plain.className = 'outlined-action regex-plain-action';
+  plain.textContent = 'Use plain text';
+  tokens.append(plain);
+  const feedback = document.createElement('p');
+  feedback.id = `tab-${id}-search-regex-feedback`;
+  feedback.className = 'regex-feedback';
+  feedback.setAttribute('aria-live', 'polite');
+  const captures = document.createElement('p');
+  captures.id = `tab-${id}-search-regex-captures`;
+  captures.className = 'regex-captures';
+  captures.setAttribute('aria-live', 'polite');
+  builder.append(grid, flags, tokens, feedback, captures);
+  wrapper.append(label, toggle, builder);
+  host.replaceChildren(wrapper);
+  host.dataset.ready = 'true';
+  input.addEventListener('input', () => {
+    if (search.mode === 'regex') pattern.value = input.value;
+    refreshTabWorkspaceSearch(id);
+  });
+  toggle.addEventListener('click', () => {
+    const opening = builder.hidden;
+    builder.hidden = !opening;
+    toggle.setAttribute('aria-expanded', String(opening));
+    if (opening) {
+      if (!pattern.value) pattern.value = input.value;
+      pattern.focus();
+    }
+  });
+  pattern.addEventListener('input', () => {
+    search.mode = 'regex';
+    input.value = pattern.value;
+    refreshTabWorkspaceSearch(id);
+  });
+  sample.addEventListener('input', () => refreshTabWorkspaceSearch(id));
+  ['i', 'm', 'u'].forEach((flag) => $(`#tab-${id}-search-flag-${flag}`)?.addEventListener('change', () => {
+    search.mode = 'regex';
+    refreshTabWorkspaceSearch(id);
+  }));
+  tokens.querySelectorAll('[data-tab-workspace-regex-token]').forEach((button) => button.addEventListener('click', () => {
+    const token = button.dataset.tabWorkspaceRegexToken || '';
+    const start = pattern.selectionStart ?? pattern.value.length;
+    const end = pattern.selectionEnd ?? start;
+    pattern.value = `${pattern.value.slice(0, start)}${token}${pattern.value.slice(end)}`.slice(0, 256);
+    pattern.selectionStart = pattern.selectionEnd = Math.min(start + token.length, pattern.value.length);
+    search.mode = 'regex';
+    input.value = pattern.value;
+    refreshTabWorkspaceSearch(id);
+    pattern.focus();
+  }));
+  plain.addEventListener('click', () => {
+    search.mode = 'plain';
+    input.value = pattern.value;
+    refreshTabWorkspaceSearch(id);
+  });
+  refreshTabWorkspaceSearch(id);
+}
+
+function refreshTabWorkspaceSearch(id) {
+  const matcher = buildTabWorkspaceMatcher(id);
+  let firstCapture = null;
+  const noteCapture = (result) => {
+    if (!firstCapture && result?.captures?.length) firstCapture = result.captures;
+  };
+  if (id === 'group') {
+    tabWorkspaceSettings().groups.forEach((group) => noteCapture(matcher.test(group.name)));
+    renderTabGroupList(matcher);
+  } else if (id === 'master') {
+    tabWorkspaceSettings().order.forEach((tab) => noteCapture(matcher.test(tabWorkspaceDescriptor(tab).searchText)));
+    renderTabMasterResults(matcher);
+  } else if (id === 'bulk') {
+    tabWorkspaceSettings().order.forEach((tab) => noteCapture(matcher.test(tabWorkspaceDescriptor(tab).searchText)));
+    renderTabBulkStatus(matcher);
+  } else if (id === 'menu') {
+    $$('#tab-context-menu-items [data-tab-menu-action]').forEach((item) => {
+      const result = matcher.test(item.textContent || '');
+      item.hidden = matcher.kind !== 'invalid' && !result.matches;
+      noteCapture(result);
+    });
+  } else if (id === 'picker') {
+    tabWorkspaceSettings().groups.forEach((group) => noteCapture(matcher.test(group.name)));
+    renderTabGroupPicker(matcher);
+  }
+  updateTabWorkspaceSearchFeedback(id, matcher, firstCapture);
+}
+
+function initializeTabWorkspaceControls() {
+  TAB_WORKSPACE_SEARCH_IDS.forEach(createTabWorkspaceSearch);
+  $('#tab-group-create-button')?.addEventListener('click', () => createTabGroupFromControl('tab-group-create-name', 'tab-group-create-color'));
+  $('#tab-picker-create-button')?.addEventListener('click', () => createTabGroupFromControl('tab-picker-create-name', 'tab-picker-create-color', tabWorkspacePickerTabId));
+  $('#tab-group-picker-cancel')?.addEventListener('click', closeTabGroupPicker);
+  $('#tab-context-menu-items')?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-tab-menu-action]')?.dataset.tabMenuAction;
+    if (action) handleTabContextAction(action);
+  });
+  $('#tab-bulk-close-matching')?.addEventListener('click', () => requestBulkTabClose('matching'));
+  $('#tab-bulk-close-not-matching')?.addEventListener('click', () => requestBulkTabClose('not-matching'));
+  $('#tab-restore-all')?.addEventListener('click', restoreAllClosedTabs);
+  document.addEventListener('pointerdown', (event) => {
+    const menu = $('#tab-context-menu');
+    const picker = $('#tab-group-picker');
+    if (menu && !menu.hidden && !menu.contains(event.target) && !event.target.closest('.tab[data-tab]')) closeTabContextMenu();
+    if (picker && !picker.hidden && !picker.contains(event.target) && !event.target.closest('.tab[data-tab]')) closeTabGroupPicker();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!$('#tab-context-menu')?.hidden) {
+      event.preventDefault();
+      closeTabContextMenu();
+    }
+    if (!$('#tab-group-picker')?.hidden) {
+      event.preventDefault();
+      closeTabGroupPicker();
+    }
+  });
+}
+
 function renderTabOverflow() {
   const list = $('#tab-overflow-list');
   if (!list) return;
   list.replaceChildren();
-  const visibleTabs = $$('#server-editor .tab').filter((tab) => !tab.hidden);
+  const workspace = tabWorkspaceSettings();
+  const matcher = buildAppearanceContextSearchMatcher('tab');
+  const visibleTabs = workspace.order.filter((tabId) => !workspace.closed.includes(tabId)
+    && (matcher.kind === 'invalid' || matcher.test(tabLabel(tabId)).matches));
   if (!visibleTabs.length) {
     const empty = document.createElement('p');
     empty.className = 'muted';
@@ -5347,26 +5724,106 @@ function renderTabOverflow() {
     list.append(empty);
     return;
   }
-  visibleTabs.forEach((tab) => {
+  visibleTabs.forEach((tabId) => {
+    const descriptor = tabWorkspaceDescriptor(tabId, workspace);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'tab-overflow-item';
     button.setAttribute('role', 'listitem');
-    button.dataset.tab = tab.dataset.tab;
-    button.setAttribute('aria-current', String(tab.dataset.tab === state.activeTab));
-    button.textContent = tab.textContent;
-    button.addEventListener('click', () => {
-      setActiveTab(tab.dataset.tab, { persist: true, focus: true });
-      closeTabOverflow(false);
+    button.dataset.tab = tabId;
+    button.setAttribute('aria-current', String(tabId === state.activeTab));
+    button.textContent = `${descriptor.label}${descriptor.pinned ? ' · pinned' : ''}${descriptor.group ? ` · ${descriptor.group.name}` : ''}${descriptor.lock ? ' · locked' : ''}`;
+    button.addEventListener('click', async () => {
+      const selected = await selectServerWorkspaceTab(tabId, { focus: true });
+      if (selected) closeTabOverflow(false);
     });
     list.append(button);
   });
+}
+
+function renderTabWorkspace() {
+  const strip = $('#server-tab-strip');
+  if (!strip) return;
+  const workspace = tabWorkspaceSettings();
+  const matcher = buildAppearanceContextSearchMatcher('tab');
+  const buttons = new Map($$('#server-editor .tab[data-tab]').map((button) => [button.dataset.tab, button]));
+  const pinned = new Set(workspace.pinned);
+  const closed = new Set(workspace.closed);
+  const fragment = document.createDocumentFragment();
+  const matches = (tabId) => matcher.kind === 'invalid' || matcher.test(tabLabel(tabId)).matches;
+  const createRegion = (label, tabIds, options = {}) => {
+    const { group = null, pinnedRegion = false } = options;
+    const visibleIds = tabIds.filter((tabId) => !closed.has(tabId) && matches(tabId));
+    if (!visibleIds.length && !group) return;
+    const section = document.createElement('section');
+    section.className = `server-tab-workspace-group${pinnedRegion ? ' pinned-tab-workspace-group' : ''}`;
+    if (group) section.dataset.groupId = group.id;
+    if (group) section.style.setProperty('--tab-group-color', group.color);
+    const heading = document.createElement(group ? 'button' : 'p');
+    heading.className = 'server-tab-workspace-group-heading';
+    heading.textContent = label;
+    if (group) {
+      heading.type = 'button';
+      heading.setAttribute('aria-expanded', String(!group.collapsed));
+      heading.setAttribute('aria-label', `${group.collapsed ? 'Expand' : 'Collapse'} ${group.name} tab group`);
+      heading.addEventListener('click', () => toggleTabGroupCollapse(group.id));
+    }
+    section.append(heading);
+    if (group?.collapsed && !pinnedRegion) {
+      section.classList.add('collapsed');
+      fragment.append(section);
+      return;
+    }
+    const list = document.createElement('div');
+    list.className = 'server-tab-workspace-group-tabs';
+    for (const tabId of visibleIds) {
+      const button = buttons.get(tabId);
+      if (!button) continue;
+      const descriptor = tabWorkspaceDescriptor(tabId, workspace);
+      button.hidden = false;
+      button.classList.toggle('tab-pinned', descriptor.pinned);
+      button.dataset.tabGroup = descriptor.group?.id || '';
+      button.setAttribute('aria-label', [descriptor.label, descriptor.pinned ? 'pinned' : null, descriptor.group ? `group ${descriptor.group.name}` : null, descriptor.lock ? 'locked' : null].filter(Boolean).join(', '));
+      list.append(button);
+    }
+    section.append(list);
+    fragment.append(section);
+  };
+  buttons.forEach((button) => { button.hidden = true; });
+  const pinnedIds = workspace.order.filter((tabId) => pinned.has(tabId));
+  createRegion('Pinned tabs', pinnedIds, { pinnedRegion: true });
+  for (const group of workspace.groups) {
+    const groupIds = workspace.order.filter((tabId) => group.tabIds.includes(tabId) && !pinned.has(tabId));
+    createRegion(group.name, groupIds, { group });
+  }
+  const assigned = new Set(workspace.groups.flatMap((group) => group.tabIds));
+  const ungrouped = workspace.order.filter((tabId) => !pinned.has(tabId) && !assigned.has(tabId));
+  createRegion('Ungrouped tabs', ungrouped);
+  strip.replaceChildren(fragment);
+  renderTabOverflow();
+  renderTabMasterResults();
+  renderTabGroupList();
+  renderTabBulkStatus();
 }
 
 function applyAppearanceContextSearch(id) {
   const matcher = buildAppearanceContextSearchMatcher(id);
   const matches = [];
   let firstCapture = null;
+  if (id === 'tab') {
+    const workspace = tabWorkspaceSettings();
+    workspace.order.filter((tabId) => !workspace.closed.includes(tabId)).forEach((tabId) => {
+      const result = matcher.test(tabLabel(tabId));
+      if (result.matches) {
+        const button = tabButtonForId(tabId);
+        if (button) matches.push(button);
+        if (!firstCapture && result.captures?.length) firstCapture = result.captures;
+      }
+    });
+    renderTabWorkspace();
+    renderAppearanceContextSearchFeedback(id, matcher, matches, firstCapture);
+    return;
+  }
   appearanceContextSearchElements(id).forEach((element) => {
     const result = matcher.test(appearanceContextSearchLabel(id, element));
     element.hidden = matcher.kind === 'invalid' ? false : !result.matches;
@@ -5375,11 +5832,6 @@ function applyAppearanceContextSearch(id) {
       if (!firstCapture && result.captures?.length) firstCapture = result.captures;
     }
   });
-  if (id === 'tab') {
-    const activeVisible = matches.some((tab) => tab.dataset.tab === state.activeTab);
-    if (matches.length && !activeVisible) setActiveTab(matches[0].dataset.tab, { persist: false });
-    renderTabOverflow();
-  }
   renderAppearanceContextSearchFeedback(id, matcher, matches, firstCapture);
 }
 
@@ -5437,14 +5889,470 @@ function bindAppearanceContextSearch(id) {
   $$(`[data-appearance-regex-plain="${id}"]`).forEach((button) => button.addEventListener('click', () => usePlainAppearanceContextSearch(id)));
 }
 
+function tabWorkspaceProtected(tabId, workspace = tabWorkspaceSettings()) {
+  return workspace.pinned.includes(tabId) || Boolean(toyLockForServerTab(tabId));
+}
+
+function renderTabMasterResults(matcher = buildTabWorkspaceMatcher('master')) {
+  const list = $('#tab-master-results');
+  if (!list) return;
+  const workspace = tabWorkspaceSettings();
+  list.replaceChildren();
+  const entries = workspace.order.map((tabId) => tabWorkspaceDescriptor(tabId, workspace)).filter((entry) => matcher.kind === 'invalid' || matcher.test(entry.searchText).matches);
+  if (!entries.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No tabs in this window match the current master search.';
+    list.append(empty);
+    return;
+  }
+  entries.forEach((entry) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tab-master-result';
+    button.setAttribute('role', 'listitem');
+    button.setAttribute('aria-current', String(entry.id === state.activeTab));
+    button.textContent = `${entry.label} · ${entry.closed ? 'closed' : 'open'}${entry.pinned ? ' · pinned' : ''}${entry.group ? ` · ${entry.group.name}` : ' · Ungrouped'}${entry.lock ? ' · locked' : ''}`;
+    button.addEventListener('click', async () => {
+      const selected = await selectServerWorkspaceTab(entry.id, { focus: true });
+      if (selected) closeTabOverflow(false);
+    });
+    list.append(button);
+  });
+}
+
+function renderTabGroupList(matcher = buildTabWorkspaceMatcher('group')) {
+  const list = $('#tab-group-list');
+  if (!list) return;
+  const workspace = tabWorkspaceSettings();
+  list.replaceChildren();
+  const groups = workspace.groups.filter((group) => matcher.kind === 'invalid' || matcher.test(group.name).matches);
+  if (!groups.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = workspace.groups.length ? 'No tab groups match the current group search.' : 'No named tab groups exist yet. Create one here or from Move… into group….';
+    list.append(empty);
+    return;
+  }
+  groups.forEach((group, index) => {
+    const card = document.createElement('article');
+    card.className = 'tab-group-card';
+    card.style.setProperty('--tab-group-color', group.color);
+    const form = document.createElement('div');
+    form.className = 'tab-group-card-controls';
+    const name = document.createElement('label');
+    name.className = 'field';
+    const nameTitle = document.createElement('span');
+    nameTitle.textContent = 'Group name';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.maxLength = 64;
+    nameInput.value = group.name;
+    nameInput.setAttribute('aria-label', `Name for ${group.name} tab group`);
+    name.append(nameTitle, nameInput);
+    const color = document.createElement('label');
+    color.className = 'field tab-group-color-field';
+    const colorTitle = document.createElement('span');
+    colorTitle.textContent = 'Color';
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = group.color;
+    colorInput.setAttribute('aria-label', `Color for ${group.name} tab group`);
+    color.append(colorTitle, colorInput);
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'outlined-action';
+    save.textContent = 'Save group';
+    save.addEventListener('click', () => updateTabGroup(group.id, { name: nameInput.value, color: colorInput.value }));
+    form.append(name, color, save);
+    const detail = document.createElement('p');
+    detail.className = 'muted';
+    detail.textContent = `${group.tabIds.length} tab${group.tabIds.length === 1 ? '' : 's'} · ${group.collapsed ? 'collapsed' : 'expanded'} · position ${index + 1} of ${workspace.groups.length}`;
+    const actions = document.createElement('div');
+    actions.className = 'tab-workspace-actions';
+    const collapse = document.createElement('button');
+    collapse.type = 'button';
+    collapse.className = 'outlined-action';
+    collapse.textContent = group.collapsed ? 'Expand group' : 'Collapse group';
+    collapse.addEventListener('click', () => toggleTabGroupCollapse(group.id));
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'outlined-action';
+    up.textContent = 'Move group earlier';
+    up.disabled = index === 0;
+    up.addEventListener('click', () => moveTabGroup(group.id, -1));
+    const down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'outlined-action';
+    down.textContent = 'Move group later';
+    down.disabled = index === workspace.groups.length - 1;
+    down.addEventListener('click', () => moveTabGroup(group.id, 1));
+    const moveActive = document.createElement('button');
+    moveActive.type = 'button';
+    moveActive.className = 'outlined-action';
+    moveActive.textContent = `Move active tab here`;
+    moveActive.disabled = group.tabIds.includes(state.activeTab);
+    moveActive.addEventListener('click', () => moveTabToGroup(state.activeTab, group.id));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'danger-action';
+    remove.textContent = 'Remove group';
+    remove.addEventListener('click', () => requestRemoveTabGroup(group.id));
+    actions.append(collapse, up, down, moveActive, remove);
+    card.append(form, detail, actions);
+    list.append(card);
+  });
+}
+
+function tabBulkCandidates(kind, matcher = buildTabWorkspaceMatcher('bulk')) {
+  const workspace = tabWorkspaceSettings();
+  const includeProtected = Boolean($('#tab-bulk-include-protected')?.checked);
+  const entries = workspace.order.map((tabId) => tabWorkspaceDescriptor(tabId, workspace)).filter((entry) => !entry.closed);
+  const matching = entries.filter((entry) => matcher.kind !== 'invalid' && matcher.test(entry.searchText).matches);
+  const selected = kind === 'matching' ? matching : entries.filter((entry) => !matching.some((candidate) => candidate.id === entry.id));
+  const protectedEntries = selected.filter((entry) => tabWorkspaceProtected(entry.id, workspace));
+  return {
+    entries: includeProtected ? selected : selected.filter((entry) => !tabWorkspaceProtected(entry.id, workspace)),
+    protectedEntries: includeProtected ? [] : protectedEntries,
+    includeProtected
+  };
+}
+
+function renderTabBulkStatus(matcher = buildTabWorkspaceMatcher('bulk')) {
+  const status = $('#tab-bulk-status');
+  if (!status) return;
+  if (matcher.kind === 'invalid') {
+    status.dataset.state = 'invalid';
+    status.textContent = 'The bulk-close regex is invalid, so no tabs can be closed.';
+    return;
+  }
+  if (!matcher.query.trim()) {
+    status.dataset.state = 'idle';
+    status.textContent = 'Enter non-empty plain text or a valid regex before using a bulk-close action.';
+    return;
+  }
+  const matching = tabBulkCandidates('matching', matcher);
+  const inverse = tabBulkCandidates('not-matching', matcher);
+  status.dataset.state = matching.entries.length || inverse.entries.length ? 'ready' : 'empty';
+  const exclusions = matching.protectedEntries.length || inverse.protectedEntries.length;
+  status.textContent = `${matching.entries.length} tab${matching.entries.length === 1 ? '' : 's'} contain the current text; ${inverse.entries.length} do not.${exclusions ? ` ${exclusions} protected tab${exclusions === 1 ? ' is' : 's are'} excluded by default.` : ''}`;
+}
+
+async function persistTabWorkspace(workspace, successMessage) {
+  if (tabPersistenceTimer) {
+    clearTimeout(tabPersistenceTimer);
+    tabPersistenceTimer = null;
+  }
+  return persistAppearanceNavigation({ tabs: cloneTabWorkspace(workspace) }, successMessage);
+}
+
+function tabGroupId() {
+  const entropy = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID().replace(/[^a-z0-9]/gi, '').toLocaleLowerCase() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+  return `group-${entropy.slice(0, 36)}`;
+}
+
+async function createTabGroup(nameValue, colorValue, tabId = null) {
+  const name = String(nameValue || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const color = String(colorValue || '').toUpperCase();
+  const workspace = cloneTabWorkspace();
+  if (!name || name.length > 64) return toast('Give the tab group a name from 1 through 64 characters.', 'error');
+  if (!/^#[0-9A-F]{6}$/.test(color)) return toast('Choose a six-digit tab-group color.', 'error');
+  if (workspace.groups.length >= 32) return toast('This workspace already has the maximum of 32 tab groups.', 'error');
+  if (workspace.groups.some((group) => group.name.toLocaleLowerCase() === name.toLocaleLowerCase())) return toast('A tab group with that name already exists.', 'error');
+  workspace.groups.push({ id: tabGroupId(), name, color, collapsed: false, tabIds: tabId && SERVER_TAB_IDS.includes(tabId) ? [tabId] : [] });
+  if (tabId) workspace.groups.forEach((group, index) => {
+    if (index !== workspace.groups.length - 1) group.tabIds = group.tabIds.filter((candidate) => candidate !== tabId);
+  });
+  const snapshot = await persistTabWorkspace(workspace, tabId ? `Created ${name} and moved ${tabLabel(tabId)} into it.` : `Created ${name}.`);
+  return Boolean(snapshot);
+}
+
+async function createTabGroupFromControl(nameId, colorId, tabId = null) {
+  const name = $(`#${nameId}`);
+  const color = $(`#${colorId}`);
+  if (!name || !color) return;
+  const created = await createTabGroup(name.value, color.value, tabId);
+  if (created) {
+    name.value = '';
+    if (tabId) closeTabGroupPicker();
+  }
+}
+
+async function updateTabGroup(groupId, patch) {
+  const workspace = cloneTabWorkspace();
+  const group = workspace.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  const name = String(patch.name ?? group.name).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const color = String(patch.color ?? group.color).toUpperCase();
+  if (!name || name.length > 64) return toast('Give the tab group a name from 1 through 64 characters.', 'error');
+  if (!/^#[0-9A-F]{6}$/.test(color)) return toast('Choose a six-digit tab-group color.', 'error');
+  if (workspace.groups.some((candidate) => candidate.id !== groupId && candidate.name.toLocaleLowerCase() === name.toLocaleLowerCase())) return toast('A tab group with that name already exists.', 'error');
+  group.name = name;
+  group.color = color;
+  await persistTabWorkspace(workspace, `Updated ${name}.`);
+}
+
+async function toggleTabGroupCollapse(groupId) {
+  const workspace = cloneTabWorkspace();
+  const group = workspace.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  group.collapsed = !group.collapsed;
+  if (group.collapsed && group.tabIds.includes(workspace.activeTab) && !workspace.pinned.includes(workspace.activeTab)) {
+    const next = workspace.order.find((tabId) => !workspace.closed.includes(tabId) && (workspace.pinned.includes(tabId) || !groupForTab(tabId, workspace)?.collapsed));
+    if (next) workspace.activeTab = next;
+  }
+  await persistTabWorkspace(workspace, `${group.name} is now ${group.collapsed ? 'collapsed' : 'expanded'}.`);
+}
+
+async function moveTabGroup(groupId, direction) {
+  const workspace = cloneTabWorkspace();
+  const index = workspace.groups.findIndex((group) => group.id === groupId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= workspace.groups.length) return;
+  [workspace.groups[index], workspace.groups[target]] = [workspace.groups[target], workspace.groups[index]];
+  await persistTabWorkspace(workspace, 'Tab group order updated.');
+}
+
+function requestRemoveTabGroup(groupId) {
+  const workspace = tabWorkspaceSettings();
+  const group = workspace.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  openDestructiveConfirmation({
+    title: `Remove ${group.name}`,
+    copy: 'This removes the named navigation group and returns its tabs to Ungrouped. It does not delete server settings or data.',
+    target: `Affected workspace group: ${group.name} · ${group.tabIds.length} tab${group.tabIds.length === 1 ? '' : 's'}`,
+    execute: async () => {
+      const next = cloneTabWorkspace();
+      next.groups = next.groups.filter((candidate) => candidate.id !== groupId);
+      await persistTabWorkspace(next, `${group.name} was removed; its tabs are ungrouped.`);
+    }
+  });
+}
+
+async function moveTabToGroup(tabId, groupId) {
+  if (!SERVER_TAB_IDS.includes(tabId)) return;
+  const workspace = cloneTabWorkspace();
+  workspace.groups.forEach((group) => { group.tabIds = group.tabIds.filter((candidate) => candidate !== tabId); });
+  const group = groupId ? workspace.groups.find((candidate) => candidate.id === groupId) : null;
+  if (group) group.tabIds.push(tabId);
+  await persistTabWorkspace(workspace, group ? `${tabLabel(tabId)} moved to ${group.name}.` : `${tabLabel(tabId)} moved to Ungrouped.`);
+}
+
+async function toggleTabPin(tabId) {
+  const workspace = cloneTabWorkspace();
+  const index = workspace.pinned.indexOf(tabId);
+  if (index >= 0) workspace.pinned.splice(index, 1);
+  else workspace.pinned.push(tabId);
+  await persistTabWorkspace(workspace, index >= 0 ? `${tabLabel(tabId)} is no longer pinned.` : `${tabLabel(tabId)} is pinned.`);
+}
+
+async function moveTabInOrder(tabId, direction) {
+  const workspace = cloneTabWorkspace();
+  const pinned = workspace.pinned.includes(tabId);
+  const peerIds = workspace.order.filter((candidate) => workspace.pinned.includes(candidate) === pinned);
+  const peerIndex = peerIds.indexOf(tabId);
+  const targetPeer = peerIds[peerIndex + direction];
+  if (!targetPeer) return;
+  const sourceIndex = workspace.order.indexOf(tabId);
+  const targetIndex = workspace.order.indexOf(targetPeer);
+  [workspace.order[sourceIndex], workspace.order[targetIndex]] = [workspace.order[targetIndex], workspace.order[sourceIndex]];
+  await persistTabWorkspace(workspace, `${tabLabel(tabId)} moved ${direction < 0 ? 'earlier' : 'later'}.`);
+}
+
+async function closeWorkspaceTabs(tabIds) {
+  const workspace = cloneTabWorkspace();
+  const open = workspace.order.filter((tabId) => !workspace.closed.includes(tabId));
+  const requested = [...new Set(tabIds)].filter((tabId) => open.includes(tabId));
+  if (!requested.length) return toast('No open tabs can be closed from this workspace action.', 'error');
+  const keep = open.includes(workspace.activeTab) ? workspace.activeTab : open[0];
+  const closable = requested.filter((tabId) => !(requested.length >= open.length && tabId === keep));
+  if (!closable.length) return toast('At least one server-settings tab stays open in the workspace.', 'error');
+  workspace.closed = [...workspace.closed, ...closable];
+  if (workspace.closed.includes(workspace.activeTab)) workspace.activeTab = workspace.order.find((tabId) => !workspace.closed.includes(tabId)) || keep;
+  await persistTabWorkspace(workspace, `${closable.length} tab${closable.length === 1 ? '' : 's'} closed from this workspace.`);
+}
+
+function requestCloseWorkspaceTab(tabId) {
+  const descriptor = tabWorkspaceDescriptor(tabId);
+  if (descriptor.closed) return;
+  openDestructiveConfirmation({
+    title: `Close ${descriptor.label}`,
+    copy: 'Closing hides this tab in the local workspace only. It does not delete server settings or server data. Restore all closed tabs from the workspace at any time.',
+    target: `Affected workspace tab: ${descriptor.label}${descriptor.pinned ? ' · pinned' : ''}${descriptor.lock ? ' · locked' : ''}`,
+    execute: () => closeWorkspaceTabs([tabId])
+  });
+}
+
+function requestBulkTabClose(kind) {
+  const matcher = buildTabWorkspaceMatcher('bulk');
+  if (matcher.kind === 'invalid' || !matcher.query.trim()) return toast('Enter non-empty plain text or a valid regex before using bulk close.', 'error');
+  const result = tabBulkCandidates(kind, matcher);
+  if (!result.entries.length) return toast('No eligible tabs match this bulk-close action.', 'error');
+  const labels = result.entries.map((entry) => entry.label).join(', ');
+  openDestructiveConfirmation({
+    title: `Close ${result.entries.length} workspace tab${result.entries.length === 1 ? '' : 's'}`,
+    copy: `This hides the reviewed ${kind === 'matching' ? 'matching' : 'non-matching'} tabs from the local workspace. It does not delete server settings or data. ${result.protectedEntries.length ? `${result.protectedEntries.length} protected tab${result.protectedEntries.length === 1 ? ' is' : 's are'} excluded.` : ''}`,
+    target: `Affected tabs: ${labels}`,
+    execute: () => closeWorkspaceTabs(result.entries.map((entry) => entry.id))
+  });
+}
+
+async function restoreAllClosedTabs() {
+  const workspace = cloneTabWorkspace();
+  if (!workspace.closed.length) return toast('No workspace tabs are closed.', 'info');
+  workspace.closed = [];
+  await persistTabWorkspace(workspace, 'All closed workspace tabs were restored.');
+}
+
+async function selectServerWorkspaceTab(tabId, options = {}) {
+  if (!SERVER_TAB_IDS.includes(tabId)) return false;
+  const lock = toyLockForServerTab(tabId);
+  if (lock) {
+    state.pendingServerTabId = tabId;
+    openToyLockUnlockDialog(lock);
+    toast(`${tabLabel(tabId)} is locked by its configured toy lock.`, 'info');
+    return false;
+  }
+  const workspace = tabWorkspaceSettings();
+  if (workspace.closed.includes(tabId)) {
+    const next = cloneTabWorkspace(workspace);
+    next.closed = next.closed.filter((candidate) => candidate !== tabId);
+    next.activeTab = tabId;
+    const snapshot = await persistTabWorkspace(next, `${tabLabel(tabId)} was restored and selected.`);
+    return Boolean(snapshot);
+  }
+  setActiveTab(tabId, { persist: true, focus: options.focus === true });
+  return true;
+}
+
+function positionTabWorkspaceOverlay(element, opener, point = null) {
+  if (!element) return;
+  element.hidden = false;
+  const rect = opener?.getBoundingClientRect?.();
+  const leftCandidate = point?.x ?? rect?.left ?? 16;
+  const topCandidate = point?.y ?? rect?.bottom ?? 16;
+  const width = element.offsetWidth || 420;
+  const height = element.offsetHeight || 320;
+  element.style.left = `${Math.max(12, Math.min(leftCandidate, window.innerWidth - width - 12))}px`;
+  element.style.top = `${Math.max(12, Math.min(topCandidate, window.innerHeight - height - 12))}px`;
+}
+
+function openTabContextMenu(tabId, opener, point = null) {
+  if (!SERVER_TAB_IDS.includes(tabId)) return;
+  tabWorkspaceContextId = tabId;
+  tabWorkspacePickerTabId = null;
+  closeTabGroupPicker(false);
+  const menu = $('#tab-context-menu');
+  const descriptor = tabWorkspaceDescriptor(tabId);
+  $('#tab-context-menu-title').textContent = `${descriptor.label} tab actions`;
+  const pinLabel = $('#tab-context-menu [data-tab-menu-label="pin"]');
+  if (pinLabel) pinLabel.textContent = descriptor.pinned ? 'Unpin tab' : 'Pin tab';
+  positionTabWorkspaceOverlay(menu, opener, point);
+  refreshTabWorkspaceSearch('menu');
+  tabWorkspaceSearchControls('menu').input?.focus();
+}
+
+function closeTabContextMenu(restoreFocus = true) {
+  const menu = $('#tab-context-menu');
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  menu.style.removeProperty('left');
+  menu.style.removeProperty('top');
+  const tabId = tabWorkspaceContextId;
+  tabWorkspaceContextId = null;
+  if (restoreFocus && tabId) tabButtonForId(tabId)?.focus();
+}
+
+function renderTabGroupPicker(matcher = buildTabWorkspaceMatcher('picker')) {
+  const list = $('#tab-group-picker-list');
+  const tabId = tabWorkspacePickerTabId;
+  if (!list || !tabId) return;
+  const workspace = tabWorkspaceSettings();
+  list.replaceChildren();
+  const addTarget = (label, groupId, current) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tab-group-picker-option';
+    button.setAttribute('role', 'listitem');
+    button.setAttribute('aria-current', String(current));
+    button.textContent = label;
+    button.addEventListener('click', async () => {
+      await moveTabToGroup(tabId, groupId);
+      closeTabGroupPicker();
+    });
+    list.append(button);
+  };
+  const currentGroup = groupForTab(tabId, workspace);
+  addTarget('Ungrouped', '', !currentGroup);
+  const groups = workspace.groups.filter((group) => matcher.kind === 'invalid' || matcher.test(group.name).matches);
+  groups.forEach((group) => addTarget(`${group.name} · ${group.tabIds.length} tab${group.tabIds.length === 1 ? '' : 's'}`, group.id, group.id === currentGroup?.id));
+  if (!groups.length && workspace.groups.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No existing group matches the current destination search. Create one below instead.';
+    list.append(empty);
+  }
+}
+
+function openTabGroupPicker(tabId, opener) {
+  if (!SERVER_TAB_IDS.includes(tabId)) return;
+  closeTabContextMenu(false);
+  tabWorkspacePickerTabId = tabId;
+  tabWorkspacePickerReturnFocus = opener || tabButtonForId(tabId);
+  $('#tab-group-picker-copy').textContent = `Move ${tabLabel(tabId)} into an existing local group, create a new one, or return it to Ungrouped.`;
+  positionTabWorkspaceOverlay($('#tab-group-picker'), opener);
+  refreshTabWorkspaceSearch('picker');
+  tabWorkspaceSearchControls('picker').input?.focus();
+}
+
+function closeTabGroupPicker(restoreFocus = true) {
+  const picker = $('#tab-group-picker');
+  if (!picker || picker.hidden) return;
+  picker.hidden = true;
+  picker.style.removeProperty('left');
+  picker.style.removeProperty('top');
+  const focus = tabWorkspacePickerReturnFocus;
+  tabWorkspacePickerTabId = null;
+  tabWorkspacePickerReturnFocus = null;
+  if (restoreFocus) focus?.focus?.();
+}
+
+function configureToyLockForServerTab(tabId) {
+  closeTabContextMenu(false);
+  state.pendingServerTabId = null;
+  state.workspaceDestination = 'authenticator';
+  state.activeAuthenticatorTab = 'locks';
+  renderAll();
+  const type = $('#toy-lock-target-type');
+  const id = $('#toy-lock-target-id');
+  const label = $('#toy-lock-target-label');
+  if (type) type.value = 'tab';
+  if (id) id.value = `server.${tabId}`;
+  if (label) label.value = `${tabLabel(tabId)} server settings tab`;
+  id?.focus();
+}
+
+function handleTabContextAction(action) {
+  const tabId = tabWorkspaceContextId;
+  if (!tabId) return;
+  const opener = tabButtonForId(tabId);
+  if (action === 'group') return openTabGroupPicker(tabId, opener);
+  closeTabContextMenu(false);
+  if (action === 'pin') void toggleTabPin(tabId);
+  else if (action === 'earlier') void moveTabInOrder(tabId, -1);
+  else if (action === 'later') void moveTabInOrder(tabId, 1);
+  else if (action === 'lock') configureToyLockForServerTab(tabId);
+  else if (action === 'close') requestCloseWorkspaceTab(tabId);
+}
+
 function openTabOverflow() {
   const panel = $('#tab-overflow-panel');
   const button = $('#tab-overflow-toggle');
   if (!panel || !button) return;
   panel.hidden = false;
   button.setAttribute('aria-expanded', 'true');
-  renderTabOverflow();
-  panel.querySelector('button')?.focus();
+  renderTabWorkspace();
+  tabWorkspaceSearchControls('master').input?.focus();
 }
 
 function closeTabOverflow(restoreFocus = true) {
@@ -5462,6 +6370,38 @@ function toggleTabOverflow() {
 }
 
 function handleServerTabKeydown(event) {
+  const tabId = event.currentTarget?.dataset?.tab;
+  if (!tabId) return;
+  if ((event.shiftKey && event.key === 'F10') || event.key === 'ContextMenu') {
+    event.preventDefault();
+    openTabContextMenu(tabId, event.currentTarget);
+    return;
+  }
+  if (event.ctrlKey && event.altKey && event.key.toLocaleLowerCase() === 'p') {
+    event.preventDefault();
+    void toggleTabPin(tabId);
+    return;
+  }
+  if (event.ctrlKey && event.altKey && event.key.toLocaleLowerCase() === 'g') {
+    event.preventDefault();
+    openTabGroupPicker(tabId, event.currentTarget);
+    return;
+  }
+  if (event.ctrlKey && event.altKey && event.key.toLocaleLowerCase() === 'w') {
+    event.preventDefault();
+    requestCloseWorkspaceTab(tabId);
+    return;
+  }
+  if (event.altKey && !event.ctrlKey && !event.shiftKey && event.key === 'ArrowUp') {
+    event.preventDefault();
+    void moveTabInOrder(tabId, -1);
+    return;
+  }
+  if (event.altKey && !event.ctrlKey && !event.shiftKey && event.key === 'ArrowDown') {
+    event.preventDefault();
+    void moveTabInOrder(tabId, 1);
+    return;
+  }
   const strip = $('#server-tab-strip');
   const vertical = strip?.getAttribute('aria-orientation') === 'vertical';
   const tabs = $$('#server-editor .tab').filter((tab) => !tab.hidden);
@@ -5474,7 +6414,7 @@ function handleServerTabKeydown(event) {
   if (event.key === 'End') nextIndex = tabs.length - 1;
   if (nextIndex === null) return;
   event.preventDefault();
-  setActiveTab(tabs[nextIndex].dataset.tab, { persist: true, focus: true });
+  void selectServerWorkspaceTab(tabs[nextIndex].dataset.tab, { focus: true });
 }
 
 function setActiveTab(tab, options = {}) {
@@ -5499,7 +6439,7 @@ function setActiveTab(tab, options = {}) {
     panel.hidden = !active;
     if (active && activeTabId) panel.setAttribute('aria-labelledby', activeTabId);
   });
-  renderTabOverflow();
+  renderTabWorkspace();
   if (persist) persistActiveTab(tab);
 }
 
@@ -6718,6 +7658,7 @@ function bindEvents() {
   attachRegexSearch('schedules');
   bindAppearanceContextSearch('tab');
   bindAppearanceContextSearch('appearance');
+  initializeTabWorkspaceControls();
   $('#experience-settings-button').addEventListener('click', openExperienceSettings);
   $('#close-experience-settings-dialog').addEventListener('click', closeExperienceSettings);
   $('#close-experience-settings-button').addEventListener('click', closeExperienceSettings);
@@ -6802,6 +7743,10 @@ function bindEvents() {
     $('#appearance-font-scale-output').textContent = `${Math.round(Number($('#appearance-font-scale').value) * 100)}%`;
   });
   $('#tab-dock').addEventListener('change', changeTabDock);
+  $('#open-tab-workspace-button')?.addEventListener('click', () => {
+    closeExperienceSettings();
+    openTabOverflow();
+  });
   $('#authenticator-destination-button').addEventListener('click', openAuthenticatorDestination);
   $('#support-tickets-destination-button').addEventListener('click', openSupportTicketsDestination);
   $('#notification-center-destination-button').addEventListener('click', openNotificationCenter);
@@ -6898,6 +7843,7 @@ function bindEvents() {
     if (state.activeToyLockId) {
       state.activeToyLockId = null;
       state.pendingAuthenticatorDestination = false;
+      state.pendingServerTabId = null;
       state.unsaved.toyLockUnlock = false;
     }
   });
@@ -7104,8 +8050,12 @@ function bindEvents() {
     }
   });
   $$('#server-editor .tab').forEach((button) => {
-    button.addEventListener('click', () => setActiveTab(button.dataset.tab, { persist: true }));
+    button.addEventListener('click', () => { void selectServerWorkspaceTab(button.dataset.tab, { focus: false }); });
     button.addEventListener('keydown', handleServerTabKeydown);
+    button.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      openTabContextMenu(button.dataset.tab, button, { x: event.clientX, y: event.clientY });
+    });
   });
   $('#settings-form').addEventListener('submit', saveSettings);
   $('#memory-gb').addEventListener('input', () => { $('#memory-output').value = $('#memory-gb').value; });

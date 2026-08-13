@@ -15,6 +15,7 @@
 - [Browser-local companion-site logo customization](site-logo-customization.md)
 - [Appearance and tab-navigation foundations (desktop and public companion site)](appearance-and-tabs.md)
 - [Desktop command palette foundation](desktop-command-palette.md)
+- [Desktop tab workspace](desktop-tab-workspace.md)
 - [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)
 - [CLI RCON gateway](cli-rcon-gateway.md)
 - [Local Ollama suite foundation](local-ollama-suite.md)

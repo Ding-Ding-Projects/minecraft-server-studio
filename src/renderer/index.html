@@ -507,7 +507,44 @@
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins" data-i18n="tab.plugins">Plugins</button>
               <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console" data-i18n="tab.console">Console</button>
             </div>
-            <section class="tab-overflow-panel" id="tab-overflow-panel" aria-label="All server settings tabs" hidden><p class="muted">Choose from the same filtered tab set. Pinning, grouping, reordering, and bulk-close controls are not enabled in this foundation.</p><div id="tab-overflow-list" class="tab-overflow-list" role="list"></div></section>
+            <section class="tab-overflow-panel" id="tab-overflow-panel" aria-label="All server settings tabs and workspace controls" hidden>
+              <div><h3>All tabs in this window</h3><p class="muted">This is the current desktop window's saved workspace. It does not claim cross-window discovery because this app currently owns one window.</p></div>
+              <div id="tab-master-search-host" class="tab-workspace-search-host" data-tab-workspace-search="master" data-search-label="Search every tab in this window" data-search-placeholder="Find any tab, pin, group, or state"></div>
+              <div id="tab-master-results" class="tab-master-results" role="list" aria-live="polite"></div>
+              <section class="tab-workspace-section" aria-labelledby="tab-group-workspace-title">
+                <div><h4 id="tab-group-workspace-title">Tab groups</h4><p class="muted">Groups keep a name, color, order, and collapsed state locally. Moving a tab changes only navigation; it does not change server settings.</p></div>
+                <div id="tab-group-search-host" class="tab-workspace-search-host" data-tab-workspace-search="group" data-search-label="Search tab groups" data-search-placeholder="Find a named tab group"></div>
+                <div class="tab-group-create-row"><label class="field"><span>New group name</span><input id="tab-group-create-name" type="text" maxlength="64" autocomplete="off" placeholder="For example, Server setup"></label><label class="field tab-group-color-field"><span>Group color</span><input id="tab-group-create-color" type="color" value="#6750A4"></label><button id="tab-group-create-button" class="outlined-action" type="button">Create group</button></div>
+                <div id="tab-group-list" class="tab-group-list" aria-live="polite"></div>
+              </section>
+              <section class="tab-workspace-section" aria-labelledby="tab-bulk-workspace-title">
+                <div><h4 id="tab-bulk-workspace-title">Bulk close</h4><p class="muted">Closing hides workspace tabs only; it never deletes server data. Pinned and currently locked tabs stay excluded unless you deliberately choose otherwise.</p></div>
+                <div id="tab-bulk-search-host" class="tab-workspace-search-host" data-tab-workspace-search="bulk" data-search-label="Match tabs to close" data-search-placeholder="Enter text or build a regex"></div>
+                <label class="switch-field"><input id="tab-bulk-include-protected" type="checkbox"><span><strong>Include pinned and locked tabs</strong><small>The review names every protected tab before it can be hidden.</small></span></label>
+                <div class="tab-workspace-actions"><button id="tab-bulk-close-matching" class="danger-action" type="button">Close tabs containing text</button><button id="tab-bulk-close-not-matching" class="danger-action" type="button">Close tabs not containing text</button><button id="tab-restore-all" class="outlined-action" type="button">Restore all closed tabs</button></div>
+                <p id="tab-bulk-status" class="tab-search-status" aria-live="polite">No tabs are selected for bulk close.</p>
+              </section>
+              <div id="tab-overflow-list" class="tab-overflow-list" role="list"></div>
+            </section>
+            <section class="tab-context-menu" id="tab-context-menu" role="menu" aria-label="Tab actions" hidden>
+              <div id="tab-menu-search-host" class="tab-workspace-search-host" data-tab-workspace-search="menu" data-search-label="Filter tab actions" data-search-placeholder="Filter this tab menu"></div>
+              <p id="tab-context-menu-title" class="muted">Tab actions</p>
+              <div id="tab-context-menu-items" class="tab-context-menu-items">
+                <button type="button" role="menuitem" data-tab-menu-action="pin"><span data-tab-menu-label="pin">Pin tab</span><kbd>Ctrl+Alt+P</kbd></button>
+                <button type="button" role="menuitem" data-tab-menu-action="earlier"><span>Move earlier</span><kbd>Alt+↑</kbd></button>
+                <button type="button" role="menuitem" data-tab-menu-action="later"><span>Move later</span><kbd>Alt+↓</kbd></button>
+                <button type="button" role="menuitem" data-tab-menu-action="group"><span>Move… into group…</span><kbd>Ctrl+Alt+G</kbd></button>
+                <button type="button" role="menuitem" data-tab-menu-action="lock"><span>Configure toy lock…</span></button>
+                <button type="button" role="menuitem" data-tab-menu-action="close"><span>Close tab</span><kbd>Ctrl+Alt+W</kbd></button>
+              </div>
+            </section>
+            <section class="tab-group-picker" id="tab-group-picker" aria-label="Move tab into group" hidden>
+              <div><h3>Move tab into group</h3><p id="tab-group-picker-copy" class="muted">Choose a local tab group or return the tab to Ungrouped.</p></div>
+              <div id="tab-picker-search-host" class="tab-workspace-search-host" data-tab-workspace-search="picker" data-search-label="Search destination groups" data-search-placeholder="Find a destination group"></div>
+              <div id="tab-group-picker-list" class="tab-group-picker-list" role="list"></div>
+              <div class="tab-group-create-row"><label class="field"><span>Create group while moving</span><input id="tab-picker-create-name" type="text" maxlength="64" autocomplete="off" placeholder="New group name"></label><label class="field tab-group-color-field"><span>Color</span><input id="tab-picker-create-color" type="color" value="#6750A4"></label><button id="tab-picker-create-button" class="outlined-action" type="button">Create and move</button></div>
+              <div class="dialog-actions"><button id="tab-group-picker-cancel" class="outlined-action" type="button">Cancel</button></div>
+            </section>
           </section>
 
           <form id="settings-form">
@@ -1086,7 +1123,7 @@
           </section>
         </section>
 
-        <section class="experience-card appearance-card" aria-labelledby="appearance-tabs-title" data-settings-card data-settings-search="appearance theme density seed typography font tabs dock navigation search regex">
+        <section class="experience-card appearance-card" aria-labelledby="appearance-tabs-title" data-settings-card data-settings-search="appearance theme density seed typography font tabs dock navigation search regex workspace pin group reorder overflow bulk close">
           <div>
             <p class="eyebrow">APPEARANCE AND NAVIGATION FOUNDATION</p>
             <h3 id="appearance-tabs-title">Appearance and browser-style tabs</h3>
@@ -1121,11 +1158,11 @@
               <label class="field"><span>Corner radius</span><input id="appearance-target-radius" type="number" min="0" max="999" step="1" value="0"><small>0–999 pixels; reset returns to the active theme.</small></label>
             </div>
             <p id="appearance-target-status" class="experience-status" aria-live="polite">Loading target appearance…</p>
-            <div class="appearance-actions"><button id="save-appearance-navigation-button" type="button" class="primary-action">Apply appearance and tabs</button><button id="reset-appearance-target-button" type="button" class="outlined-action">Reset selected target to theme</button></div>
+            <div class="appearance-actions"><button id="save-appearance-navigation-button" type="button" class="primary-action">Apply appearance and tabs</button><button id="reset-appearance-target-button" type="button" class="outlined-action">Reset selected target to theme</button><button id="open-tab-workspace-button" type="button" class="outlined-action">Open tab workspace</button></div>
           </section>
-          <section class="appearance-inventory appearance-searchable" data-appearance-search="inventory boundaries full every element editor Word color picker pinned grouped reordered master search command palette">
+          <section class="appearance-inventory appearance-searchable" data-appearance-search="inventory boundaries full every element editor Word color picker pinned grouped reordered master search command palette bulk close current window">
             <h4>Foundation inventory boundary</h4>
-            <ul><li>Implemented now: persisted theme, density, seed color, bounded typography, direct shell/tab/action targets, tab dock, tab selection, keyboard navigation, local tab search, regex filtering, and an all-tabs overflow list.</li><li>Not implemented in this foundation: an every-element editor, installed-font enumeration, word-processor-depth typography, infinite color translation, pinned/reordered/grouped tabs, cross-window tab search, command palette, or bulk tab actions.</li></ul>
+            <ul><li>Implemented now: persisted theme, density, seed color, bounded typography, direct shell/tab/action targets, dock-aware tab selection, tab order, pinning, named groups, collapse state, current/group/master searches with local regex builders, all-tabs overflow, context actions, and confirmation-routed bulk close.</li><li>Not implemented in this foundation: an every-element editor, installed-font enumeration, word-processor-depth typography, infinite color translation, cross-window tab discovery, or a claim that this one-window workspace has multi-window behavior.</li></ul>
           </section>
         </section>
 
