@@ -16,7 +16,7 @@ This public page is static. It has no account system, backend, analytics, instal
 
 The published installer is for Windows x64 version 0.1.0 and is unsigned. Windows may show an unknown-publisher or SmartScreen warning. The page links to the asset and release status without claiming that a download or installation completed.
 
-The page does not install prerequisites, download a Paper or Spigot distribution, create files, start a Minecraft server, send a console command, or convert a file. It does not retain a selected source file, source file name, source path, or a secret. Its local browser exceptions are deliberately bounded: the optional personal-vocabulary JSON control reads user-selected JSON bytes only for strict local validation, and the Ollama observer makes three fixed loopback reads only after a visitor explicitly selects **Refresh local Ollama**. The observer has no editable host, port, path, token, proxy, redirect, or cloud route, and it cannot create, change, remove, copy, pull, or run a model.
+The page does not install prerequisites, download a Paper or Spigot distribution, create server files, start a Minecraft server, or send a console command. It does not retain a selected source file, source path, raw source/output bytes, browser file handle, download location, or a secret. Its deliberately bounded browser-local exceptions are the optional personal-vocabulary JSON control, the file converter, and the Ollama observer. The converter can inspect up to 12 user-selected files, each no larger than 1 MiB, and perform only its explicitly enabled local text/structured-data/encoding transformations. Its browser-local history retains at most 100 sanitized metadata records; it is not a source-file store. PDF, media, archive, and native-workbook conversions remain unavailable. The observer makes three fixed loopback reads only after a visitor explicitly selects **Refresh local Ollama**. It has no editable host, port, path, token, proxy, redirect, or cloud route, and it cannot create, change, remove, copy, pull, or run a model.
 
 All server operation and every Ollama capability beyond that read-only browser observer belong exclusively to the installed desktop application, where local paths, prerequisite checks, process status, data handling, and outcomes can be verified.
 
@@ -43,6 +43,35 @@ The visible destinations are:
 `index.html` loads `contract.js` before the module `app.js` at the end of the document. The module imports `vocabulary-loader.js`, which is a browser-safe, DOM-free strict validator. The interaction engine hydrates visible settings, notifications, audit history, browser-local status, and completeness state from the contract's version-3 `minecraft-server-studio.site.contract.v2` local-storage record, then persists changes through the contract's documented public methods. It does not maintain a parallel session-storage settings model. Other than the explicit fixed-loopback Ollama observer described below, the engines do not establish a chat bridge, backend connection, desktop command channel, server connection, installer service, or credential store. The static installer anchors remain ordinary browser links and are not transformed into an in-page transfer flow.
 
 The settings preview uses the same contract state that it renders: language mode, English and Cantonese funny levels, theme, density, and dialog emoji preference. The language mode, both tone sliders, and the emoji switch are real persisted browser-local controls on this page; they do not delegate to the desktop app. The command palette registers browser-local destinations through the contract and teleports to the associated preview panel. The personal-vocabulary control accepts only the exact version-1 schema below; malformed, duplicate-key, unsafe, oversized, unsupported, or partial JSON is rejected as a whole before it is cached or applied.
+
+## Browser-local file converter
+
+The `file-converter` surface is an independently functional browser-local
+slice, not a decorative desktop-app preview. It accepts up to 12 files through
+the browser's file input, rejects a source above 1 MiB, and inspects at most
+the first 512 bytes before admitting a record to the current-page queue. The
+queue holds up to 24 items. Detection and adapter eligibility use bounded bytes
+and content validation rather than a filename extension or MIME value alone.
+
+The only enabled local routes are UTF-8 text to UTF-8 text; valid JSON, CSV,
+or TSV to JSON, CSV, TSV, or deliberately limited YAML-style text; and any
+bounded source bytes to Base64 or hexadecimal text. Base64 and hexadecimal are
+encodings rather than media, PDF, archive, or workbook conversion. PDF, image,
+audio, video, archive, and native-workbook cards stay visible but disabled with
+their exact missing parser/encoder reason. A category owns its own plain-text
+filter and adjacent anchored pattern helper; pattern mode is explicit and does
+not share state across categories.
+
+The visitor previews an eligible output and explicitly chooses Download before
+the browser creates a file. The browser decides the download location. The
+existing browser-local contract retains at most 100 metadata-only conversion
+records: `id`, sanitized `sourceName`, `sourceType`, `sourceBytes`,
+`detectedKind`, `category`, `targetType`, `targetFormat`, `targetName`,
+`status`, `adapterId`, `createdAt`, `updatedAt`, `downloadRequestedAt`, and `reason`.
+It never retains source/output bytes, preview text, browser file handles, a
+source path, or a download location. See
+[`docs/features/browser-local-file-converter.md`](../docs/features/browser-local-file-converter.md)
+for the full behavior, failure, privacy, and verification boundary.
 
 ```json
 {
@@ -105,7 +134,7 @@ This is a public-source inventory, not a claim that the installed application ha
 | Browser-local Status | Browser-local contract view | This README and `CONTRACT.md` | Missing | Missing | Missing |
 | Settings and appearance | Browser-local language, funny-level, notice-emoji, personal-vocabulary, and renamed presentation-mode controls wired to contract | This README and `CONTRACT.md` | Core only; page-wide localization remains incomplete | Not run in fast-delivery lane | Missing |
 | Offline documentation | Static source hook | This README | Missing | Missing | Missing |
-| File converter | Static unavailable-capability boundary | This README and `CONTRACT.md` | Missing | Missing | Missing |
+| File converter | Browser-local bounded text/structured-data/encoding conversion; PDF/media/archive/native-workbook routes remain unavailable | This README, `CONTRACT.md`, and `../docs/features/browser-local-file-converter.md` | Missing | Missing | Missing |
 | Authenticator and locks | Static credential-free boundary | This README and `CONTRACT.md` | Missing | Missing | Missing |
 | Browser-local Ollama observer | Explicit fixed-loopback `GET` observer with a local last-success snapshot; catalog, pull, chat, delete, copy, hardware fit, and harness remain unavailable | This README, `CONTRACT.md`, and the [feature article](../docs/features/browser-local-ollama-observer.md) | Missing | Not run in fast-delivery lane | Missing |
 | Local version history | Browser-local audit preview only | This README and `CONTRACT.md` | Missing | Missing | Missing |

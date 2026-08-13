@@ -447,3 +447,40 @@ The backup/update candidate adds a bounded local snapshot lifecycle for world, c
 - The local Ollama foundation does not yet complete the exhaustive official Model Store, catalog pagination and revision evidence, hardware-fit assessment, batch pulls, streamed chat, capability-gated attachments, registered harness profiles, rollback, offline documentation/troubleshooting, or their required proof set.
 - The documentation destination bundles and renders the current feature-article inventory, but local history, notification center, full localization, complete command-palette/tabs coverage, tests, packaged interaction, and captures remain pending.
 - Scheduled appearance values, validated external schedule sources, full narrator runtime evidence, broad local-model/converter workflows, universal localization, personal-vocabulary upload, history, exports, and packaged-runtime evidence remain open work. The bounded settings modules above do not stand in for those complete contracts.
+
+## Browser-local companion-site file converter
+
+The public `site/` source now contains an independently browser-local,
+deliberately bounded conversion slice. It admits up to 12 selected files per
+action, each up to 1 MiB, sniffs no more than the first 512 bytes before a
+queue record, and keeps up to 24 files only for the open page. The durable
+browser-local history contains at most 100 metadata-only records with bounded
+`id`, sanitized `sourceName`, `sourceType`, `sourceBytes`, `detectedKind`,
+`category`, `targetType`, `targetFormat`, `targetName`, `status`, `adapterId`,
+`createdAt`, `updatedAt`, `downloadRequestedAt`, and `reason` fields. This timestamp records only a browser download request, never a destination or completion result. It never stores
+a source path, browser file handle, download location, preview text, source
+bytes, or output bytes.
+
+Enabled routes are limited to UTF-8 text, validated JSON/CSV/TSV, a deliberately
+limited YAML-style target, and Base64/hex encodings. PDF, images, audio, video,
+archives, and native workbooks stay visible but unavailable with an exact
+missing parser/encoder reason. No browser upload, remote converter, desktop
+bridge, shell, server action, or download-location tracking exists.
+
+### Directly related documentation
+
+- `docs/features/browser-local-file-converter.md`: detailed browser-local
+  behavior, bounds, available routes, unavailable adapters, privacy, failure
+  handling, configuration, and verification boundary.
+- `site/README.md` and `site/CONTRACT.md`: public static-site and contract
+  limits for the local converter.
+
+### Remaining work
+
+- Do not broaden the available set without separately bounded parsing,
+  validation, loss disclosure, output validation, accessibility work, and
+  evidence.
+- PDF, media, archive, and native-workbook conversion remain unavailable.
+- The fast-delivery lane has not provided tests, linting, independent review,
+  build/package verification, runtime interaction, or captures for this
+  browser-local feature.
