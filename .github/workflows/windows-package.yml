@@ -6,6 +6,12 @@ on:
       - main
   workflow_dispatch:
 
+# Release publication has external side effects. Serialize it without cancelling
+# an already running release so each candidate checks the complete prior history.
+concurrency:
+  group: minecraft-server-studio-windows-release
+  cancel-in-progress: false
+
 permissions:
   actions: read
   contents: write
@@ -138,6 +144,75 @@ jobs:
           $lineCount | Set-Content -LiteralPath $lineCountPath -Encoding utf8
           Add-Content -Path $env:GITHUB_ENV -Value "LINE_COUNT_PATH=$lineCountPath"
 
+      - name: Resolve optional dim sum release metadata
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          $catalogRecord = 'hk-dish-0001'
+          $codeName = 'Classic Har Gow · 蝦餃'
+          $photoUrl = 'https://github.com/Ding-Ding-Projects/dim-sum-photos/releases/download/catalog-v1/hk-dish-0001-classic-har-gow.png'
+          $currentTag = "v0.1.0-build.$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
+          $metadataPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\dim-sum-release-metadata.md'
+          $omissionReason = $null
+          $canAssignCodeName = $false
+
+          try {
+            $releaseHistoryJson = & gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseHistoryJson)) {
+              throw 'release history could not be read'
+            }
+
+            $releasePages = $releaseHistoryJson | ConvertFrom-Json -Depth 100
+            $priorReleases = @()
+            foreach ($page in @($releasePages)) {
+              foreach ($release in @($page)) {
+                if ($null -ne $release -and [string]$release.tag_name -ne $currentTag) {
+                  $priorReleases += $release
+                }
+              }
+            }
+
+            $priorAssignments = @($priorReleases | Where-Object {
+              $releaseName = [string]$_.name
+              $releaseBody = [string]$_.body
+              $releaseName.Contains($codeName) -or
+                $releaseBody.Contains($codeName) -or
+                $releaseBody.Contains($catalogRecord) -or
+                $releaseBody.Contains($photoUrl)
+            })
+
+            if ($priorAssignments.Count -eq 0) {
+              $canAssignCodeName = $true
+            } else {
+              $priorTags = @($priorAssignments | ForEach-Object {
+                if ([string]::IsNullOrWhiteSpace([string]$_.tag_name)) { '<untagged release>' } else { [string]$_.tag_name }
+              }) -join ', '
+              $omissionReason = "catalog record $catalogRecord is already recorded by $priorTags"
+            }
+          } catch {
+            $omissionReason = 'release history could not be read, so the verified catalog record remains unassigned'
+            Write-Warning $omissionReason
+          }
+
+          if ($canAssignCodeName) {
+            @(
+              '## Release code name and public photo',
+              "- Code name: $codeName",
+              "- Catalog record: $catalogRecord",
+              "- Public photo: [$codeName]($photoUrl)",
+              '- The photo remains hosted by Ding-Ding-Projects/dim-sum-photos. This release links to it only; it does not download, copy, bundle, or attach the image.'
+            ) | Set-Content -LiteralPath $metadataPath -Encoding utf8
+          } else {
+            @(
+              '## Release code name and public photo',
+              "- No dim sum code name was assigned. Reason: $omissionReason.",
+              '- This workflow did not download, copy, bundle, or attach a photo.'
+            ) | Set-Content -LiteralPath $metadataPath -Encoding utf8
+          }
+
+          Add-Content -Path $env:GITHUB_ENV -Value "DIM_SUM_RELEASE_NOTES_PATH=$metadataPath"
+
       - name: Create or update non-draft release
         shell: pwsh
         env:
@@ -192,6 +267,7 @@ jobs:
           $durationText = ('{0:00}:{1:00}:{2:00}' -f [math]::Floor($duration.TotalHours), $duration.Minutes, $duration.Seconds)
           $hashMarkdown = Get-Content -LiteralPath $env:ARTIFACT_HASHES_PATH -Raw
           $lineCountMarkdown = Get-Content -LiteralPath $env:LINE_COUNT_PATH -Raw
+          $dimSumReleaseMetadata = Get-Content -LiteralPath $env:DIM_SUM_RELEASE_NOTES_PATH -Raw
           $releaseBodyPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\release-body.md'
           @(
             "# $releaseTitle",
@@ -218,8 +294,7 @@ jobs:
             '## Verification boundary',
             'This workflow restored dependencies, packaged the Windows artifact, validated the Squirrel output, calculated hashes, and recorded the line count. It did not run tests, linting, type checks, accessibility checks, reviews, or capture work.',
             '',
-            '## Release code name and photo',
-            'A dim sum code name and photo are unavailable because this workflow has not resolved a verified catalog asset. It does not query, copy, or bundle catalog assets.'
+            $dimSumReleaseMetadata.TrimEnd()
           ) | Set-Content -LiteralPath $releaseBodyPath -Encoding utf8
 
           & gh release edit $tag --repo $env:GITHUB_REPOSITORY --title $releaseTitle --notes-file $releaseBodyPath
