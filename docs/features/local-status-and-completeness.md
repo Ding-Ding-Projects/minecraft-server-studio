@@ -101,10 +101,15 @@ two-key destructive confirmation flow.
 ## BuildTools plan inventory boundary
 
 The `spigot-buildtools` row includes both the existing BuildTools adapter and the
-separate typed plan-only orchestration controller. The plan-only controller
-surfaces a Java/Git requirement matrix, controlled workspace and output paths,
-and a direct-argv preview, but leaves execution unavailable. It is not evidence
-that BuildTools downloaded, executed, or produced a server JAR.
+separate typed plan-only orchestration controller. The only renderer-facing
+plan route is `studio:plan-buildtools` / `planBuildTools`, backed by
+`BuildToolsOrchestrationController.createPlan()`; the main/preload boundary does
+not register legacy BuildTools preflight or execution routes. The plan-only
+controller surfaces a Java/Git requirement matrix, controlled workspace and
+output paths, and a direct-argv preview, but returns unavailable execution with
+`processStarted: false`. It is not evidence that BuildTools downloaded,
+executed, promoted, rolled back, or produced a server JAR. Spigot provisioning
+is likewise unavailable in this plan-only build.
 
 ## Application-update inventory boundary
 

@@ -78,11 +78,28 @@ workflow accepts only a user-selected local JAR.
 
 ## Execution boundary and recovery
 
-The returned `execution` state is always `unavailable` in this implementation.
-There is no downloader, process runner, JAR validator, promotion/rollback
-handler, or executable button registered through the plan-only IPC route. A
-successfully prepared plan is not a BuildTools run, does not prove that a Java
-runtime or Git will work at execution time, and does not create a server JAR.
+The only renderer-facing IPC route that creates a BuildTools plan is `studio:plan-buildtools`,
+exposed to the renderer as `planBuildTools` and backed by
+`BuildToolsOrchestrationController.createPlan()`. The main process does not
+register `studio:buildtools-preflight` or `studio:execute-buildtools-plan`, and
+the preload API does not expose `buildToolsPreflight` or
+`executeBuildToolsPlan`.
+
+The returned `execution` state is always `unavailable` with
+`processStarted: false` in this implementation. There is no renderer-reachable
+downloader, process runner, JAR validator, promotion/rollback handler, or
+executable button. The retained legacy ServerManager preflight is not a desktop
+capability because it does not cross the main-process or preload boundary. Its
+`executeBuildToolsPlan()` method itself fails closed with an unavailable error,
+so it cannot download, run, promote, or roll back a JAR even if another future
+caller reached it. A successfully prepared plan is not a BuildTools run, does
+not prove that a Java runtime or Git will work at execution time, and does not
+create a server JAR.
+
+Spigot provisioning also fails closed in this plan-only build. A request to set
+up a Spigot server returns an unavailable state that directs the user to review
+the typed BuildTools plan; it does not turn that plan into a download, process,
+JAR promotion, rollback operation, or server setup.
 
 If a typed input is invalid, the planner reports the exact rejected field. If a
 workspace is unsafe, choose a dedicated local directory outside the server,
