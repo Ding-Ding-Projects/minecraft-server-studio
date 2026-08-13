@@ -1159,15 +1159,17 @@
     else main.appendChild(panel);
   }
 
-  function installUnavailableDownloadCtas() {
-    all(".download-button").forEach(function (cta) {
-      cta.disabled = true;
-      cta.setAttribute("aria-disabled", "true");
-      cta.setAttribute("title", "Unavailable: an installer link appears only after a verified public release.");
-      cta.dataset.mssUnavailable = "true";
+  function installVerifiedDownloadCtas() {
+    all("a[data-mss-verified-installer][href]").forEach(function (cta) {
+      cta.removeAttribute("aria-disabled");
+      cta.removeAttribute("disabled");
+      cta.removeAttribute("title");
+      delete cta.dataset.mssUnavailable;
+      cta.dataset.mssVerified = "true";
     });
     all('[data-contract-hook="download-states"]').forEach(function (grid) {
-      grid.dataset.mssUnavailable = "true";
+      delete grid.dataset.mssUnavailable;
+      grid.dataset.mssVerified = "true";
     });
   }
 
@@ -1247,7 +1249,7 @@
     installDestructiveDemo();
     installHistoryFilters();
     installExports();
-    installUnavailableDownloadCtas();
+    installVerifiedDownloadCtas();
     installSearches();
     installPalette();
     notify("info", localize("marketing.preview.ready", "Browser-local product preview ready. This page does not contact a server, installer, runtime, or file service."));
