@@ -1,7 +1,9 @@
 const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
+const { StudioSettingsService } = require('./studio-settings.cjs');
 let CredentialVault;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
@@ -14,6 +16,9 @@ app.setName('Minecraft Server Studio');
 let mainWindow;
 let serverManager;
 let credentialVault;
+let studioSettings;
+let schoolModeVault;
+let schoolModeCredentialKey;
 
 function rconPacket(id, type, body) {
   const payload = Buffer.from(String(body), 'utf8');
@@ -117,6 +122,79 @@ function sendToRenderer(event) {
   mainWindow.webContents.send('studio:event', event);
 }
 
+function requireStudioSettings() {
+  if (!studioSettings) throw new Error('Presentation settings are still starting.');
+  return studioSettings;
+}
+
+function schoolModeVaultStatus() {
+  if (!schoolModeVault || !schoolModeCredentialKey) {
+    return { state: 'unavailable', mode: 'none', configured: false, detail: 'Operating-system credential protection is unavailable.' };
+  }
+  const status = schoolModeVault.getStatus();
+  let configured = false;
+  try {
+    configured = status.state !== 'unavailable' && schoolModeVault.has(schoolModeCredentialKey);
+  } catch {
+    return { state: 'unavailable', mode: 'none', configured: false, detail: 'Operating-system credential protection is unavailable.' };
+  }
+  return {
+    state: status.state,
+    mode: status.mode,
+    configured,
+    detail: status.state === 'ready'
+      ? (configured ? 'A shared unlock credential is configured.' : 'Create an unlock password or PIN before enabling the shared mode.')
+      : 'Operating-system credential protection is unavailable.'
+  };
+}
+
+function experienceSnapshot() {
+  return {
+    ...requireStudioSettings().snapshot(),
+    credential: schoolModeVaultStatus()
+  };
+}
+
+function applyDisplayName(displayName) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setTitle(displayName);
+}
+
+function publishExperienceSettings() {
+  const snapshot = experienceSnapshot();
+  applyDisplayName(snapshot.local.displayName);
+  sendToRenderer({ type: 'experience-settings', payload: snapshot });
+  return snapshot;
+}
+
+function normalizeSchoolCredential(value, label) {
+  if (typeof value !== 'string') throw new Error(`${label} must be text.`);
+  if (value.length < 4 || value.length > 256) throw new Error(`${label} must contain between 4 and 256 characters.`);
+  if (/\u0000/.test(value)) throw new Error(`${label} contains an invalid character.`);
+  return value;
+}
+
+function credentialsMatch(left, right) {
+  const first = Buffer.from(left, 'utf8');
+  const second = Buffer.from(right, 'utf8');
+  return first.length === second.length && crypto.timingSafeEqual(first, second);
+}
+
+function requireSchoolModeVault() {
+  const status = schoolModeVaultStatus();
+  if (!schoolModeVault || !schoolModeCredentialKey || status.state !== 'ready') {
+    throw new Error('Operating-system credential protection is unavailable. Restore it before changing the shared mode.');
+  }
+  return status;
+}
+
+function verifySchoolModeCredential(candidate) {
+  const status = requireSchoolModeVault();
+  if (!status.configured) throw new Error('Create a shared unlock password or PIN before changing the shared mode.');
+  const supplied = normalizeSchoolCredential(candidate, 'Unlock password or PIN');
+  const stored = schoolModeVault.read(schoolModeCredentialKey);
+  if (!stored || !credentialsMatch(stored, supplied)) throw new Error('The unlock password or PIN did not match. You can recover by deleting the shared local application-data record yourself.');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -124,6 +202,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 720,
     show: false,
+    title: experienceSnapshot().local.displayName,
     titleBarStyle: 'hidden',
     backgroundColor: '#10131a',
     webPreferences: {
@@ -138,10 +217,25 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const appData = app.getPath('appData');
+  const sharedSettingsDirectory = path.join(appData, 'Ding Ding Projects', 'shared-experience-settings');
+  studioSettings = new StudioSettingsService({
+    dataDir: path.join(app.getPath('userData'), 'settings'),
+    sharedDataDir: sharedSettingsDirectory,
+    onChange: publishExperienceSettings
+  });
+  studioSettings.initialize();
   credentialVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
   }) : null;
+  schoolModeVault = CredentialVault ? new CredentialVault({
+    dataDir: path.join(sharedSettingsDirectory, 'credential-vault'),
+    safeStorage
+  }) : null;
+  schoolModeCredentialKey = schoolModeVault
+    ? schoolModeVault.createKey('ding-ding-projects', 'shared-school-mode-unlock')
+    : null;
   serverManager = new ServerManager({
     dataDir: path.join(app.getPath('userData'), 'servers'),
     credentialSecretProvider: async (kind, serverId) => {
@@ -160,12 +254,50 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('before-quit', () => {
+  studioSettings?.stopWatching();
+});
+
 function requireManager() {
   if (!serverManager) throw new Error('Minecraft Server Studio is still starting.');
   return serverManager;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
+ipcMain.handle('studio:experience-settings', () => experienceSnapshot());
+ipcMain.handle('studio:update-experience-settings', (_event, patch) => {
+  requireStudioSettings().updateLocal(patch);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:create-school-mode-record', () => {
+  requireStudioSettings().ensureSharedRecord();
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:update-school-mode-label', (_event, label) => {
+  requireStudioSettings().updateSchoolModeLabel(label);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:save-school-mode-credential', (_event, input) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Unlock credential input is invalid.');
+  requireStudioSettings().ensureSharedRecord();
+  const status = requireSchoolModeVault();
+  if (status.configured) verifySchoolModeCredential(input.currentCredential);
+  const next = normalizeSchoolCredential(input.newCredential, 'New unlock password or PIN');
+  schoolModeVault.save(schoolModeCredentialKey, next);
+  return publishExperienceSettings();
+});
+ipcMain.handle('studio:set-school-mode', (_event, input) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || typeof input.enabled !== 'boolean') throw new Error('Shared mode input is invalid.');
+  const settings = requireStudioSettings();
+  if (input.enabled) {
+    const status = requireSchoolModeVault();
+    if (!status.configured) throw new Error('Create a shared unlock password or PIN before enabling the shared mode.');
+  } else {
+    verifySchoolModeCredential(input.credential);
+  }
+  settings.setSchoolModeEnabled(input.enabled);
+  return experienceSnapshot();
+});
 ipcMain.handle('studio:create-server', (_event, draft) => requireManager().createServer(draft));
 ipcMain.handle('studio:update-server', async (_event, id, patch) => {
   const safePatch = patch && typeof patch === 'object' ? { ...patch } : patch;

@@ -1,6 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('studio', {
+  experienceSettings: () => ipcRenderer.invoke('studio:experience-settings'),
+  updateExperienceSettings: (patch) => ipcRenderer.invoke('studio:update-experience-settings', patch),
+  createSchoolModeRecord: () => ipcRenderer.invoke('studio:create-school-mode-record'),
+  updateSchoolModeLabel: (label) => ipcRenderer.invoke('studio:update-school-mode-label', label),
+  saveSchoolModeCredential: (input) => ipcRenderer.invoke('studio:save-school-mode-credential', input),
+  setSchoolMode: (input) => ipcRenderer.invoke('studio:set-school-mode', input),
   listServers: () => ipcRenderer.invoke('studio:list-servers'),
   createServer: (draft) => ipcRenderer.invoke('studio:create-server', draft),
   updateServer: (id, patch) => ipcRenderer.invoke('studio:update-server', id, patch),

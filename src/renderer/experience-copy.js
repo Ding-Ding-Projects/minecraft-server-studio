@@ -1,0 +1,159 @@
+(() => {
+  'use strict';
+
+  const COPY = Object.freeze({
+    'brand.eyebrow': { english: 'LOCAL CONTROL CENTER', cantonese: '本機控制中心' },
+    'nav.createServer': { english: 'Create server', cantonese: '建立伺服器' },
+    'nav.findServer': { english: 'Find a server', cantonese: '搵伺服器' },
+    'nav.searchPlaceholder': { english: 'Filter by name or software', cantonese: '按名稱或軟件篩選' },
+    'nav.refresh': { english: 'Refresh local data', cantonese: '重新整理本機資料' },
+    'nav.preferences': { english: 'Studio preferences', cantonese: 'Studio 偏好設定' },
+    'heading.noServer': { english: 'NO SERVER SELECTED', cantonese: '未揀伺服器' },
+    'heading.firstServer': { english: 'Create your first Minecraft server', cantonese: '建立你第一個 Minecraft 伺服器' },
+    'heading.serverType': { english: '{software} SERVER', cantonese: '{software} 伺服器' },
+    'dependency.description': { english: 'Paper needs Java. Spigot setup also needs Git. {appName} detects both and can install missing tools using Windows package managers after you select the action.', cantonese: 'Paper 需要 Java，Spigot 設定亦都需要 Git。你揀咗動作之後，{appName} 會偵測兩樣工具，並且可以用 Windows 套件管理員安裝缺少嘅工具。' },
+    'plugins.description': { english: 'Select a local plugin JAR. {appName} copies it into the selected server\'s plugins folder without opening a shell.', cantonese: '揀一個本機 plugin JAR。{appName} 會將佢複製去已揀伺服器嘅 plugins 資料夾，唔會開 shell。' },
+    'empty.title': { english: 'Build a local server, not a pile of terminal commands.', cantonese: '整個本機伺服器，唔使砌一堆終端指令。' },
+    'empty.description': { english: 'Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.', cantonese: '建立 Paper 或 Spigot 伺服器，用結構化控制項揀世界同網絡設定，再喺同一個主控台開動。' },
+    'tab.general': { english: 'General', cantonese: '一般' },
+    'tab.world': { english: 'World', cantonese: '世界' },
+    'tab.gameplay': { english: 'Gameplay', cantonese: '遊戲玩法' },
+    'tab.network': { english: 'Network', cantonese: '網絡' },
+    'tab.runtime': { english: 'Runtime', cantonese: '執行環境' },
+    'tab.buildtools': { english: 'BuildTools', cantonese: 'BuildTools' },
+    'tab.live': { english: 'Live management', cantonese: '即時管理' },
+    'tab.commands': { english: 'Command Center', cantonese: '指令中心' },
+    'tab.status': { english: 'Local status', cantonese: '本機狀態' },
+    'tab.advanced': { english: 'Advanced', cantonese: '進階' },
+    'tab.plugins': { english: 'Plugins', cantonese: '外掛' },
+    'tab.console': { english: 'Console', cantonese: '主控台' },
+    'dialog.createEyebrow': { english: 'NEW LOCAL SERVER', cantonese: '新本機伺服器' },
+    'dialog.createTitle': { english: 'Create a Minecraft server', cantonese: '建立 Minecraft 伺服器' },
+    'dialog.createDescription': { english: 'Choose the server software, version, folder, and initial capacity. All other settings remain editable after creation.', cantonese: '揀伺服器軟件、版本、資料夾同初始容量；建立之後仍然可以改其他設定。' },
+    'dialog.cancel': { english: 'Cancel', cantonese: '取消' },
+    'dialog.create': { english: 'Create server', cantonese: '建立伺服器' },
+    'dialog.confirmTitle': { english: 'Confirm {action}', cantonese: '確認 {action}' },
+    'dialog.confirmBackup': { english: 'This action can change world or server state. Review the affected server, create the required backup, operate both confirmation controls, then move the slider to authorize it.', cantonese: '呢個動作可以改變世界或伺服器狀態。請檢視受影響伺服器、建立所需備份、操作兩個確認控制項，再推動滑桿授權。' },
+    'dialog.confirmImpact': { english: 'This action can affect the selected server or connected players. Review the affected server, operate both confirmation controls, then move the slider to authorize it.', cantonese: '呢個動作可以影響已揀伺服器或已連線玩家。請檢視受影響伺服器、操作兩個確認控制項，再推動滑桿授權。' },
+    'dialog.affectedResource': { english: 'Affected resource: {server} · command /{command}', cantonese: '受影響資源：{server} · 指令 /{command}' },
+    'settings.title': { english: 'Studio preferences', cantonese: 'Studio 偏好設定' },
+    'settings.subtitle': { english: 'Personal presentation controls', cantonese: '個人呈現控制項' },
+    'settings.languageMode': { english: 'Language mode', cantonese: '語言模式' },
+    'settings.languageTitle': { english: 'Language and message style', cantonese: '語言同訊息風格' },
+    'settings.languageDescription': { english: 'Choose how app-owned navigation, headings, dialog framing, and notification framing are presented. Dynamic server facts and external error text stay exact.', cantonese: '揀應用程式本身嘅導覽、標題、對話框框架同通知框架點樣呈現。動態伺服器資料同外部錯誤文字會保持準確。' },
+    'settings.languageEnglish': { english: 'English', cantonese: '英文' },
+    'settings.languageCantonese': { english: 'Playful Hong Kong-style Cantonese', cantonese: '玩味港式廣東話' },
+    'settings.languageBilingual': { english: 'Bilingual', cantonese: '雙語' },
+    'settings.englishFunny': { english: 'English message playfulness', cantonese: '英文訊息玩味程度' },
+    'settings.cantoneseFunny': { english: 'Cantonese message playfulness', cantonese: '廣東話訊息玩味程度' },
+    'settings.funnyDescription': { english: 'This styles all app-owned messages, including errors and warnings, without changing facts. You can reset it at any time.', cantonese: '呢個設定會改變所有應用程式本身嘅訊息風格，包括錯誤同警告，但唔會改變事實。你隨時可以重設。' },
+    'settings.dialogEmoji': { english: 'Show emoji decorations in dialogs and message boxes', cantonese: '喺對話框同訊息框顯示 emoji 裝飾' },
+    'settings.dialogEmojiDescription': { english: 'Decorative emoji never replace the factual message or control labels.', cantonese: '裝飾 emoji 唔會代替事實訊息或控制項標籤。' },
+    'settings.displayName': { english: 'Display name', cantonese: '顯示名稱' },
+    'settings.displayNameDescription': { english: 'Changes only what this app shows in its title and app-owned copy. Package identity, data location, installer identity, and update identity do not change.', cantonese: '只會改變程式標題同應用程式本身顯示嘅名稱。封裝身分、資料位置、安裝程式身分同更新身分都唔會改。' },
+    'settings.savePresentation': { english: 'Save presentation settings', cantonese: '儲存呈現設定' },
+    'settings.schoolTitle': { english: '{label} control', cantonese: '{label} 控制' },
+    'settings.schoolEyebrow': { english: 'SHARED LOCAL EXPERIENCE CONTROL', cantonese: '共用本機使用體驗控制' },
+    'settings.schoolDescription': { english: '{label} is a shared local user-experience control, not a security boundary. It forces English while active and hides language and message-playfulness controls. It does not encrypt data or prevent a local reset.', cantonese: '{label} 係共用本機使用體驗控制，唔係保安界線。啟用時會強制英文，同時隱藏語言同訊息玩味控制。佢唔會加密資料，亦唔會阻止本機重設。' },
+    'settings.schoolLabel': { english: 'Mode label', cantonese: '模式名稱' },
+    'settings.saveSchoolLabel': { english: 'Save mode label', cantonese: '儲存模式名稱' },
+    'settings.schoolEnabled': { english: 'Enable {label}', cantonese: '啟用 {label}' },
+    'settings.schoolToggleDescription': { english: 'Turning it off requires the shared unlock password or PIN. While the shared record is unavailable, English safety presentation remains active.', cantonese: '關閉時需要共用解鎖密碼或 PIN。共用記錄唔可用時，英文安全呈現會保持啟用。' },
+    'settings.schoolRecordMissing': { english: 'The shared local mode record is missing. Create it before configuring this control; English safety presentation stays active until then.', cantonese: '共用本機模式記錄唔見咗。請先建立記錄先可以設定；到時之前英文安全呈現會保持啟用。' },
+    'settings.schoolRecordUnavailable': { english: 'The shared local mode record is unavailable. English safety presentation stays active; repair local application-data access and refresh this dialog.', cantonese: '共用本機模式記錄唔可用。英文安全呈現會保持啟用；請修復本機應用程式資料存取，然後重新開啟呢個對話框。' },
+    'settings.createSchoolRecord': { english: 'Create shared local record', cantonese: '建立共用本機記錄' },
+    'settings.unlockTitle': { english: 'Shared unlock password or PIN', cantonese: '共用解鎖密碼或 PIN' },
+    'settings.unlockDescription': { english: 'The credential is stored through operating-system protection, never in the shared record. To reset after losing it, delete the shared local application-data record yourself; this is a user-experience recovery route, not account support.', cantonese: '憑證會透過作業系統保護儲存，唔會寫入共用記錄。忘記之後要重設，請你自己刪除共用本機應用程式資料記錄；呢個係使用體驗復原方法，唔係帳戶支援。' },
+    'settings.recoveryFolder': { english: 'Recovery folder:', cantonese: '復原資料夾：' },
+    'settings.currentCredential': { english: 'Current password or PIN', cantonese: '目前密碼或 PIN' },
+    'settings.newCredential': { english: 'New password or PIN', cantonese: '新密碼或 PIN' },
+    'settings.confirmCredential': { english: 'Confirm new password or PIN', cantonese: '確認新密碼或 PIN' },
+    'settings.saveCredential': { english: 'Save unlock credential', cantonese: '儲存解鎖憑證' },
+    'settings.credentialUnavailable': { english: 'Operating-system credential protection is unavailable. This control cannot change the mode until it is restored.', cantonese: '作業系統憑證保護唔可用。未修復之前，呢個控制唔可以改變模式。' },
+    'settings.credentialRequired': { english: 'Create an unlock password or PIN before enabling this mode.', cantonese: '啟用呢個模式之前，請先建立解鎖密碼或 PIN。' },
+    'settings.credentialReady': { english: 'A shared unlock credential is configured.', cantonese: '已設定共用解鎖憑證。' },
+    'settings.schoolActive': { english: '{label} is active. English safety presentation is currently applied.', cantonese: '{label} 已啟用。目前正套用英文安全呈現。' },
+    'settings.schoolInactive': { english: '{label} is off. Saved presentation preferences are available.', cantonese: '{label} 已關閉。已儲存嘅呈現偏好可以使用。' },
+    'settings.close': { english: 'Close preferences', cantonese: '關閉偏好設定' },
+    'toast.presentationSaved': { english: 'Presentation settings saved.', cantonese: '已儲存呈現設定。' },
+    'toast.schoolRecordCreated': { english: 'The shared local mode record is ready.', cantonese: '共用本機模式記錄已準備好。' },
+    'toast.schoolLabelSaved': { english: 'The shared mode label was saved.', cantonese: '已儲存共用模式名稱。' },
+    'toast.credentialSaved': { english: 'The shared unlock credential was saved.', cantonese: '已儲存共用解鎖憑證。' },
+    'toast.schoolEnabled': { english: '{label} is now on. English safety presentation is active.', cantonese: '{label} 已啟用。英文安全呈現已生效。' },
+    'toast.schoolDisabled': { english: '{label} is now off. Your saved presentation preferences are restored.', cantonese: '{label} 已關閉。你已儲存嘅呈現偏好已恢復。' },
+    'toast.error': { english: 'Attention', cantonese: '留意' },
+    'toast.success': { english: 'Updated', cantonese: '已更新' },
+    'toast.info': { english: 'Notice', cantonese: '提示' }
+  });
+
+  const ENGLISH_TONES = Object.freeze([
+    'Professional',
+    'Friendly',
+    'Bright',
+    'Playful',
+    'Maximum block-party'
+  ]);
+  const CANTONESE_TONES = Object.freeze([
+    '正式',
+    '親切',
+    '醒神',
+    '玩味',
+    '方塊派對最大火力'
+  ]);
+  const ENGLISH_BRAND_TONES = Object.freeze([
+    'LOCAL CONTROL CENTER',
+    'LOCAL CONTROL DESK',
+    'LOCAL BLOCK CONTROL DESK',
+    'LOCAL BLOCK COMMAND POST',
+    'MAXIMUM BLOCK-PARTY CONTROL HQ'
+  ]);
+  const CANTONESE_BRAND_TONES = Object.freeze([
+    '本機控制中心',
+    '本機控制站',
+    '本機方塊控制站',
+    '本機方塊指揮站',
+    '本機方塊派對總部'
+  ]);
+
+  function interpolate(template, values = {}) {
+    return String(template).replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, key) => String(values[key] ?? ''));
+  }
+
+  function entry(key) {
+    return COPY[key] || { english: key, cantonese: key };
+  }
+
+  function format(key, mode, values) {
+    const value = entry(key);
+    const english = interpolate(value.english, values);
+    const cantonese = interpolate(value.cantonese, values);
+    if (mode === 'cantonese') return cantonese;
+    if (mode === 'bilingual') return `${english} · ${cantonese}`;
+    return english;
+  }
+
+  function tone(language, level) {
+    const values = language === 'cantonese' ? CANTONESE_TONES : ENGLISH_TONES;
+    return values[Math.max(1, Math.min(5, Number(level) || 1)) - 1];
+  }
+
+  function toastPrefix(mode, levels, kind) {
+    const englishBase = format(`toast.${kind}`, 'english');
+    const cantoneseBase = format(`toast.${kind}`, 'cantonese');
+    const english = `${englishBase} — ${tone('english', levels?.english)}`;
+    const cantonese = `${cantoneseBase} — ${tone('cantonese', levels?.cantonese)}`;
+    if (mode === 'cantonese') return cantonese;
+    if (mode === 'bilingual') return `${english} · ${cantonese}`;
+    return english;
+  }
+
+  function brandingEyebrow(mode, levels) {
+    const english = ENGLISH_BRAND_TONES[Math.max(1, Math.min(5, Number(levels?.english) || 1)) - 1];
+    const cantonese = CANTONESE_BRAND_TONES[Math.max(1, Math.min(5, Number(levels?.cantonese) || 1)) - 1];
+    if (mode === 'cantonese') return cantonese;
+    if (mode === 'bilingual') return `${english} · ${cantonese}`;
+    return english;
+  }
+
+  window.StudioExperienceCopy = Object.freeze({ COPY, brandingEyebrow, format, tone, toastPrefix });
+})();
