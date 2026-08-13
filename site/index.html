@@ -275,10 +275,27 @@
           </article>
 
           <article class="preview-panel" id="notifications-preview" data-contract-surface="notification-center" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Notification center</p><h2>See status without a blocking prompt</h2></div><span class="preview-status">Preview only</span></div>
-            <p>The desktop app maintains its notification center locally. This static page only documents its non-blocking notification behavior.</p>
-            <ul class="notification-list" data-contract-hook="notification-history"><li><span class="notification-dot notification-dot--info"></span><div><strong>Verified installer link</strong><small>Release v0.1.0-build.72.1 provides a Windows x64 installer. The asset is unsigned, and Windows may show an unknown-publisher or SmartScreen warning.</small></div></li><li><span class="notification-dot notification-dot--quiet"></span><div><strong>No server activity is connected</strong><small>This browser page does not start, stop, or observe a server.</small></div></li></ul>
-            <div class="inline-controls" data-contract-hook="notification-bulk-actions"><button type="button" disabled>Manage notifications in desktop app</button><span>Nothing is dismissed or saved here.</span></div>
+            <div class="panel-heading"><div><p class="eyebrow">Notification center</p><h2>Review browser-local status without a blocking prompt</h2></div><output class="preview-status" data-mss-notification-summary aria-live="polite">Preparing local notices</output></div>
+            <p>This page stores only its own bounded notification records in this browser. Notices never report a server, installer, download, desktop-app, account, or external-data outcome.</p>
+            <aside class="notification-boundary" aria-label="Browser-local notification boundary">Only page-local notification metadata is available here. Clearing records cannot delete browser downloads, server data, installed-app data, credentials, files, or any external data.</aside>
+            <section class="notification-center" data-mss-notification-center aria-labelledby="notification-center-heading">
+              <h3 id="notification-center-heading">Browser-local notice history</h3>
+              <div class="notification-center-toolbar">
+                <div class="preview-search" data-contract-hook="notification-search-regex"><label><span>Search local notices</span><input type="search" placeholder="Search title, message, and status" autocomplete="off" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+                <label class="notification-toggle"><input type="checkbox" data-mss-notification-show-dismissed /> Show dismissed notice history</label>
+              </div>
+              <div class="notification-bulk-actions" data-contract-hook="notification-bulk-actions" aria-label="Notification bulk actions">
+                <button type="button" data-mss-notification-add="true">Add local information notice</button>
+                <button type="button" data-mss-notification-select-visible="true">Select visible active notices</button>
+                <button type="button" data-mss-notification-clear-selection="true">Clear selection</button>
+                <button type="button" data-mss-notification-dismiss-selected="true" disabled>Dismiss selected notices</button>
+                <button type="button" data-mss-notification-clear-dismissed="true" disabled>Clear dismissed metadata…</button>
+                <button type="button" data-mss-notification-clear-all="true" disabled>Clear all local notices…</button>
+              </div>
+              <output class="notification-status" data-mss-notification-status aria-live="polite">Preparing browser-local notification controls.</output>
+              <ul class="notification-list notification-center-list" data-mss-notification-list aria-live="polite"></ul>
+              <section class="notification-confirmation-host" data-mss-notification-confirmation hidden aria-live="polite"></section>
+            </section>
           </article>
 
           <article class="preview-panel" id="downloads-preview" data-contract-surface="download-flow" tabindex="-1">

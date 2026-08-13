@@ -113,11 +113,13 @@ The custom record also carries only its derived width, height, fit (`contain`, `
 
 `recordAudit(action, target, detail)` writes a bounded local audit record. A normalized record contains only `id`, `action`, `target`, `detail`, and `createdAt`; action and target are bounded labels, detail is bounded non-secret text, and the contract keeps at most 500 records. It is not Git history, a server log, a filesystem history, a browser-history reader, or a source-of-truth record for a server operation. It records only what the browser-local surface did.
 
+The public landing page uses this bounded contract only for page-local notices and audit records. Its visible Notification center labels its messages as browser-local, gives `info`, `success`, and `progress` notices a bounded in-page auto-dismiss path, keeps `warning` and `error` notices until dismissal, and does not interpret any notice as a server, installer, transfer, file, desktop, or external-service result. The static host exposes only local dismissal and notification-metadata clear actions; it cannot perform any of those operations.
+
 The local version-history destination may read and filter only this bounded page-owned audit list. Date, action, and plain-text filters compose against the same list; plain text is the default search mode; and an explicit regular-expression mode uses `evaluateRegex` locally and must surface invalid input rather than silently return an unrelated empty list. The host may select only visible filtered audit records for export or local deletion. It must not inspect a desktop application, selected converter file content, browser file handles, source paths, browser history, server output, or the separate authenticator/toy-lock store.
 
 `createExport(format, records)` generates text for `json`, `jsonl`, `csv`, `tsv`, or `markdown`. The browser-local history destination supplies only selected audit records. Exports are UTF-8 text supplied to the host; the host may prepare a browser download but cannot know its destination or prove its completion. The static page has no desktop handoff, remote transfer, archive, encryption, or unsupported-format fallback. `redactStateForExport()` never exports personal-vocabulary replacements or file metadata, a custom-logo data URL, raw secrets, TOTP secrets, passwords, codes, pairing data, Support Tickets note content, or the presentation-mode verifier; it reports only safe omission metadata. The engine does not store raw credentials or codes.
 
-Removing selected audit records or clearing the audit list is limited to this page's browser-local state. The host must use the existing two-key/full-slider destructive-action state machine and must leave the records unchanged after cancellation, Escape, or an incomplete slider. It must never treat a page-local deletion as a server, desktop, file, download, or authenticator mutation.
+Removing selected audit records, clearing the audit list, or clearing dismissed/all notification metadata is limited to this page's browser-local state. The host must use the existing two-key/full-slider destructive-action state machine, expose an Emergency exit and Escape cancellation path, return focus to the originating control, and leave records unchanged after cancellation or an incomplete slider. It must never treat a page-local deletion as a server, desktop, file, download, or authenticator mutation.
 
 ## Regex evaluation and palette search
 
@@ -138,6 +140,8 @@ Closing a pinned, locked, or non-closable tab is refused unless the caller expli
 `beginDestructiveAction({ id, title, affected })` creates an in-memory confirmation session. `advanceDestructiveAction(session, { key, slider, confirm, cancel })` requires both independent key controls and a slider value of 100 before confirmation. It returns an explicit cancelled, awaiting-keys, awaiting-slider, or confirmed state.
 
 The engine never calls a destructive operation. A host must place this state machine in its own accessible UI: identify the real affected data, expose two independently operated controls, add the full-range slider, offer an emergency exit and Escape/back route, honor reduced motion, return focus, and execute the actual operation only after `confirmed` is returned.
+
+The public landing page identifies only its own notification metadata as affected data. Its dismissed/all-record clear flows require two independent acknowledgements and the full slider before the host calls `clearNotifications()`, with Emergency exit, Escape cancellation, and focus return. It must not be represented as deletion, modification, upload, transfer, installation, desktop control, or server authorization beyond that origin-scoped metadata clear.
 
 ## Personal vocabulary loader
 

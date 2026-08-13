@@ -35,6 +35,32 @@ documentation candidate under the active fast-delivery workflow. The record
 does not establish a server operation, a desktop export, a browser transfer,
 or a real capture; those remain separate evidence requirements.
 
+## Browser-local notification center and destructive-confirmation candidate
+
+The public companion site now documents and exposes bounded origin-local
+notification and audit records. The visible center reports only page-local
+preview activity; its plain-text/regex discovery, individual/selected
+dismissal, and dismissed/all-record clear routes remain origin-local. The clear
+routes state the exact affected record count and require two separately
+operated acknowledgements plus a 0–100 slider, Emergency exit/Escape, and
+focus return before they call `clearNotifications()`. They remove only local
+notification metadata and never call a server, change a local file, start or
+observe an installer transfer, contact a backend, or authorize a desktop
+operation.
+
+The detailed public boundary is in
+`docs/features/browser-local-notifications-and-confirmation.md`; the fixed
+desktop offline-documentation inventory includes that article. The companion
+page documentation in `site/README.md` and `site/CONTRACT.md` explicitly keeps
+the notification and confirmation behavior browser-local and confines the
+destructive effect to notification metadata.
+
+No tests, linting, review, build, package, browser interaction, screen capture,
+Page publication, release, or network request ran in this source-only
+fast-delivery lane. Localization breadth, accessible interaction, notification
+actions, durable-storage exercise, built-site interaction, and capture evidence
+remain unverified.
+
 ## Public companion-site appearance and tab-navigation documentation candidate
 
 The public companion site now has documentation and a per-surface inventory entry for a browser-local appearance and tab-navigation foundation. Its independent local state covers system/light/dark theme, density, accent, safe typography, bounded appearance-target controls, left/right/top/bottom tab docking, active/order/pin/group state, overflow, and separate current-strip, group, and master tab searches with anchored regular-expression builders. It remains a page-local feature only: it does not alter the installed application, operate a Minecraft server, manage an installer transfer, send an account request, or contact a backend.
