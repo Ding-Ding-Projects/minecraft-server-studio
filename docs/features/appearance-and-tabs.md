@@ -18,9 +18,9 @@ Open **Studio preferences** and use **Appearance and tabs foundation** to apply 
 | Typography | Persists a bounded local list of font families, a 85%–125% type scale, and weights 400, 500, 600, or 700. |
 | Tab dock | Persists the server-settings tab strip at the left, right, top, or bottom edge. Left is the default. The tab list updates its `aria-orientation`, and keyboard navigation uses Up/Down for side docks and Left/Right for top or bottom docks. |
 | Active tab | Persists the currently selected server-settings tab after a short local debounce. |
-| Direct target editor | Applies and persists color and corner-radius overrides for the app shell, server-settings tab strip, and primary actions. Reset restores a target to the active theme's inherited values. |
+| Canonical target profile editor | Applies and persists a bounded profile for the app shell, server-settings tab strip, primary actions, secondary actions, preference cards, status cards, or dialog surfaces. Each target can locally override surface/text colors, corner radius, font family, type scale, font weight, density, and motion; every unset profile field inherits the active theme or base appearance setting. |
 
-The server-settings strip, including the Paper JAR CLI tab, has a working all-tabs overflow list, local tab search, persisted ordering, pinning, grouping, and protected bulk-close controls. The advanced workspace remains intentionally limited to the current desktop window. It does not claim multi-window tab discovery or control. See [Desktop tab workspace](desktop-tab-workspace.md) for its persistence, search, grouping, accessible-orientation, and protected-close boundaries.
+The server-settings strip, including the Paper JAR CLI tab, has a working all-tabs overflow list, local tab search, persisted ordering, pinning, grouping, and protected bulk-close controls. Its context menu contains **Edit tab appearance…**, and `Ctrl+Alt+A` on a focused tab plus Shift+right-click both open the persisted **Settings-tab strip** profile. That profile changes the strip as a whole, not one individual tab. The advanced workspace remains intentionally limited to the current desktop window. It does not claim multi-window tab discovery or control. See [Desktop tab workspace](desktop-tab-workspace.md) for its persistence, search, grouping, accessible-orientation, and protected-close boundaries.
 
 The current-strip, group, and master tab searches keep plain text as their default and expose separate anchored regex builders with raw patterns, flags, construction tokens, local sample text, live match counts, and capture-group feedback. An invalid regex leaves all entries visible and reports the error instead of applying a partial filter.
 
@@ -30,13 +30,21 @@ Each query and pattern is limited to 256 characters and is evaluated only agains
 
 `src/main/appearance-navigation-settings.cjs` owns a separate `appearance-navigation-settings.json` record under the application's existing private settings directory. It is deliberately separate from the presentation and shared School-mode records so an appearance change does not migrate or overwrite the shared mode state.
 
-The record uses an exact-key, versioned schema with:
+The current version-3 record uses an exact-key, versioned schema with:
 
 - a 64 KiB maximum file size;
-- allowlisted theme, density, font, tab, and target values;
+- seven canonical profile target identifiers: `shell`, `tabStrip`, `primaryAction`, `secondaryAction`, `settingsCard`, `statusCard`, and `dialogSurface`;
+- allowlisted theme, density, font, tab, motion, and target-profile values;
 - strict six-digit hexadecimal color validation;
-- bounded type scale and corner-radius values; and
+- bounded type scale and corner-radius values;
 - atomic same-directory replacement with restrictive file permissions.
+
+Older version-1 and version-2 records, plus the prior tab-workspace version-3
+record shape, remain readable. Their shell, tab-strip, and primary-action
+colors/radius values retain their meaning while the new canonical targets and
+profile fields initialize to inherited values. The record is written as version
+3 on the next accepted appearance update; an otherwise readable legacy record
+is not overwritten just because it was loaded.
 
 The renderer receives only the validated snapshot through the existing narrow Electron IPC bridge. There is no network request, telemetry event, export, credential, server setting, or command execution in this feature.
 
@@ -44,13 +52,18 @@ If the record is invalid or unavailable, the renderer uses safe in-memory defaul
 
 ### Current boundary
 
-The direct target editor currently covers only the app shell, the server-settings tab strip, and primary actions. It does not claim a complete every-element editor.
+The canonical profile editor renders the eight listed properties only for its
+seven named targets. It does not claim a complete every-element editor. The
+preferences surface names the selected target, reports which values are local
+instead of inherited, and displays a separate unsupported-property statement.
+Resetting a selected profile clears all eight values and returns that profile to
+the active theme/base-setting provenance.
 
 The following remain incomplete and visibly identified as such in the preferences inventory:
 
 - installed-font enumeration, variable-font axes, and word-processor-depth typography;
 - an infinite color picker, color-space translator, contrast audit, and per-property locks;
-- per-element editors for every dialog, menu, control, state, and pseudo-state;
+- gradients, borders, elevation, state/pseudo-state profiles, and per-element editors for every dialog, menu, control, state, and pseudo-state;
 - cross-window tab discovery or a multi-window tab workspace;
 - a full command palette; and
 - full application-wide localization and every-search-surface regex coverage.
@@ -59,7 +72,12 @@ The overflow list and tab search are real controls, not placeholders. The bounda
 
 ### Update and recovery behavior
 
-An unsaved direct-target preview is tracked as local pending work. The unsigned application-update controller therefore continues to prevent a restart while a preview or the preferences dialog remains unresolved. Closing preferences without applying an appearance preview restores the last persisted values.
+An unsaved profile preview is tracked as local pending work. The unsigned
+application-update controller therefore continues to prevent a restart while a
+preview or the preferences dialog remains unresolved. Closing preferences
+without applying a profile preview restores the last persisted values. Context
+opening from a tab returns focus to that tab after the preferences dialog
+closes.
 
 No appearance value changes package identity, executable name, installer identity, update feed, application-data location, server data, or shared School-mode credential.
 

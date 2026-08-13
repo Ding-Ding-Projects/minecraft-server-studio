@@ -114,11 +114,55 @@ Player-oriented records require an exact user-supplied player UUID and name. IP 
 - `docs/features/server-orchestration.md`
 - `docs/features/local-status-and-completeness.md`
 - `docs/features/README.md`
-- `README.md`, `ROADMAP.md`, `CHANGELOG.md`, and `HANDOFF.md`
 
 ### Verification boundary
 
 No tests, linting, independent review, build, package, server-process interaction, runtime validation, release, application-network route, or screen capture ran in this source-only fast-delivery lane. The source has not established that an installed server accepts, reloads, or applies a local access-list record. Localization breadth, accessibility validation, packaged interaction, and real capture evidence remain pending.
+
+## Desktop canonical appearance-profile candidate
+
+The desktop appearance/navigation record is now schema version 3. It stores
+seven canonical, bounded profiles for the app shell, settings-tab strip,
+primary actions, secondary actions, preference cards, status cards, and dialog
+surfaces. Every profile has independently persisted surface/text color, corner
+radius, font family, type scale, font weight, density, and motion values. A
+selected profile displays whether each value is locally overridden or inherited
+from the active theme/base appearance settings; reset clears all profile values
+without changing installed identity or server data.
+
+The renderer maps every supported profile property to the target it names:
+shell spacing/chrome, tab navigation and tabs, filled and secondary actions,
+preference cards, local-status cards, or dialog surfaces. The tab context menu
+includes **Edit tab appearance…**; `Ctrl+Alt+A` from a tab and Shift+right-click
+both route to the settings-tab-strip profile. Old version-1/version-2 records
+and the prior tab-workspace version-3 shape retain their existing three target
+fields and normalize to the new profile shape in memory; the next accepted
+update writes version 3.
+
+### Directly related paths
+
+- `src/main/appearance-navigation-settings.cjs`
+- `src/main/studio-settings.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/main/server-manager.cjs`
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/appearance-and-tabs.md`
+- `docs/features/local-status-and-completeness.md`
+- `README.md`, `ROADMAP.md`, `CHANGELOG.md`, and `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, runtime interaction, package, release,
+or screenshot capture ran in this fast-delivery source lane. The desktop completeness
+inventory records source evidence as in progress and keeps localization,
+focused checks, built-artifact interaction, and capture evidence pending.
+This candidate does not claim every rendered element, installed-font discovery,
+Word-style text effects, gradients, borders, elevation, state/pseudo-state
+profiles, color-space translation, full per-property locks, or multi-window
+tab discovery.
 
 ## Browser-local history and safe-export documentation candidate
 

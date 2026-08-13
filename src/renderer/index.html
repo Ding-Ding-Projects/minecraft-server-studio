@@ -548,6 +548,7 @@
                 <button type="button" role="menuitem" data-tab-menu-action="earlier"><span>Move earlier</span><kbd>Alt+↑</kbd></button>
                 <button type="button" role="menuitem" data-tab-menu-action="later"><span>Move later</span><kbd>Alt+↓</kbd></button>
                 <button type="button" role="menuitem" data-tab-menu-action="group"><span>Move… into group…</span><kbd>Ctrl+Alt+G</kbd></button>
+                <button type="button" role="menuitem" data-tab-menu-action="appearance"><span>Edit tab appearance…</span><kbd>Ctrl+Alt+A</kbd></button>
                 <button type="button" role="menuitem" data-tab-menu-action="lock"><span>Configure toy lock…</span></button>
                 <button type="button" role="menuitem" data-tab-menu-action="close"><span>Close tab</span><kbd>Ctrl+Alt+W</kbd></button>
               </div>
@@ -1209,11 +1210,11 @@
           </section>
         </section>
 
-        <section class="experience-card appearance-card" aria-labelledby="appearance-tabs-title" data-settings-card data-settings-search="appearance theme density seed typography font tabs dock navigation search regex workspace pin group reorder overflow bulk close">
+        <section class="experience-card appearance-card" aria-labelledby="appearance-tabs-title" data-settings-card data-settings-search="appearance profile element target theme density seed typography font motion shape color radius provenance unsupported tabs dock navigation search regex workspace pin group reorder overflow bulk close">
           <div>
-            <p class="eyebrow">APPEARANCE AND NAVIGATION FOUNDATION</p>
+            <p class="eyebrow">APPEARANCE PROFILES AND NAVIGATION</p>
             <h3 id="appearance-tabs-title">Appearance and browser-style tabs</h3>
-            <p class="muted">These saved controls apply to this running desktop shell. Direct editing currently targets the app shell, server settings tab strip, and primary actions; all other rendered elements remain explicitly outside this foundation.</p>
+            <p class="muted">These saved controls apply to this running desktop shell. Canonical profiles target the app shell, settings-tab strip, primary and secondary actions, preference cards, status cards, and dialog surfaces. Other rendered elements and advanced property types stay explicitly unavailable.</p>
           </div>
           <div class="anchored-search appearance-search" data-context-search="appearance">
             <label class="field search-field" for="appearance-search"><span class="sr-only">Search appearance and tab controls</span><input id="appearance-search" type="search" maxlength="256" autocomplete="off" placeholder="Find an appearance or tab control"></label>
@@ -1235,20 +1236,27 @@
             <label class="field"><span>Font weight</span><select id="appearance-font-weight"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select><small>Applies to the bounded shell typography token.</small></label>
             <label class="field"><span>Tab dock</span><select id="tab-dock"><option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option></select><small>Left is the default. The tab list changes keyboard axis and ARIA orientation with the dock.</small></label>
           </div>
-          <section class="appearance-target-editor appearance-searchable" data-appearance-search="element target shell tab strip primary action surface text color corner radius">
-            <div><h4>Direct target editor</h4><p class="muted">The selected target's colors and corner radius update live. Values inherit the active theme until you apply an override.</p></div>
+          <section class="appearance-target-editor appearance-searchable" data-appearance-search="element target shell tab strip primary secondary action settings preference card status dialog surface text color corner radius font family type scale font weight density motion provenance unsupported">
+            <div><h4>Canonical target profile editor</h4><p class="muted">The selected target's rendered colors, shape, typography, density, and motion update locally while you preview. Each property inherits the active theme or base appearance setting until this profile saves an override.</p></div>
             <div class="appearance-target-grid">
-              <label class="field"><span>Target</span><select id="appearance-target"><option value="shell">App shell</option><option value="tabStrip">Settings-tab strip</option><option value="primaryAction">Primary actions</option></select></label>
+              <label class="field"><span>Target</span><select id="appearance-target"><option value="shell">App shell</option><option value="tabStrip">Settings-tab strip</option><option value="primaryAction">Primary actions</option><option value="secondaryAction">Secondary actions</option><option value="settingsCard">Preference cards</option><option value="statusCard">Status cards</option><option value="dialogSurface">Dialog surfaces</option></select></label>
               <label class="field"><span>Surface color</span><input id="appearance-target-surface" type="color" value="#10131A"></label>
               <label class="field"><span>Text color</span><input id="appearance-target-on-surface" type="color" value="#E0E5F0"></label>
               <label class="field"><span>Corner radius</span><input id="appearance-target-radius" type="number" min="0" max="999" step="1" value="0"><small>0–999 pixels; reset returns to the active theme.</small></label>
+              <label class="field"><span>Font family</span><select id="appearance-target-font-family"><option value="system-ui">System UI</option><option value="Segoe UI">Segoe UI</option><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Consolas">Consolas</option></select><small>Uses the bounded font list this desktop can render; installed-font discovery is not available.</small></label>
+              <label class="field"><span>Type scale <output id="appearance-target-font-scale-output" class="range-output">100%</output></span><input id="appearance-target-font-scale" type="range" min="0.85" max="1.25" step="0.01" value="1"><small>Applies to the selected rendered target only.</small></label>
+              <label class="field"><span>Font weight</span><select id="appearance-target-font-weight"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></label>
+              <label class="field"><span>Density</span><select id="appearance-target-density"><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="spacious">Spacious</option></select><small>Changes only the selected target's rendered spacing or control sizing.</small></label>
+              <label class="field"><span>Motion</span><select id="appearance-target-motion"><option value="standard">Standard</option><option value="reduced">Reduced</option></select><small>Reduced motion shortens this target's visual transitions. System reduced-motion preference still takes precedence.</small></label>
             </div>
             <p id="appearance-target-status" class="experience-status" aria-live="polite">Loading target appearance…</p>
-            <div class="appearance-actions"><button id="save-appearance-navigation-button" type="button" class="primary-action">Apply appearance and tabs</button><button id="reset-appearance-target-button" type="button" class="outlined-action">Reset selected target to theme</button><button id="configure-appearance-toy-lock" type="button" class="outlined-action">Configure selected toy lock…</button><button id="unlock-appearance-toy-lock" type="button" class="outlined-action" hidden>Unlock selected target</button><button id="open-tab-workspace-button" type="button" class="outlined-action">Open tab workspace</button></div>
+            <p id="appearance-target-provenance" class="appearance-provenance" aria-live="polite">Loading profile provenance…</p>
+            <p id="appearance-target-support" class="appearance-unsupported" aria-live="polite">Loading supported property detail…</p>
+            <div class="appearance-actions"><button id="save-appearance-navigation-button" type="button" class="primary-action">Apply appearance and tabs</button><button id="reset-appearance-target-button" type="button" class="outlined-action">Reset selected profile to inherited values</button><button id="configure-appearance-toy-lock" type="button" class="outlined-action">Configure selected toy lock…</button><button id="unlock-appearance-toy-lock" type="button" class="outlined-action" hidden>Unlock selected target</button><button id="open-tab-workspace-button" type="button" class="outlined-action">Open tab workspace</button></div>
           </section>
           <section class="appearance-inventory appearance-searchable" data-appearance-search="inventory boundaries full every element editor Word color picker pinned grouped reordered master search command palette bulk close current window">
             <h4>Foundation inventory boundary</h4>
-            <ul><li>Implemented now: persisted theme, density, seed color, bounded typography, direct shell/tab/action targets, dock-aware tab selection, tab order, pinning, named groups, collapse state, current/group/master searches with local regex builders, all-tabs overflow, context actions, and confirmation-routed bulk close.</li><li>Not implemented in this foundation: an every-element editor, installed-font enumeration, word-processor-depth typography, infinite color translation, cross-window tab discovery, or a claim that this one-window workspace has multi-window behavior.</li></ul>
+            <ul><li>Implemented now: persisted theme, density, seed color, bounded typography, seven canonical target profiles, inherited-value provenance, tab-context routing to the tab-strip profile, dock-aware tab selection, tab order, pinning, named groups, collapse state, current/group/master searches with local regex builders, all-tabs overflow, context actions, and confirmation-routed bulk close.</li><li>Not implemented in this foundation: an editor for every rendered element, installed-font enumeration, variable-font axes, word-processor-depth typography, infinite color translation, gradients, borders, elevation, state or pseudo-state profiles, cross-window tab discovery, or a claim that this one-window workspace has multi-window behavior.</li></ul>
           </section>
         </section>
 
