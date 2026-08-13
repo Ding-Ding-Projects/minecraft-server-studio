@@ -4092,6 +4092,7 @@ async function refreshOfflineDocumentation() {
   if (!documents.some((record) => record.id === state.offlineDocument?.id)) state.offlineDocument = null;
   renderDocumentationDestination();
   if (!state.offlineDocument && documents.length) await readOfflineDocument(documents[0].id);
+  renderCommandPalette();
 }
 
 async function readOfflineDocument(id) {
@@ -5235,6 +5236,7 @@ function renderAll() {
   renderDocumentationDestination();
   renderChangelogDestination();
   setActiveTab(state.activeTab);
+  renderCommandPalette();
 }
 
 function appearanceContextSearchElements(id) {
