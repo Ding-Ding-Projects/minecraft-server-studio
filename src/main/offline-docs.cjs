@@ -39,6 +39,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('narrator-and-scheduled-settings', 'narrator-and-scheduled-settings.md', 'Event narrator and scheduled language settings', 'Configure local platform narration and bounded local-time language schedules.'),
   entry('cli-rcon-gateway', 'cli-rcon-gateway.md', 'CLI RCON gateway', 'Use the protected one-shot CLI route for RCON commands.'),
   entry('local-ollama-suite', 'local-ollama-suite.md', 'Local Ollama suite foundation', 'Inspect the bounded fixed-loopback local service inventory.'),
+  entry('browser-local-ollama-observer', 'browser-local-ollama-observer.md', 'Browser-local Ollama observer', 'Visitor-triggered browser-only observation of the fixed local Ollama API with bounded data handling and no remote-control bridge.'),
   entry('unsigned-automatic-updates', 'unsigned-automatic-updates.md', 'Unsigned automatic updates', 'Understand the fixed Squirrel update feed and restart choice.'),
   entry('release-packaging', 'release-packaging.md', 'Windows release packaging metadata', 'Understand public dim-sum code-name metadata and its no-copy release boundary.'),
   entry('file-converter', 'file-converter.md', 'Local file-converter foundation', 'Inspect a local file and browse the honest disabled adapter catalog.'),
