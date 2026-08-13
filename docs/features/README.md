@@ -22,6 +22,7 @@
 - [Windows release packaging metadata](release-packaging.md)
 - [Local file-converter foundation](file-converter.md)
 - [Browser-local companion-site file converter](browser-local-file-converter.md)
+- [Browser-local history and safe exports](browser-local-history-and-safe-exports.md)
 - [External editor integration](external-editor-integration.md)
 - [Local authenticator and toy-lock foundation](authenticator-and-toy-locks.md)
 - [Support Tickets recovery desk](support-tickets.md)

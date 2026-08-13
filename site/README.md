@@ -7,7 +7,7 @@ The landing page describes:
 - the Paper and Spigot server choices;
 - automatic Java and Git prerequisite setup performed by the installed desktop application;
 - local server planning, configuration, lifecycle, and plugin-management capabilities;
-- browser-local controls and product destinations such as settings, optional event narration, local schedules, companion-site logo customization, documentation, file conversion, authenticator and lock management, a deliberately narrow local Ollama observer, local history, notification center, and download states; and
+- browser-local controls and product destinations such as settings, optional event narration, local schedules, companion-site logo customization, documentation, file conversion, authenticator and lock management, a deliberately narrow local Ollama observer, local history with bounded safe exports, notification center, and download states; and
 - the verified public installer availability boundary.
 
 ## Truthful static boundary
@@ -83,6 +83,32 @@ for the full behavior, failure, privacy, and verification boundary.
 ```
 
 The JSON payload is limited to 64 KiB in UTF-8, three structural levels, 250 records, nonempty 128-code-point `from` strings, and 512-code-point `to` strings. It is not uploaded or shared. The loader rejects malformed UTF-8, duplicate object keys (including escaped equivalents), unknown fields, unsafe keys, unsupported versions, invalid Unicode, and incomplete cache envelopes. The contract revalidates its browser-local cache on startup and the page revalidates the payload again before display or text replacement. Clearing the visible control clears only this browser-local payload.
+
+## Browser-local history and safe exports
+
+The local version-history destination is a browser-local view of the general
+page contract's bounded audit records. It contains only page-owned action
+metadata: an identifier, action, target, bounded non-secret detail, and creation
+time. The normalized history has a maximum of 500 records. Date, action,
+plain-text, and explicit local regular-expression filters compose over that
+same bounded record set, and visitors may select visible filtered records. It
+does not read or write a Minecraft server log, a desktop application record,
+browser history, local files, selected converter bytes, source paths, download
+locations, or authenticator/toy-lock records.
+
+The history view uses an honest empty state, plain-text filtering by default,
+and a local bounded regular-expression option. Its safe exports are limited to
+UTF-8 `json`, `jsonl`, `csv`, `tsv`, and `markdown` representations of selected
+page audit records. A browser download request does not reveal a destination or
+prove transfer completion. The page never exports personal-vocabulary values,
+credentials, secrets, TOTP codes, passwords, verifiers, pairing data, file
+content, server data, installer assets, external-status data, or
+personal-vocabulary file metadata. Removing selected records or clearing the
+page audit list uses the contract's two-key/full-slider local destructive
+confirmation and affects no desktop, server, download, browser-history, or
+authenticator data. See
+[`docs/features/browser-local-history-and-safe-exports.md`](../docs/features/browser-local-history-and-safe-exports.md)
+for the full failure, privacy, reset, and verification boundary.
 
 ## Browser-local authenticator, pairing QR, and toy locks
 
@@ -249,7 +275,7 @@ This is a public-source inventory, not a claim that the installed application ha
 | File converter | Browser-local bounded text/structured-data/encoding conversion; PDF/media/archive/native-workbook routes remain unavailable | This README, `CONTRACT.md`, and `../docs/features/browser-local-file-converter.md` | Missing | Missing | Missing |
 | Authenticator and locks | Browser-local TOTP, QR pairing reveal, toy-lock, and local Support Tickets source | This README, `CONTRACT.md`, and `../docs/features/browser-local-authenticator-and-toy-locks.md` | English-first; incomplete | Not run in fast-delivery lane | Missing |
 | Browser-local Ollama observer | Explicit fixed-loopback `GET` observer with a local last-success snapshot; catalog, pull, chat, delete, copy, hardware fit, and harness remain unavailable | This README, `CONTRACT.md`, and the [feature article](../docs/features/browser-local-ollama-observer.md) | Missing | Not run in fast-delivery lane | Missing |
-| Local version history | Browser-local audit preview only | This README and `CONTRACT.md` | Missing | Missing | Missing |
+| Local version history and safe exports | Browser-local bounded audit browsing, local regex filtering, and selected-record UTF-8 export; no server/filesystem/credential history | This README, `CONTRACT.md`, and `../docs/features/browser-local-history-and-safe-exports.md` | Missing | Not run in fast-delivery lane | Missing |
 | Notification center | Browser-local notification preview | This README and `CONTRACT.md` | Missing | Missing | Missing |
 | Download and release states | Static verified installer anchor | This README | Missing | Missing | Missing |
 

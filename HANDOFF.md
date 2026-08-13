@@ -4,6 +4,37 @@
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
+## Browser-local history and safe-export documentation candidate
+
+The public companion site now has a dedicated documentation record and
+per-surface inventory entry for a browser-local history and safe-export
+foundation. It describes a maximum of 500 normalized page-owned audit records,
+local date/action/plain-text and explicit regular-expression filtering,
+selected-record UTF-8 JSON, JSON Lines, CSV, TSV, or Markdown export, and a
+two-key/full-slider confirmation before deleting page audit records. The scope stays strictly
+browser-local: it excludes desktop application records, Minecraft server data,
+browser history, local files, source/output bytes, paths, download locations,
+credentials, authenticator/toy-lock material, and transfer-completion claims.
+
+### Directly related paths
+
+- `docs/features/browser-local-history-and-safe-exports.md`
+- `docs/features/README.md`
+- `site/README.md`
+- `site/CONTRACT.md`
+- `README.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, browser interaction,
+deployment verification, or screenshots were run or claimed for this
+documentation candidate under the active fast-delivery workflow. The record
+does not establish a server operation, a desktop export, a browser transfer,
+or a real capture; those remain separate evidence requirements.
+
 ## Public companion-site appearance and tab-navigation documentation candidate
 
 The public companion site now has documentation and a per-surface inventory entry for a browser-local appearance and tab-navigation foundation. Its independent local state covers system/light/dark theme, density, accent, safe typography, bounded appearance-target controls, left/right/top/bottom tab docking, active/order/pin/group state, overflow, and separate current-strip, group, and master tab searches with anchored regular-expression builders. It remains a page-local feature only: it does not alter the installed application, operate a Minecraft server, manage an installer transfer, send an account request, or contact a backend.
