@@ -54,6 +54,7 @@
 
 ### Fixed
 
+- Derive a workflow-local stable Squirrel/Electron application version for every Actions run and attempt, inject it into packaged metadata without rewriting source `package.json`, and reject mismatched Setup, full-package, or `RELEASES` artifacts before immutable release publication.
 - Route CLI `command` and `stop` through a one-shot protected Electron gateway that fixes RCON to loopback, keeps the password out of CLI arguments, environment variables, registry JSON, and output, and fails closed to desktop configuration recovery.
 - Reject `mss config --set rcon.password=...` and omit legacy RCON password fields from CLI JSON output.
 - Normalize `rpc.discover` descriptors before persistence, bind the stored allowlist to its endpoint, expire it after a bounded lifetime, and restore it only when a reconnect targets the same current endpoint.

@@ -17,6 +17,7 @@
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
 - Offline changelog browsing from bundled curated notes and package-local release metadata, with local filtering and export rather than runtime release fetching.
 - Serialized next-release metadata that can record one unused public dim-sum catalog link without copying the source photo into the product release.
+- Workflow-local stable Squirrel/Electron application versions derived from Actions run/attempt metadata, with exact version-matched installer, full-package, and `RELEASES` validation before immutable release publication.
 
 ## Next implementation items
 
@@ -33,5 +34,5 @@
 - Complete notification-center accessibility/localization, persistent-state evidence, and notification-action exercise; any future destructive operation beyond page-local notification metadata must name and safely perform its exact affected-data action.
 - Extend the external-editor handoff foundation with complete export coverage, localized recovery states, focused verification, packaged interaction, and capture evidence before treating it as a complete application-wide editor/export workflow.
 - Expand the desktop command palette only through explicit per-surface registrations and evidence: complete settings/article/control coverage, localized and accessibility validation, safe rich-control behavior, runtime interaction, and captures remain outstanding.
-- Produce release packaging and runtime verification evidence after the speed-delivery boundary is lifted.
+- Produce release packaging and runtime verification evidence after the speed-delivery boundary is lifted, including a published version-matched Setup executable, full package, and `RELEASES` row from the workflow-local application-version strategy.
 - Complete the companion site's operation-level localization, QR import/decoder and camera boundaries, all-element toy-lock coverage, synchronized accessibility evidence, automated tests, built-site interaction, and captures before treating its authenticator or lock surface as complete.

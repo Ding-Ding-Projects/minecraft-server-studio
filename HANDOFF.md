@@ -271,6 +271,43 @@ asset, and timing evidence.
 - Do not treat a release-note hyperlink as an attached, downloaded, or bundled
   dim-sum image.
 
+## Workflow-local Squirrel application versioning
+
+The Windows release workflow now derives an updater-facing stable application
+version as `0.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>` before packaging. It
+uses Electron Builder's `-c.extraMetadata.version` route so the packaged
+Electron metadata, Squirrel full package, Setup filename, and `RELEASES` row
+share the same version without rewriting the checked-in `package.json` or
+lockfile. The existing GitHub Release tag stays a separate provenance value in
+the `v<source-version>-build.<run>.<attempt>` form.
+
+The workflow rejects malformed Actions metadata, an invalid computed version,
+a setup/full-package name that does not match the computed version, missing or
+duplicate matching `RELEASES` rows, and an existing release tag. It no longer
+replaces an existing release's assets. The local installer script likewise
+derives its configured dotted Setup filename from the local source version
+instead of retaining a stale hard-coded `0.1.0` filename, but it does not mint
+a release version or publish a release.
+
+### Directly related paths
+
+- `.github/workflows/windows-package.yml`
+- `build-installer.bat`
+- `docs/features/unsigned-automatic-updates.md`
+- `docs/features/release-packaging.md`
+- `README.md`
+- `ROADMAP.md`
+- `CHANGELOG.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, build, package, release, runtime interaction, or capture
+ran in this source-only fast-delivery lane. The next GitHub Actions workflow
+must demonstrate a new non-draft release with a version-matched Setup
+executable, full `.nupkg`, and exact `RELEASES` row before this change is
+claimed as delivery proof.
+
 ## Local app-logo customization foundation
 
 The desktop source now keeps app-logo choices in a separate versioned private store. The main process owns native file selection, actual-byte inspection, PNG/JPEG signature and dimension validation, static-image restrictions, packaged-decoder validation, bounded cache promotion, reset, and atomic settings writes. The renderer receives no selected source path or file URL; it renders a shipped preset or a bounded derived display representation only after validation.

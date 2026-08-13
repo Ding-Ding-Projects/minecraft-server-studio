@@ -32,6 +32,48 @@ stored for application updates. A feed failure must not expose sensitive URL
 fragments or response bodies in the desktop UI, logs, exports, or status
 records.
 
+## Release-time application version
+
+The workflow does not rewrite the checked-in source `package.json` or its
+lockfile for a release. Its current source baseline remains `0.1.0`. Instead,
+after dependencies are restored and before packaging, every GitHub Actions run
+derives one stable three-part application version:
+
+```text
+0.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>
+```
+
+Both GitHub-provided values must be positive decimal integers, and the computed
+value is rejected unless it is strict stable semantic versioning with exactly
+three numeric parts. A new workflow run increments the middle component; a
+rerun increments the final component. For example, run 94 attempt 1 packages
+application version `0.94.1`, while its rerun packages `0.94.2`. Those values
+sort above the prior `0.1.0` source-baseline package and above earlier values
+from this release train.
+
+The workflow passes that value to Electron Builder as
+`-c.extraMetadata.version=<computed-version>`. Electron Builder injects the
+metadata into the packaged application only, so Electron's `app.getVersion()`,
+the Squirrel NuGet package, the `RELEASES` row, and the configured Setup
+filename all use the same application version without changing the source
+package identity, app identifier, executable identity, update-feed address, or
+application-data identity.
+
+The GitHub Release tag remains a separate provenance record in the existing
+`v<source-version>-build.<run>.<attempt>` format. It is deliberately not used
+as the Squirrel package version. The workflow rejects a pre-existing tag rather
+than replacing its assets, and it validates exactly one version-matched Setup
+executable, one full package, and one `RELEASES` row before publication.
+
+Build metadata such as `0.1.0+build.94` is not used because the Windows
+installer conversion removes the `+` portion. Prerelease forms such as
+`0.1.0-build.94` are not used because they rank below the equal stable release
+and the converter normalizes dots in their suffixes. Local `build.bat` and
+`build-installer.bat` retain their source-baseline package behavior: they do
+not mint a release version, tag, upload, or publish. The installer script
+derives the configured dotted Setup filename from the local source version
+instead of retaining a stale hard-coded version string.
+
 ## State model
 
 The updater publishes one current state rather than treating a spinner as a
@@ -64,6 +106,13 @@ Minecraft Server Studio package. Redirects are bounded and must remain within
 the approved HTTPS delivery origin. A missing, malformed, mismatched, or
 unsupported index/package pair is a failed update, not an installable
 candidate.
+
+For a workflow-derived application version such as `0.94.1`, the matching
+release assets are `Minecraft.Server.Studio-0.94.1-x64-Setup.exe`,
+`minecraft-server-studio-0.94.1-full.nupkg`, and the `RELEASES` row naming that
+full package. The full package is the essential update payload. Delta packages
+remain optional because the current packaging configuration does not set a
+remote Squirrel release source for delta generation.
 
 After that validation, Electron's Squirrel updater selects and transfers the
 candidate package. The `available` and `downloading` states are driven by its
