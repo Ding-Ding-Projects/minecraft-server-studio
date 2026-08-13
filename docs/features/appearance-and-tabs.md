@@ -79,7 +79,7 @@ The companion site persists the following bounded presentation preferences in th
 | Density | Uses compact, comfortable, or spacious layout density. |
 | Accent | Uses a validated local accent color. |
 | Typography | Uses safe bounded family, scale, and weight choices that the site can render locally. |
-| Appearance targets | Provides local editor controls for the page, tab strip, and selected tab using bounded accent, font-scale, and font-weight values. A reset returns the target to its inherited local setting. |
+| Appearance targets | Provides local editor controls for the page, tab strip, and selected tab using bounded accent, font-scale, and font-weight values. A reset clears or resets only the values this foundation manages. |
 
 The page records only validated browser-local preference state. It does not upload a font choice, color, layout preference, tab label, or editor value. If browser storage is unavailable or rejects a write, the page can remain usable for the current visit but must state that persistence did not succeed.
 
@@ -87,7 +87,7 @@ The page records only validated browser-local preference state. It does not uplo
 
 The companion site uses browser-style tabs for its registered product-preview destinations. Visitors can choose a dock at the left, right, top, or bottom; the active dock changes layout responsively rather than rotating text. A left or right dock exposes vertical tab semantics and Up/Down navigation, while a top or bottom dock exposes horizontal semantics and Left/Right navigation.
 
-The browser-local tab record keeps a dock edge, derived accessible orientation, the active destination, display order, pinned state, group membership, group order, and collapsed-group state. Overflow remains reachable through a real overflow surface instead of clipping excess tab labels. The public contract exposes `setTabDock` and `setTabAppearance` alongside tab registration, grouping, updating, movement, selection, and accessible-tab retrieval. The current tab strip, each tab group, and the site-wide tab list each have an independent plain-text search with an adjacent anchored regular-expression builder. Each builder stays bound to its own query, pattern, flags, validation feedback, and local candidate labels; it does not search the installed application or a remote service.
+The browser-local tab record keeps a dock edge, derived accessible orientation, the active destination, display order, pinned state, group membership, group order, and collapsed-group state. Overflow remains reachable through a real overflow surface instead of clipping excess tab labels. The public contract exposes `setTabDock` and `setTabAppearance` alongside tab registration, grouping, updating, movement, selection, and accessible-tab retrieval. The current tab strip, the browser-local group list, and the site-wide tab list each have an independent plain-text search with an adjacent anchored regular-expression builder. Each builder stays bound to its own query, pattern, flags, validation feedback, and local candidate labels; it does not search the installed application or a remote service.
 
 The local appearance editor and the tab controls are intentionally bounded. They preserve only browser-local companion-site state and present honest unavailable states when a requested action needs an installed application or a backend.
 

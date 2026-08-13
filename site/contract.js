@@ -48,6 +48,7 @@
   const THEMES = Object.freeze(["system", "light", "dark"]);
   const DENSITIES = Object.freeze(["compact", "comfortable", "spacious"]);
   const ORIENTATIONS = Object.freeze(["vertical", "horizontal"]);
+  const TAB_DOCKS = Object.freeze(["left", "right", "top", "bottom"]);
   const SCHEDULE_SOURCES = Object.freeze(["local"]);
   const STATUS_STATES = Object.freeze(["idle", "running", "waiting", "blocked", "verified", "failed"]);
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
@@ -173,7 +174,14 @@
       },
       notifications: [],
       audit: [],
-      tabs: { orientation: "vertical", activeId: null, groups: [], items: [] },
+      tabs: {
+        dock: "left",
+        orientation: "vertical",
+        activeId: null,
+        appearance: { accent: "#3f7cff", fontScale: 1, fontWeight: 600 },
+        groups: [],
+        items: []
+      },
       collections: [],
       personalVocabulary: { status: "empty", payload: null },
       schoolModeCredential: { algorithm: "", salt: "", verifier: "", configuredAt: null },
@@ -321,6 +329,24 @@
     };
   }
 
+  function normalizeTabItemAppearance(raw) {
+    const appearance = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
+    return {
+      accent: safeColor(appearance.accent, ""),
+      fontScale: Math.max(0.75, Math.min(2, Number(appearance.fontScale) || 1)),
+      fontWeight: boundedInteger(appearance.fontWeight, 100, 900, 600)
+    };
+  }
+
+  function normalizeTabStripAppearance(raw, defaults) {
+    const appearance = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
+    return {
+      accent: safeColor(appearance.accent, defaults.accent),
+      fontScale: Math.max(0.75, Math.min(2, Number(appearance.fontScale) || defaults.fontScale)),
+      fontWeight: boundedInteger(appearance.fontWeight, 100, 900, defaults.fontWeight)
+    };
+  }
+
   function normalizeTabItem(raw, groupIds) {
     if (!isPlainObject(raw) || hasUnsafeKeys(raw)) {
       return null;
@@ -338,7 +364,8 @@
       groupId: groupIds.has(groupId) ? groupId : null,
       pinned: Boolean(raw.pinned),
       locked: Boolean(raw.locked),
-      closable: raw.closable !== false
+      closable: raw.closable !== false,
+      appearance: normalizeTabItemAppearance(raw.appearance)
     };
   }
 
@@ -365,9 +392,13 @@
       return items.length >= LIMITS.tabs;
     });
     const activeId = safeId(tabs.activeId, "");
+    const dock = enumValue(tabs.dock, TAB_DOCKS, defaults.dock);
+    const inferredOrientation = dock === "left" || dock === "right" ? "vertical" : "horizontal";
     return {
-      orientation: enumValue(tabs.orientation, ORIENTATIONS, defaults.orientation),
+      dock,
+      orientation: inferredOrientation,
       activeId: ids.has(activeId) ? activeId : (items[0] ? items[0].id : null),
+      appearance: normalizeTabStripAppearance(tabs.appearance, defaults.appearance),
       groups,
       items
     };
@@ -1398,6 +1429,24 @@
     return { ok: true, tabs: getAccessibleTabs() };
   }
 
+  function setTabDock(dock) {
+    const nextDock = enumValue(dock, TAB_DOCKS, "");
+    if (!nextDock) return { ok: false, error: "Choose a valid tab dock." };
+    state.tabs.dock = nextDock;
+    state.tabs.orientation = nextDock === "left" || nextDock === "right" ? "vertical" : "horizontal";
+    writeAudit("Tab dock updated", "feature-tabs", nextDock);
+    persist({ type: "tabs" });
+    return { ok: true, tabs: getAccessibleTabs() };
+  }
+
+  function setTabAppearance(patch) {
+    if (!isPlainObject(patch) || hasUnsafeKeys(patch)) return { ok: false, error: "The tab-strip appearance patch is invalid." };
+    state.tabs.appearance = normalizeTabStripAppearance(Object.assign({}, state.tabs.appearance, patch), state.tabs.appearance);
+    writeAudit("Tab-strip appearance updated", "feature-tabs", "Browser-local tab-strip appearance changed.");
+    persist({ type: "tabs" });
+    return { ok: true, appearance: clone(state.tabs.appearance) };
+  }
+
   function closeTab(id, options) {
     const request = isPlainObject(options) ? options : {};
     const index = state.tabs.items.findIndex((item) => item.id === safeId(id, ""));
@@ -1416,9 +1465,11 @@
   function getAccessibleTabs() {
     const total = state.tabs.items.length;
     return {
+      dock: state.tabs.dock,
       orientation: state.tabs.orientation,
       ariaOrientation: state.tabs.orientation,
       activeId: state.tabs.activeId,
+      appearance: clone(state.tabs.appearance),
       groups: clone(state.tabs.groups),
       tabs: state.tabs.items.map((tab, index) => ({
         id: tab.id,
@@ -1427,6 +1478,7 @@
         pinned: tab.pinned,
         locked: tab.locked,
         closable: tab.closable,
+        appearance: clone(tab.appearance),
         role: "tab",
         tabId: `${tab.id}-tab`,
         panelId: tab.panelId,
@@ -2042,6 +2094,8 @@
     updateTab,
     moveTab,
     setActiveTab,
+    setTabDock,
+    setTabAppearance,
     closeTab,
     getAccessibleTabs,
     saveCollection,
