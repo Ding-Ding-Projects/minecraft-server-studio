@@ -87,6 +87,7 @@ const DESKTOP_SURFACES = deepFreeze([
   surface('configuration', 'Server configuration', 'Rich controls for server, world, gameplay, network, runtime, and property configuration.'),
   surface('console-and-rcon', 'Console and RCON', 'Local console, RCON configuration, credential handling, command delivery, and recovery states.'),
   surface('backups-and-updates', 'Backups and updates', 'Local backup, restore, update discovery, staging, rollback, and progress controls.'),
+  surface('application-updates', 'Application updates', 'Unsigned Squirrel application-update discovery, download, restart, and recovery controls.'),
   surface('settings-appearance-and-localization', 'Settings, appearance, and localization', 'Desktop settings, appearance controls, language modes, and localized rich controls.'),
   surface('file-converter', 'Local file converter', 'Offline adapter catalog, conversion queue, validation, and result history.'),
   surface('ollama', 'Local Ollama suite', 'Local runtime, model store, chat, batch pull, hardware-fit, and harness controls.'),
