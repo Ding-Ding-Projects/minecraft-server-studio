@@ -27,17 +27,18 @@ The engine does not create markup, inject styles, or attach controls automatical
 
 ## Persistence, schema, and migration
 
-The persisted root schema is version `2`.
+The persisted root schema is version `3`.
 
 ```text
 {
-  version: 2,
+  version: 3,
   settings: { ... },
   notifications: [ ... ],
   audit: [ ... ],
   tabs: { ... },
   collections: [ ... ],
   personalVocabulary: { ... },
+  schoolModeCredential: { ... },
   locks: [ ... ],
   totp: [ ... ],
   schedules: [ ... ],
@@ -49,7 +50,7 @@ The persisted root schema is version `2`.
 }
 ```
 
-Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
+Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Version 3 adds the browser-local presentation-mode credential record; pre-version-3 records migrate with no configured verifier. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
 
 The entire normalized record is limited to 1 MiB measured as encoded text where the browser supports `TextEncoder`. If an attempted save reaches that boundary, the engine retains the newest half of notification and audit history before trying to save again. If the bounded record is still too large, or browser storage is unavailable or throws, the in-memory model remains usable for the current page lifetime and `isStorageAvailable()` reports `false`; the host must show that persistence did not succeed.
 
@@ -80,11 +81,13 @@ The companion page does not keep a parallel `sessionStorage` settings model. Its
 
 `getNarratorCapabilities()` returns browser speech-synthesis availability and the actual currently available voices. `observeNarratorVoices(listener)` reports immediately and again on `voiceschanged`; its return value unsubscribes. The host must select voices by stable `voiceURI` where present, expose an automatic choice, and explain a missing selected voice. This contract does not speak text by itself, so a host can manage queues, cooldowns, assistive-technology behavior, and user initiation correctly.
 
-### School mode
+### Renamed browser-local presentation mode
 
-`setSchoolMode({ enabled, name, credentialAccepted })` stores a browser-local renamed School mode. Enabling it needs no credential. Turning it off accepts only a `credentialAccepted: true` result from a host-owned local verification step; this engine never receives a credential.
+`setSchoolMode({ enabled, name, credentialAccepted })` stores a browser-local user-renamable presentation mode. The host first derives a local one-way SHA-256 verifier from a user-entered unlock code and fresh random salt, then calls `setSchoolModeCredential({ algorithm: "SHA-256", salt, verifier })`. The engine validates only the fixed-size encoding and stores the verifier record; it never receives, stores, exports, logs, or returns the unlock code.
 
-`getEffectiveSettings()` forces English while School mode is active and reports that personal-vocabulary replacement and dim sum are inactive. The host must omit the suppressed controls and content rather than merely disabling them. `getSchoolModeResetBoundary()` returns the exact local-storage boundary that the host should present to users: clearing this site's local storage resets browser-local School mode and local lock metadata only. It is not a security boundary and does not change desktop-app data.
+`getSchoolModeCredentialState()` reports only whether the verifier exists, its algorithm, and its configuration time. `getSchoolModeCredentialSalt()` makes the non-secret local salt available to the host. The host derives the candidate verifier and passes it to `verifySchoolModeCredential(verifier)`, whose bounded comparison returns only `{ ok }`. `clearSchoolModeCredential({ credentialAccepted: true })` removes the verifier and turns the mode off after a host has obtained a successful local match.
+
+`getEffectiveSettings()` forces English while the renamed mode is active and reports that personal-vocabulary replacement and dim sum are inactive. The host must omit the suppressed controls and content rather than merely disabling them, and it must use the exact chosen name wherever it introduces the mode. `getSchoolModeResetBoundary()` returns the exact local-storage boundary that the host should present to users: clearing this site's local storage resets the browser-local preferences, vocabulary cache, local lock metadata, and verifier only. This is a user-experience lock, not a security boundary, and it does not change desktop-app or server data.
 
 ## Notifications, audit history, and exports
 
@@ -92,7 +95,7 @@ The companion page does not keep a parallel `sessionStorage` settings model. Its
 
 `recordAudit(action, target, detail)` writes a bounded local audit record. It is not Git history, a server log, or a source-of-truth record for a server operation. It records only what the browser-local surface did.
 
-`createExport(format, records)` generates text for `json`, `jsonl`, `csv`, `tsv`, or `markdown`. Exports are UTF-8 text supplied to the host; the host decides whether to use a browser download, clipboard flow, or connected desktop handoff. `redactStateForExport()` never exports personal-vocabulary replacements, raw secrets, TOTP secrets, passwords, credentials, tokens, or codes. The engine does not store those values in the first place.
+`createExport(format, records)` generates text for `json`, `jsonl`, `csv`, `tsv`, or `markdown`. Exports are UTF-8 text supplied to the host; the host decides whether to use a browser download, clipboard flow, or connected desktop handoff. `redactStateForExport()` never exports personal-vocabulary replacements, raw secrets, TOTP secrets, passwords, codes, or the presentation-mode verifier; it reports only that a local verifier is configured. The engine does not store raw credentials or codes.
 
 ## Regex evaluation and palette search
 
@@ -116,7 +119,9 @@ The engine never calls a destructive operation. A host must place this state mac
 
 ## Personal vocabulary loader
 
-The personal-vocabulary setting begins empty. `loadPersonalVocabulary(text)` is the only ingestion path and it keeps the valid payload in this browser's local storage only. No default mappings, samples, source filename, path, network request, telemetry event, export payload, or public record are created.
+The personal-vocabulary setting begins empty. `site/vocabulary-loader.js` is a browser-safe ES module with no DOM, network, storage, or logging access. The page calls `validatePersonalVocabularyPayload(input)` before `loadPersonalVocabulary(text)` and serializes only the frozen normalized result into the contract. The module also exposes `validatePersonalVocabularyCache`, `createPersonalVocabularyCacheEnvelope`, and `createClearedPersonalVocabularyCacheEnvelope` for a host that owns a distinct versioned cache envelope. The companion page uses the contract's one local-storage record and validates its payload again before display or replacement.
+
+`loadPersonalVocabulary(text)` is the contract ingestion path and it keeps the valid payload in this browser's local storage only. No default mappings, samples, source filename, path, network request, telemetry event, export payload, or public record are created.
 
 The accepted schema is exactly:
 
@@ -129,7 +134,7 @@ The accepted schema is exactly:
 }
 ```
 
-The payload must be at most 64 KiB measured as UTF-8 bytes; contain no duplicate JSON object keys; have no more than three structural levels (root object, replacement array, replacement object); use only `version` and `replacements` at the root; contain at most 250 replacement records; use exactly `from` and `to` in each record; and have unique, nonempty source strings no longer than 128 Unicode code points and target strings no longer than 512 Unicode code points. An empty target is allowed because a user may deliberately remove a visible phrase; an empty source is never allowed. Unsafe object keys, unknown fields, malformed JSON, unsupported versions, partial input, duplicate source strings, and over-limit input are rejected as a whole.
+The payload must be at most 64 KiB measured as UTF-8 bytes; contain no duplicate JSON object keys (including equivalent escaped keys); have no more than three structural levels (root object, replacement array, replacement object); use only `version` and `replacements` at the root; contain at most 250 replacement records; use exactly `from` and `to` in each record; and have unique, nonempty source strings no longer than 128 Unicode code points and target strings no longer than 512 Unicode code points. An empty target is allowed because a user may deliberately remove a visible phrase; an empty source is never allowed. Unsafe object keys, unknown fields, malformed JSON or UTF-8, unsupported versions, incomplete cache envelopes, partial input, duplicate source strings, and over-limit input are rejected as a whole.
 
 `applyPersonalVocabulary(text)` applies the stored local replacement list only while School mode is inactive. `clearPersonalVocabulary()` immediately removes the local cache. The host must preserve commands, URLs, code, paths, external records, and technical identifiers rather than applying replacement indiscriminately.
 
@@ -199,7 +204,7 @@ Use `setCompletenessInventory(input)` for a complete authoritative replacement o
 
 ## Limits and unavailable capability boundary
 
-In addition to the limits documented above, the engine caps command-palette entries at 600, tab groups at 40, lock metadata at 250, TOTP metadata records at 250, schedules at 100, conversion jobs at 100, and notification actions at four per notification. Text fields are normalized to the documented per-field bounds before persistence.
+In addition to the limits documented above, the engine caps command-palette entries at 600, tab groups at 40, lock metadata at 250, TOTP metadata records at 250, schedules at 100, conversion jobs at 100, and notification actions at four per notification. The browser-local presentation-mode code must be 4–64 Unicode code points; its code value is never persisted, only its SHA-256 verifier and fresh 16-byte salt. Text fields are normalized to the documented per-field bounds before persistence.
 
 The following capabilities are intentionally unavailable from this file:
 
