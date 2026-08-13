@@ -39,6 +39,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('cli-rcon-gateway', 'cli-rcon-gateway.md', 'CLI RCON gateway', 'Use the protected one-shot CLI route for RCON commands.'),
   entry('local-ollama-suite', 'local-ollama-suite.md', 'Local Ollama suite foundation', 'Inspect the bounded fixed-loopback local service inventory.'),
   entry('unsigned-automatic-updates', 'unsigned-automatic-updates.md', 'Unsigned automatic updates', 'Understand the fixed Squirrel update feed and restart choice.'),
+  entry('release-packaging', 'release-packaging.md', 'Windows release packaging metadata', 'Understand public dim-sum code-name metadata and its no-copy release boundary.'),
   entry('file-converter', 'file-converter.md', 'Local file-converter foundation', 'Inspect a local file and browse the honest disabled adapter catalog.'),
   entry('authenticator-and-toy-locks', 'authenticator-and-toy-locks.md', 'Local authenticator and toy-lock foundation', 'Manage local RFC 6238 codes and independently credentialed toy-lock records.'),
   entry('appearance-and-tabs', 'appearance-and-tabs.md', 'Appearance and tab-navigation foundation', 'Minecraft Server Studio now has a bounded, local desktop appearance and tab-navigation foundation.'),
