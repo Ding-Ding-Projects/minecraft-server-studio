@@ -53,7 +53,8 @@ The template includes these desktop surface rows:
 | `plugins` | Plugin management |
 | `configuration` | Server configuration |
 | `console-and-rcon` | Console and RCON |
-| `backups-and-updates` | Backups and updates |
+| `backups-and-updates` | Backup, restore, and Paper server-JAR update/rollback controls |
+| `application-updates` | Unsigned Squirrel application-update controls |
 | `settings-appearance-and-localization` | Settings, appearance, and localization |
 | `file-converter` | Local file converter |
 | `ollama` | Local Ollama suite |
@@ -63,7 +64,24 @@ The template includes these desktop surface rows:
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
 
+## Application-update inventory boundary
+
+The `application-updates` row is separate from server backups, server rollback,
+plugin update, and world restore. Each row remains incomplete until every
+required proof record is verified; an application-update source record is not a
+substitute for backup, restore, localization, tests, built-artifact interaction,
+or capture evidence.
+
 The `settings-appearance-and-localization` row now names the implemented presentation-settings foundation: app-private persisted language modes, independent English/Cantonese message-playfulness values, dialog/message emoji preference, display-name label, and a watched shared local School-mode record with a protected unlock-credential boundary. Its localization, test, capture, and complete-evidence fields remain intentionally incomplete because the broader settings, appearance, and universal surface contract is not yet complete.
+
+The update-controller record must distinguish an unconfigured runtime from an
+offline or invalid approved public feed, preserve the installed application when
+an update fails, and describe the unsigned Squirrel boundary. It must not claim
+that an application update installed just because a release was discovered or
+downloaded. The only accepted feed is the product-derived public
+latest-release path; a visitor or desktop user cannot provide another feed URL.
+See [Unsigned automatic updates](unsigned-automatic-updates.md) for the state
+and recovery contract.
 
 ## Source and evidence boundaries
 
@@ -75,7 +93,7 @@ The optional bridge record is incomplete unless its implementation and documenta
 
 ## Verification status
 
-This feature record was added during the active speed-delivery workflow. Tests, linting, review, built-artifact interaction, runtime verification, and captures are intentionally recorded as **pending** rather than claimed. No build, package, deployment, commit, release, or external Status Hub registration/update/poll/reply acceptance is asserted by this documentation alone.
+This feature record was added during the active speed-delivery workflow. Tests, linting, review, built-artifact interaction, runtime verification, and captures are intentionally recorded as **pending** rather than claimed. No build, package, deployment, commit, release, application-update cycle, or external Status Hub registration/update/poll/reply acceptance is asserted by this documentation alone.
 
 ## Suggested related articles
 
@@ -84,3 +102,4 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Spigot BuildTools adapter](spigot-buildtools.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
+- [Unsigned automatic updates](unsigned-automatic-updates.md)

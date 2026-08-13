@@ -17,7 +17,15 @@ const state = {
   pluginPath: '',
   experience: null,
   pluginPlan: null,
-  pluginPlanServerId: null
+  pluginPlanServerId: null,
+  applicationUpdate: null,
+  unsaved: {
+    settings: false,
+    createDraft: false,
+    pluginSelection: false,
+    consoleDraft: false,
+    statusHubBridge: false
+  }
 };
 
 const ADVANCED_FIELDS = [
@@ -1275,6 +1283,7 @@ function renderAll() {
   renderConsole();
   renderLocalStatus();
   renderBackupLifecycle();
+  renderApplicationUpdate();
   setActiveTab(state.activeTab);
 }
 
@@ -1343,6 +1352,7 @@ async function saveStatusHubBridgeSettings() {
   }));
   if (!bridge) return;
   state.statusHubBridge = bridge;
+  state.unsaved.statusHubBridge = false;
   renderStatusHubBridge(bridge);
   if (bridge.state === 'credential-unavailable') {
     toast('Bridge settings were saved, but a protected enrollment credential is unavailable. No external request was sent.');
@@ -1370,6 +1380,7 @@ async function clearStatusHubBridgeSettings() {
   const bridge = await safely(() => window.studio.configureStatusHubBridge({ endpoint: '', allowInsecureLoopback: false }));
   if (!bridge) return;
   state.statusHubBridge = bridge;
+  state.unsaved.statusHubBridge = false;
   renderStatusHubBridge(bridge);
   toast('Bridge settings were removed. Local status remains available.');
   await refreshLocalStatus();
@@ -1387,6 +1398,72 @@ async function refreshBackupOverview() {
   if (selectedServer()?.id !== server.id) return;
   state.backupOverview = overview;
   renderBackupLifecycle();
+}
+
+async function refreshApplicationUpdate() {
+  const update = await safely(() => window.studio.updateStatus());
+  if (!update) return;
+  state.applicationUpdate = update;
+  renderApplicationUpdate();
+}
+
+function updateStateLabel(value) {
+  return ({
+    idle: 'Automatic check scheduled',
+    checking: 'Checking for updates',
+    current: 'Current',
+    available: 'Update available',
+    downloading: 'Downloading update',
+    ready: 'Ready to restart',
+    offline: 'Update feed offline',
+    failed: 'Update check failed',
+    disabled: 'Automatic checks disabled',
+    unconfigured: 'Update feed unavailable'
+  })[value] || 'Update status unavailable';
+}
+
+function renderApplicationUpdate() {
+  const update = state.applicationUpdate;
+  const card = $('#application-update-card');
+  if (!card || !update) return;
+  const stateValue = String(update.state || 'unconfigured');
+  card.dataset.state = stateValue;
+  $('#application-update-state').textContent = updateStateLabel(stateValue);
+  $('#application-update-copy').textContent = update.message || 'No update state is available yet.';
+  $('#application-update-version').textContent = update.availableVersion
+    ? `Installed version: ${update.currentVersion || 'unknown'} · candidate: ${update.availableVersion}${update.releaseTag ? ` · release: ${update.releaseTag}` : ''}`
+    : `Installed version: ${update.currentVersion || 'unknown'}`;
+  const integrity = update.integrity || {};
+  $('#application-update-integrity').textContent = integrity.detail || 'Squirrel RELEASES metadata has not been checked during this session.';
+  $('#application-update-warning').textContent = update.unsignedWarning || 'Update signing state is unavailable.';
+  const enabled = update.enabled !== false;
+  $('#updates-enabled').checked = enabled;
+  $('#updates-enabled').disabled = stateValue === 'unconfigured';
+  $('#check-updates-button').disabled = !enabled || ['checking', 'available', 'downloading'].includes(stateValue);
+  $('#restart-update-button').disabled = stateValue !== 'ready';
+  $('#later-update-button').disabled = stateValue !== 'ready';
+  $('#open-update-notes-button').disabled = !update.releaseNotesUrl;
+  $('#restart-update-button').textContent = update.restartBlocked ? 'Save work before restart' : 'Restart to install update';
+}
+
+function unsavedWorkState() {
+  const createDialog = $('#create-dialog');
+  const experienceDialog = $('#experience-settings-dialog');
+  const confirmationDialog = $('#command-confirmation-dialog');
+  const hasUnsavedWork = Boolean(
+    state.unsaved.settings
+    || state.unsaved.createDraft
+    || state.unsaved.pluginSelection
+    || state.unsaved.consoleDraft
+    || state.unsaved.statusHubBridge
+    || createDialog?.open
+    || experienceDialog?.open
+    || confirmationDialog?.open
+  );
+  return {
+    hasUnsavedWork,
+    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, Status Hub bridge edit, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
+  };
 }
 
 async function refreshVersions() {
@@ -1639,6 +1716,7 @@ async function createServer(event) {
   const created = await safely(() => window.studio.createServer(draft), 'Server created. Choose Set up server to fetch its official software.');
   if (created) {
     state.selectedId = created.id;
+    state.unsaved.createDraft = false;
     $('#create-dialog').close();
     await refreshServers();
     await refreshDependencies();
@@ -1665,6 +1743,7 @@ async function saveSettings(event) {
   if (saved) {
     const applied = await safely(() => window.studio.applyGameRules(server.id, gameRules));
     if (applied) toast('Game-rule delivery state updated without treating it as a server.properties field.', 'success');
+    state.unsaved.settings = false;
     await refreshServers();
   }
 }
@@ -1699,6 +1778,7 @@ async function clearManagementCredential() {
   );
   if (result) {
     $('#management-token').value = '';
+    state.unsaved.settings = false;
     await refreshServers();
   }
   return result;
@@ -1923,6 +2003,11 @@ function logEvent(event) {
     renderStatusHubBridge(event.bridge);
     return;
   }
+  if (event?.type === 'application-update') {
+    state.applicationUpdate = event.update || null;
+    renderApplicationUpdate();
+    return;
+  }
   const prefix = new Date(event.at || Date.now()).toLocaleTimeString();
   const label = event.serverId ? `[${event.serverId.slice(0, 8)}] ` : '';
   if (event.message) state.logs.push(`${prefix} ${label}${event.message}`);
@@ -1954,9 +2039,23 @@ function bindEvents() {
   $('#school-mode-enabled').addEventListener('change', changeSchoolMode);
   $('#new-server-button').addEventListener('click', openCreateDialog);
   $('#empty-create-button').addEventListener('click', openCreateDialog);
-  $('#close-create-dialog').addEventListener('click', () => $('#create-dialog').close());
-  $('#cancel-create-button').addEventListener('click', () => $('#create-dialog').close());
+  $('#close-create-dialog').addEventListener('click', () => { state.unsaved.createDraft = false; $('#create-dialog').close(); });
+  $('#cancel-create-button').addEventListener('click', () => { state.unsaved.createDraft = false; $('#create-dialog').close(); });
   $('#create-form').addEventListener('submit', createServer);
+  $('#create-form').addEventListener('input', () => { state.unsaved.createDraft = true; });
+  $('#create-form').addEventListener('change', () => { state.unsaved.createDraft = true; });
+  $('#create-dialog').addEventListener('close', () => { state.unsaved.createDraft = false; });
+  const markSettingsDraft = (event) => {
+    const panel = event.target.closest('[data-panel]')?.dataset.panel;
+    if (panel === 'status') {
+      state.unsaved.statusHubBridge = true;
+      return;
+    }
+    if (['commands', 'console', 'plugins'].includes(panel)) return;
+    state.unsaved.settings = true;
+  };
+  $('#settings-form').addEventListener('input', markSettingsDraft);
+  $('#settings-form').addEventListener('change', markSettingsDraft);
   $('#browse-root-button').addEventListener('click', async () => {
     const folder = await safely(() => window.studio.pickFolder());
     if (folder) $('#create-root').value = folder;
@@ -1969,6 +2068,36 @@ function bindEvents() {
   $('#save-status-hub-bridge-button').addEventListener('click', saveStatusHubBridgeSettings);
   $('#sync-status-hub-bridge-button').addEventListener('click', synchronizeStatusHubBridge);
   $('#clear-status-hub-bridge-button').addEventListener('click', clearStatusHubBridgeSettings);
+  $('#updates-enabled').addEventListener('change', async () => {
+    const update = await safely(() => window.studio.setUpdatesEnabled($('#updates-enabled').checked));
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+    }
+  });
+  $('#check-updates-button').addEventListener('click', async () => {
+    const update = await safely(() => window.studio.checkForUpdates());
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+    }
+  });
+  $('#later-update-button').addEventListener('click', async () => {
+    const update = await safely(() => window.studio.deferUpdate());
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+    }
+  });
+  $('#restart-update-button').addEventListener('click', async () => {
+    const update = await safely(() => window.studio.restartForUpdate());
+    if (update) {
+      state.applicationUpdate = update;
+      renderApplicationUpdate();
+      if (update.restartBlocked) toast('Save or discard the recorded work before restarting to install the update.', 'error');
+    }
+  });
+  $('#open-update-notes-button').addEventListener('click', () => safely(() => window.studio.openUpdateNotes()));
   $('#install-dependencies-button').addEventListener('click', async () => {
     const missing = Object.values(state.dependencies?.dependencies || {}).filter((item) => !item.available && item.installable !== false).map((item) => item.id);
     if (!missing.length) {
@@ -2040,6 +2169,7 @@ function bindEvents() {
     if (!selected) return;
     const server = selectedServer();
     state.pluginPath = selected;
+    state.unsaved.pluginSelection = true;
     $('#plugin-path').value = selected;
     state.pluginPlan = server ? await safely(() => window.studio.planPluginInstall(server.id, selected)) : null;
     state.pluginPlanServerId = server?.id || null;
@@ -2053,6 +2183,7 @@ function bindEvents() {
     if (result) {
       toast(result.state === 'staged' ? 'Plugin JAR staged safely outside the live plugins directory.' : 'Plugin JAR promoted with its local rollback record.', 'success');
       state.pluginPath = '';
+      state.unsaved.pluginSelection = false;
       state.pluginPlan = null;
       state.pluginPlanServerId = null;
       $('#plugin-path').value = '';
@@ -2068,8 +2199,9 @@ function bindEvents() {
       await refreshPlugins();
     }
   });
-  $('#send-console-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const result = await safely(() => window.studio.console(server.id, command)); if (result) $('#console-command').value = ''; });
-  $('#send-rcon-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const response = await safely(() => window.studio.rcon(server.id, command)); if (response !== null) { state.logs.push(rconConsoleLine(response)); renderConsole(); } });
+  $('#send-console-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const result = await safely(() => window.studio.console(server.id, command)); if (result) { $('#console-command').value = ''; state.unsaved.consoleDraft = false; } });
+  $('#console-command').addEventListener('input', () => { state.unsaved.consoleDraft = Boolean($('#console-command').value.trim()); });
+  $('#send-rcon-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const response = await safely(() => window.studio.rcon(server.id, command)); if (response !== null) { state.logs.push(rconConsoleLine(response)); $('#console-command').value = ''; state.unsaved.consoleDraft = false; renderConsole(); } });
   $('#clear-console-button').addEventListener('click', () => { state.logs = []; renderConsole(); });
   $$('.command-presets button').forEach((button) => button.addEventListener('click', () => { $('#console-command').value = button.dataset.command; $('#console-command').focus(); }));
 }
@@ -2078,11 +2210,12 @@ async function initialize() {
   renderAdvancedControls();
   bindEvents();
   window.studio.onEvent(handleStudioEvent);
+  window.studio.onUnsavedWorkQuery(unsavedWorkState);
   const experience = await safely(() => window.studio.experienceSettings());
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate()]);
   renderCommandCenter();
 }
 

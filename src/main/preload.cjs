@@ -65,6 +65,30 @@ contextBridge.exposeInMainWorld('studio', {
   applyPaperUpdate: (id, confirmation) => ipcRenderer.invoke('studio:apply-paper-update', id, confirmation),
   paperRollbackPreflight: (id) => ipcRenderer.invoke('studio:paper-rollback-preflight', id),
   applyPaperRollback: (id, confirmation) => ipcRenderer.invoke('studio:apply-paper-rollback', id, confirmation),
+  updateStatus: () => ipcRenderer.invoke('studio:update-status'),
+  checkForUpdates: () => ipcRenderer.invoke('studio:check-for-updates'),
+  setUpdatesEnabled: (enabled) => ipcRenderer.invoke('studio:set-updates-enabled', Boolean(enabled)),
+  deferUpdate: () => ipcRenderer.invoke('studio:defer-update'),
+  restartForUpdate: () => ipcRenderer.invoke('studio:restart-for-update'),
+  openUpdateNotes: () => ipcRenderer.invoke('studio:open-update-notes'),
+  onUnsavedWorkQuery: (callback) => {
+    if (typeof callback !== 'function') throw new Error('Unsaved-work callbacks must be functions.');
+    const listener = async (_event, request) => {
+      let response = { hasUnsavedWork: true, detail: 'The renderer could not confirm unsaved work.' };
+      try {
+        const result = await callback();
+        response = {
+          hasUnsavedWork: Boolean(result?.hasUnsavedWork),
+          detail: typeof result?.detail === 'string' ? result.detail.slice(0, 160) : ''
+        };
+      } catch {
+        // A renderer-side query failure intentionally blocks update restart.
+      }
+      ipcRenderer.send('studio:unsaved-work-response', { requestId: String(request?.requestId || ''), ...response });
+    };
+    ipcRenderer.on('studio:query-unsaved-work', listener);
+    return () => ipcRenderer.removeListener('studio:query-unsaved-work', listener);
+  },
   onEvent: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('studio:event', listener);

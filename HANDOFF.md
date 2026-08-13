@@ -12,17 +12,60 @@ The application source provides a Windows Electron control center, shared CLI, s
 - `src/main/config-plugin-safety.cjs`: lossless `server.properties` updates, Minecraft 1.21.9+ game-rule delivery state, bounded local plugin JAR inspection, dependency/cycle planning, staging, atomic promotion, and rollback records.
 - `src/main/server-backup-manager.cjs`: bounded local snapshot inventory, manifest hashing, stopped-server restore staging, official stable Paper update staging, and retained-JAR rollback helpers.
 - `docs/features/shared-status-hub-bridge.md` and `docs/features/local-status-and-completeness.md`: an opt-in external Status Hub documentation boundary. It requires explicit transport acceptance before claiming registration, update, inbox polling, or reply delivery; raw replies and credentials remain outside the renderer, history, exports, and logs.
-- `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
+- `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, command planning, and update-state/restart requests.
 - `src/renderer/rcon-response-safety.js`, `src/main/main.cjs`, `src/main/preload.cjs`, and `src/renderer/renderer.js`: bounded RCON response envelope that redacts the current vault-only password and credential-shaped values before renderer-visible console or notifier state.
 - `src/main/studio-settings.cjs`, `src/main/main.cjs`, and `src/main/preload.cjs`: app-private presentation settings, a watched shared per-user School-mode record, protected shared unlock-credential boundary, and narrow renderer IPC.
-- `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, backup/update/rollback previews, and Local status destination.
+- `src/main/update-controller.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: approved-feed validation, Electron Squirrel update-state wiring, visible update status, and user-controlled restart handling.
+- `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, backup/update/rollback previews, application-update controls, and Local status destination.
 - `src/renderer/experience-copy.js` and the preferences dialog: persisted English/Cantonese/bilingual presentation, independent message-playfulness controls, decorative message emoji preference, display-name label, and School-mode status/recovery controls.
 - `src/cli/mss.cjs` and `src/cli/rcon-gateway.cjs`: shared local CLI plus a one-shot protected Electron gateway for fixed-loopback RCON command and stop operations. The CLI rejects password configuration, removes legacy RCON password fields from JSON output, and never carries an RCON credential across its own arguments, environment, stdin, or registry path.
-- `docs/features/backups-and-paper-updates.md`: local snapshot, restore, Paper update, rollback, failure-mode, and credential-boundary documentation.
+- `docs/features/backups-and-paper-updates.md` and `docs/features/unsigned-automatic-updates.md`: local snapshot/Paper lifecycle and unsigned application-update behavior, failure modes, and credential boundaries.
 - `site/`: public marketing and browser-local interaction source, including a local Status destination.
 - `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. It does not assert a dim sum code name or photo unless a separately verified catalog asset is available.
 - `assets/minecraft-server-studio.svg`, `assets/minecraft-server-studio.ico`, and `scripts/generate-app-icon.ps1`: original vector master and reproducible multi-resolution Windows icon source.
 - `package.json`: local Windows executable icon plus an immutable commit-pinned Squirrel icon metadata URL.
+
+## Unsigned Squirrel application-update controller
+
+The updater lane adds an application-update controller for the Windows
+Squirrel.Windows install path. It derives only the approved public
+`https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/latest/download/`
+feed and uses it only from a packaged Windows Squirrel installation. It
+publishes distinct unconfigured, disabled, idle, checking, current, available,
+downloading, ready, offline, and failed states, and leaves the installed
+application usable if feed discovery, metadata validation, or package transfer
+fails. It does not accept a user-configured feed URL or any update credentials.
+
+The controller validates `RELEASES` before it calls Electron's updater, then
+uses the resulting Squirrel package metadata for the update event flow. The
+release and update artifacts are unsigned by design; the product must keep the
+unknown-publisher/SmartScreen warning visible and never claim signature
+verification. A staged `ready` update is not installed until the user selects
+restart, and normal unsaved-work protection must still run before that restart.
+
+### Directly related documentation
+
+- `docs/features/unsigned-automatic-updates.md`: approved-feed derivation,
+  literal state semantics, Squirrel metadata boundary, restart policy,
+  failure/offline recovery, and no-secret boundary.
+- `docs/features/local-status-and-completeness.md`: separate incomplete rows for
+  application updates and the server backup/Paper lifecycle.
+
+### Verification boundary
+
+No tests, linting, build, package, packaged-runtime interaction, capture, or
+installed-update cycle was run by this documentation lane. Source-level updater
+behavior and any eventual release evidence must be recorded separately; this
+handoff does not claim either.
+
+### Remaining work
+
+- Keep the source inventory's `application-updates` and `backups-and-updates`
+  rows incomplete until each row has its own localization, test, built-artifact,
+  and capture evidence.
+- Application self-update is not evidence for server, world, or plugin lifecycle
+  behavior, and server backup/Paper lifecycle work is not evidence that an
+  application update installed.
 
 ### Verification state
 

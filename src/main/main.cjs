@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
+const { app, autoUpdater, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
@@ -6,6 +6,7 @@ const { MinecraftManagementProtocolClient } = require('./minecraft-management-pr
 const { StudioSettingsService } = require('./studio-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
+const { UpdateController } = require('./update-controller.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
 try {
@@ -31,6 +32,8 @@ let schoolModeCredentialKey;
 const MAX_RCON_PACKET_BYTES = 256 * 1024;
 const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 let statusHubBridge;
+let updateController;
+const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
   const payload = Buffer.from(String(body), 'utf8');
@@ -247,6 +250,34 @@ async function localStatusWithBridge() {
   };
 }
 
+function queryRendererUnsavedWork() {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
+    return Promise.resolve({ hasUnsavedWork: true, detail: 'The application window is unavailable to confirm unsaved work.' });
+  }
+  const requestId = crypto.randomUUID();
+  const senderId = mainWindow.webContents.id;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      unsavedWorkQueries.delete(requestId);
+      resolve({ hasUnsavedWork: true, detail: 'The application did not confirm unsaved work before the restart safety timeout.' });
+    }, 5_000);
+    unsavedWorkQueries.set(requestId, { resolve, timer, senderId });
+    mainWindow.webContents.send('studio:query-unsaved-work', { requestId });
+  });
+}
+
+ipcMain.on('studio:unsaved-work-response', (event, response) => {
+  const requestId = String(response?.requestId || '');
+  const pending = unsavedWorkQueries.get(requestId);
+  if (!pending || pending.senderId !== event.sender.id) return;
+  unsavedWorkQueries.delete(requestId);
+  clearTimeout(pending.timer);
+  pending.resolve({
+    hasUnsavedWork: Boolean(response?.hasUnsavedWork),
+    detail: typeof response?.detail === 'string' ? response.detail.slice(0, 160) : ''
+  });
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -268,7 +299,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const appData = app.getPath('appData');
   const sharedSettingsDirectory = path.join(appData, 'Ding Ding Projects', 'shared-experience-settings');
   studioSettings = new StudioSettingsService({
@@ -308,6 +339,13 @@ app.whenReady().then(() => {
     },
     onEvent: sendToRenderer
   });
+  updateController = new UpdateController({
+    app,
+    autoUpdater,
+    dataDir: path.join(app.getPath('userData'), 'updates'),
+    onStateChange: (update) => sendToRenderer({ type: 'application-update', update })
+  });
+  await updateController.initialize();
   createWindow();
   serverManager.revalidateManagedJavaInventory().catch((error) => {
     serverManager.emit({ type: 'dependency-output', dependency: 'java', message: 'The app-managed Java inventory could not be revalidated at startup: ' + String(error?.message || 'unknown error').slice(0, 512) });
@@ -323,11 +361,17 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   studioSettings?.stopWatching();
+  updateController?.shutdown();
 });
 
 function requireManager() {
   if (!serverManager) throw new Error('Minecraft Server Studio is still starting.');
   return serverManager;
+}
+
+function requireUpdater() {
+  if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
+  return updateController;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -526,3 +570,15 @@ ipcMain.handle('studio:paper-update-preflight', async (_event, id) => requireMan
 ipcMain.handle('studio:apply-paper-update', async (_event, id, confirmation) => requireManager().applyPaperUpdate(id, confirmation));
 ipcMain.handle('studio:paper-rollback-preflight', async (_event, id) => requireManager().preparePaperRollbackPlan(id));
 ipcMain.handle('studio:apply-paper-rollback', async (_event, id, confirmation) => requireManager().applyPaperRollback(id, confirmation));
+ipcMain.handle('studio:update-status', () => requireUpdater().status());
+ipcMain.handle('studio:check-for-updates', () => requireUpdater().checkForUpdates({ reason: 'manual' }));
+ipcMain.handle('studio:set-updates-enabled', (_event, enabled) => requireUpdater().setEnabled(enabled));
+ipcMain.handle('studio:defer-update', () => requireUpdater().deferUpdate());
+ipcMain.handle('studio:restart-for-update', () => requireUpdater().restartForUpdate(queryRendererUnsavedWork));
+ipcMain.handle('studio:open-update-notes', async () => {
+  const releaseNotesUrl = requireUpdater().status().releaseNotesUrl;
+  const url = releaseNotesUrl ? new URL(releaseNotesUrl) : null;
+  const expectedPrefix = '/Ding-Ding-Projects/minecraft-server-studio/releases/';
+  if (!url || url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.startsWith(expectedPrefix)) throw new Error('No verified public release-notes link is available for this update state.');
+  await shell.openExternal(url.toString());
+});
