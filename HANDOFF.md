@@ -1,5 +1,35 @@
 # Handoff
 
+## Release-publication timing record correction
+
+The Windows release workflow now labels its release-note clock values as
+release-publication timing. Immediately after a successful non-draft
+`gh release create`, it records workflow start, release-publication-command
+completion, and elapsed time through that event. It no longer calls that
+pre-finalization timestamp “Workflow completed.”
+
+The final release-note edit, published-asset availability poll, evidence
+collection, and evidence upload run later. The release note therefore does not
+claim a terminal workflow-completion timestamp that it cannot truthfully know
+when constructed. Unsigned Squirrel packaging, injected application versioning,
+asset validation, release uniqueness, and the no-tests/no-lint workflow boundary
+are unchanged.
+
+### Directly related paths
+
+- `.github/workflows/windows-package.yml`
+- `docs/features/release-packaging.md`
+- `README.md`
+- `CHANGELOG.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, review, build, package, release, runtime interaction, or
+capture ran for this fast-delivery workflow correction. A future workflow run
+must provide the next release note and package evidence; that future run is not
+claimed here.
+
 ## Minecraft Server Studio expanded candidate
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.

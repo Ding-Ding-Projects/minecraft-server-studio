@@ -44,6 +44,20 @@ a prerelease suffix because that sorts below the corresponding stable version.
 The strictly numeric workflow version is therefore the updater-facing value;
 the source version remains a development baseline only.
 
+## Release-publication timing semantics
+
+The release note records a workflow clock value immediately after the
+non-draft `gh release create` command succeeds. Its timing section is therefore
+explicitly labeled **Release-publication timing** and records the workflow
+start, the release-publication command completion time, and elapsed time through
+that event.
+
+It does not label that value as a terminal workflow-completion timestamp. The
+final release-note edit, published-asset availability polling, evidence
+collection, and evidence upload occur later in the workflow. Recording only the
+event that is known at release-note construction avoids a circular attempt to
+rewrite a published release note after the final workflow step.
+
 ## Public dim-sum code-name metadata
 
 Before finalizing the release note, the workflow calls the committed
@@ -119,8 +133,8 @@ evidence is still available at workflow time.
 
 This lane did not run tests, linting, a build, package, release, or runtime
 interaction. The next workflow run must provide the actual version-matched
-Setup/package/`RELEASES` evidence, release-note, and asset evidence before the
-behavior can be treated as delivery proof.
+Setup/package/`RELEASES` evidence, release-publication timing record, and asset
+evidence before the behavior can be treated as delivery proof.
 
 ## Suggested articles
 

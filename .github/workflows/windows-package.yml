@@ -246,10 +246,10 @@ jobs:
             }
           }
 
-          $completedAt = [DateTimeOffset]::UtcNow
+          $releasePublicationRecordedAt = [DateTimeOffset]::UtcNow
           $startedAt = [DateTimeOffset]::Parse($env:WORKFLOW_STARTED_AT)
-          $duration = $completedAt - $startedAt
-          $durationText = ('{0:00}:{1:00}:{2:00}' -f [math]::Floor($duration.TotalHours), $duration.Minutes, $duration.Seconds)
+          $elapsedToReleasePublication = $releasePublicationRecordedAt - $startedAt
+          $elapsedToReleasePublicationText = ('{0:00}:{1:00}:{2:00}' -f [math]::Floor($elapsedToReleasePublication.TotalHours), $elapsedToReleasePublication.Minutes, $elapsedToReleasePublication.Seconds)
           $hashMarkdown = Get-Content -LiteralPath $env:ARTIFACT_HASHES_PATH -Raw
           $lineCountMarkdown = Get-Content -LiteralPath $env:LINE_COUNT_PATH -Raw
           $dimSumReleaseMetadata = Get-Content -LiteralPath $env:DIM_SUM_RELEASE_NOTES_PATH -Raw
@@ -260,10 +260,11 @@ jobs:
             '> [!WARNING]',
             '> The attached Windows Squirrel installer and update packages are unsigned. Windows may show an unknown-publisher or SmartScreen warning.',
             '',
-            '## Workflow timing',
+            '## Release-publication timing',
             "- Workflow started (UTC): $($startedAt.ToUniversalTime().ToString('o'))",
-            "- Workflow completed (UTC): $($completedAt.ToString('o'))",
-            "- Workflow duration: $durationText",
+            "- Release publication command completed (UTC): $($releasePublicationRecordedAt.ToString('o'))",
+            "- Elapsed through release publication: $elapsedToReleasePublicationText",
+            '- Timing scope: this record ends when non-draft release creation succeeds. The final release-note edit, published-asset availability poll, evidence collection, and evidence upload occur later in the workflow; this note does not assert a terminal workflow-completion timestamp.',
             '',
             '## Validated artifacts',
             $hashMarkdown.TrimEnd(),
