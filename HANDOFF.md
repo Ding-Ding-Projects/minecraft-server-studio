@@ -40,6 +40,28 @@ localization, automated tests, built-site interaction, and capture evidence
 remain incomplete. No test, lint, review, browser interaction, capture, build,
 package, release, Page publish, or GitHub mutation was run in this lane.
 
+## Browser-local marketing narrator and schedule candidate
+
+The public `site/` source now carries an optional browser event narrator and a local schedule editor. Narration is disabled by default and uses actual browser `speechSynthesis` voices only after a visitor enables it. It observes late `voiceschanged` delivery, persists separate English and Cantonese `voiceURI` choices or automatic selection, preserves a missing saved choice, uses one serialized queue for English-then-Cantonese bilingual events, bounds rate and pitch, and states when the browser cannot provide a matching voice or reliably identify a screen reader. The page makes no text-to-speech request.
+
+The schedule editor stores at most 100 version-1 local rules in contract schema version 4. It supports language mode, theme, density, accent color, browser-safe font-family fallback stacks, font scale, and font weight; optional local date/time bounds; every-day or explicit weekday selection; cross-midnight anchoring to the prior start date/weekday; equal-time inactive rules; highest-priority then lexical-id resolution; edit and two-key/full-slider-confirmed remove paths; and an adjacent bounded regular-expression builder for saved-rule search. HTTPS and Home Assistant choices remain visible but unavailable because the static page has no privileged adapter, validation path, or credential store, and no request is made. The renamed presentation mode hides narrator/schedule controls, cancels queued speech, and pauses overrides while retaining saved browser-local preferences.
+
+### Directly related paths
+
+- `site/index.html`
+- `site/app.js`
+- `site/contract.js`
+- `site/styles.css`
+- `site/README.md`
+- `site/CONTRACT.md`
+- `site/NARRATOR_AND_SCHEDULE.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+
+### Verification boundary
+
+No tests, linting, review, build, package, browser interaction, screen capture, Page publication, release, or network request ran in this source-only fast-delivery lane. The browser-local completeness inventory remains in progress and explicitly leaves localization breadth, accessibility validation, runtime speech/voice behavior, local-storage persistence, schedule transitions, built-artifact interaction, and capture evidence unverified.
+
 ## Appearance and browser-style server-tab foundation
 
 The desktop source now keeps a separate strict local appearance/navigation record

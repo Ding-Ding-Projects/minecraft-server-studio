@@ -27,11 +27,11 @@ The engine does not create markup, inject styles, or attach controls automatical
 
 ## Persistence, schema, and migration
 
-The persisted root schema is version `3`.
+The persisted root schema is version `4`.
 
 ```text
 {
-  version: 3,
+  version: 4,
   settings: { ... },
   notifications: [ ... ],
   audit: [ ... ],
@@ -50,11 +50,11 @@ The persisted root schema is version `3`.
 }
 ```
 
-Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Version 3 adds the browser-local presentation-mode credential record; pre-version-3 records migrate with no configured verifier. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
+Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Version 3 adds the browser-local presentation-mode credential record; version 4 adds normalized version-1 schedule records while preserving a valid legacy local rule as version 1 and keeps bounded browser-local conversion metadata beside them. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
 
 The entire normalized record is limited to 1 MiB measured as encoded text where the browser supports `TextEncoder`. If an attempted save reaches that boundary, the engine retains the newest half of notification and audit history before trying to save again. If the bounded record is still too large, or browser storage is unavailable or throws, the in-memory model remains usable for the current page lifetime and `isStorageAvailable()` reports `false`; the host must show that persistence did not succeed.
 
-The companion page does not keep a parallel `sessionStorage` settings model. Its visible language, funny-level, theme, density, emoji, status, inventory, notification, audit, and validated vocabulary state hydrate from and write through this one browser-local contract record. That record belongs only to this origin in this browser. It is not shared with another browser profile, device, user account, server, chat, status hub, or the installed desktop application.
+The companion page does not keep a parallel `sessionStorage` settings model. Its visible language, funny-level, theme, density, emoji, narrator preferences, schedules, status, inventory, notification, audit, and validated vocabulary state hydrate from and write through this one browser-local contract record. That record belongs only to this origin in this browser. It is not shared with another browser profile, device, user account, server, chat, status hub, or the installed desktop application.
 
 `resetLocalState({ confirm: true })` removes only this site's contract key and restores an empty local state. It does not affect the desktop application, Minecraft server folders, installed tools, browser downloads, or another site's data.
 
@@ -79,7 +79,7 @@ The companion page does not keep a parallel `sessionStorage` settings model. Its
 | English and Cantonese voices | `narrator.englishVoice`, `narrator.cantoneseVoice` | browser voice identifier or `auto` |
 | Narrator rate and pitch | `narrator.rate`, `narrator.pitch` | rate 0.5–2; pitch 0–2 |
 
-`getNarratorCapabilities()` returns browser speech-synthesis availability and the actual currently available voices. `observeNarratorVoices(listener)` reports immediately and again on `voiceschanged`; its return value unsubscribes. The host must select voices by stable `voiceURI` where present, expose an automatic choice, and explain a missing selected voice. This contract does not speak text by itself, so a host can manage queues, cooldowns, assistive-technology behavior, and user initiation correctly.
+`getNarratorCapabilities()` returns browser speech-synthesis availability and actual currently available voices with a non-empty stable `voiceURI`; a display name is never substituted as an identity. `observeNarratorVoices(listener)` reports immediately and again on `voiceschanged`; its return value unsubscribes. The host exposes an automatic choice and explains a missing selected voice without silently erasing it. The contract does not speak text itself; `app.js` owns an opt-in serialized `SpeechSynthesisUtterance` queue that uses actual browser voice objects, queues English before Cantonese in bilingual mode, debounces ordinary rapid events for 250 milliseconds, applies a per-category cooldown, replaces pending superseded events, and never begins speech until a visitor has enabled narration and a page event occurs. Browser APIs do not reliably report an active screen reader, so the host states that limitation rather than claiming it can duck or yield to one.
 
 ### Browser-local appearance and navigation foundation
 
@@ -97,7 +97,7 @@ This section records a browser-local foundation only. It does not promise every-
 
 `getSchoolModeCredentialState()` reports only whether the verifier exists, its algorithm, and its configuration time. `getSchoolModeCredentialSalt()` makes the non-secret local salt available to the host. The host derives the candidate verifier and passes it to `verifySchoolModeCredential(verifier)`, whose bounded comparison returns only `{ ok }`. `clearSchoolModeCredential({ credentialAccepted: true })` removes the verifier and turns the mode off after a host has obtained a successful local match.
 
-`getEffectiveSettings()` forces English while the renamed mode is active and reports that personal-vocabulary replacement and dim sum are inactive. The host must omit the suppressed controls and content rather than merely disabling them, and it must use the exact chosen name wherever it introduces the mode. `getSchoolModeResetBoundary()` returns the exact local-storage boundary that the host should present to users: clearing this site's local storage resets the browser-local preferences, vocabulary cache, local lock metadata, and verifier only. This is a user-experience lock, not a security boundary, and it does not change desktop-app or server data.
+`getEffectiveSettings()` applies matching local schedules to supported language and appearance values without overwriting the saved base settings. It then forces English while the renamed mode is active, reports that personal-vocabulary replacement and dim sum are inactive, and suppresses all scheduled overrides until that mode is unlocked. The host omits the suppressed language, tone, vocabulary, narrator, and schedule controls rather than merely disabling them, cancels queued speech, and uses the exact chosen name wherever it introduces the mode. `getSchoolModeResetBoundary()` returns the exact local-storage boundary that the host should present to users: clearing this site's local storage resets the browser-local preferences, vocabulary cache, local lock metadata, schedule records, and verifier only. This is a user-experience lock, not a security boundary, and it does not change desktop-app or server data.
 
 ## Notifications, audit history, and exports
 
@@ -195,9 +195,13 @@ free-text notes and directs recovery to clearing this site's storage.
 
 ## Local schedules
 
-`createSchedule()` accepts local-only schedule rules. Each rule has a stable id, label, setting id, scalar string/number/boolean value, enabled state, optional date and time bounds, selected weekdays, and a priority. It supports `source: "local"` only. API and home-automation sources are not registered here and must remain visibly unavailable until a host implements their validation and secure credential handling.
+`createSchedule()` accepts at most 100 normalized version-1 local-only schedule rules. Each rule has a stable id, bounded label, one supported setting id, validated scalar value, enabled state, optional inclusive date bounds, optional local time bounds, every-day or selected-weekday state, and priority `0`–`999`. The available setting ids are `languageMode`, `appearance.theme`, `appearance.density`, `appearance.accent`, `appearance.font.family`, `appearance.font.scale`, and `appearance.font.weight`. Font-family rules accept only the shipped browser-safe fallback stacks. The contract rejects unsupported versions, unknown setting ids, invalid colors, out-of-range font values, invalid dates or times, reversed date bounds, unsafe keys, and any source other than `local`. `getSchedules()` returns a clone of the saved rules, and `removeSchedule(id)` removes one local rule and records a bounded local audit event.
 
-`getActiveScheduleValues(date)` resolves matching local rules deterministically: highest numeric priority first, then stable id. For one setting, the first result wins. Same start and end time means no active time window. Cross-midnight windows are supported. The host must label the local timezone and daylight-saving behavior in its schedule UI.
+`getActiveScheduleValues(date)` resolves matching local rules deterministically: highest numeric priority first, then stable id in ascending lexical order. For one setting, the first result wins. A normal time window includes its start and excludes its end. Equal start/end times deliberately create no active window. A cross-midnight rule applies after midnight against the previous local start date and weekday, so its date bounds and weekday selection remain anchored to the rule's start. A start-only time means from that time onward; an end-only time means until that time; neither means all day. The host shows the browser's local timezone and states that daylight-saving behavior follows the local clock: skipped wall-clock values do not match and repeated wall-clock values can match twice when in range.
+
+The static companion page keeps HTTPS API and Home Assistant options visibly unavailable. It has no privileged network adapter, URL-validation route, redirect handling, token vault, or request path for either source, and neither this contract nor the host makes a request for them.
+
+The host's saved-rule removal surface identifies the selected local rule, requires two separate acknowledgements plus a 100-percent slider before calling `removeSchedule(id)`, offers an Emergency exit action and Escape cancellation, and returns focus to the originating removal control. The contract itself never opens a dialog or performs a desktop or network action.
 
 ## Browser-local Ollama observation boundary
 

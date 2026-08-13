@@ -7,6 +7,7 @@
 
   const STORAGE_KEY = "minecraft-server-studio.site.contract.v2";
   const SCHEMA_VERSION = 4;
+  const SCHEDULE_RULE_VERSION = 1;
   const LIMITS = Object.freeze({
     stateBytes: 1024 * 1024,
     notifications: 200,
@@ -50,6 +51,16 @@
   const ORIENTATIONS = Object.freeze(["vertical", "horizontal"]);
   const TAB_DOCKS = Object.freeze(["left", "right", "top", "bottom"]);
   const SCHEDULE_SOURCES = Object.freeze(["local"]);
+  const SCHEDULED_SETTING_IDS = Object.freeze([
+    "languageMode",
+    "appearance.theme",
+    "appearance.density",
+    "appearance.accent",
+    "appearance.font.family",
+    "appearance.font.scale",
+    "appearance.font.weight"
+  ]);
+  const SCHEDULE_FONT_FAMILIES = Object.freeze(["system-ui", "Inter, system-ui, sans-serif", "Arial, sans-serif", "Segoe UI, sans-serif", "Georgia, serif", "Cascadia Code, Consolas, monospace"]);
   const STATUS_STATES = Object.freeze(["idle", "running", "waiting", "blocked", "verified", "failed"]);
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
   const CONVERSION_STATUSES = Object.freeze(["planned", "queued", "ready", "converting", "converted", "download-requested", "unsupported", "unavailable", "cancelled", "failed", "removed"]);
@@ -221,6 +232,12 @@
     }
     if (version < 3) {
       migrated.schoolModeCredential = { algorithm: "", salt: "", verifier: "", configuredAt: null };
+    }
+    if (version < 4 && Array.isArray(migrated.schedules)) {
+      migrated.schedules = migrated.schedules.map((rule) => {
+        if (!isPlainObject(rule) || hasUnsafeKeys(rule) || hasOwn(rule, "version")) return rule;
+        return Object.assign({}, rule, { version: SCHEDULE_RULE_VERSION });
+      });
     }
     migrated.version = SCHEMA_VERSION;
     return migrated;
@@ -533,31 +550,72 @@
     };
   }
 
+  function isCanonicalLocalDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }
+
+  function isCanonicalLocalTime(value) {
+    if (!/^\d{2}:\d{2}$/.test(value || "")) return false;
+    const [hours, minutes] = value.split(":").map(Number);
+    return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+  }
+
+  function normalizeScheduledValue(setting, value) {
+    if (setting === "languageMode") return LANGUAGE_MODES.includes(value) ? value : null;
+    if (setting === "appearance.theme") return THEMES.includes(value) ? value : null;
+    if (setting === "appearance.density") return DENSITIES.includes(value) ? value : null;
+    if (setting === "appearance.accent") {
+      return typeof value === "string" && SAFE_COLOR.test(value.trim()) ? value.trim().toLowerCase() : null;
+    }
+    if (setting === "appearance.font.family") return SCHEDULE_FONT_FAMILIES.includes(value) ? value : null;
+    if (setting === "appearance.font.scale") {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) && numeric >= 0.75 && numeric <= 2 ? Math.round(numeric * 100) / 100 : null;
+    }
+    if (setting === "appearance.font.weight") {
+      const numeric = Number(value);
+      return Number.isInteger(numeric) && numeric >= 100 && numeric <= 900 && numeric % 100 === 0 ? numeric : null;
+    }
+    return null;
+  }
+
   function normalizeSchedule(raw) {
     if (!isPlainObject(raw) || hasUnsafeKeys(raw)) {
       return null;
     }
     const id = safeId(raw.id, "");
-    const setting = safeId(raw.setting, "");
-    if (!id || !setting) {
+    const setting = trimString(raw.setting, 80, "");
+    const version = hasOwn(raw, "version") ? Number(raw.version) : SCHEDULE_RULE_VERSION;
+    const source = hasOwn(raw, "source") ? raw.source : "local";
+    if (!id || !SCHEDULED_SETTING_IDS.includes(setting) || version !== SCHEDULE_RULE_VERSION || source !== "local") {
       return null;
     }
     const weekdays = Array.isArray(raw.weekdays) ? raw.weekdays.map((day) => boundedInteger(day, 0, 6, -1)).filter((day, index, list) => day >= 0 && list.indexOf(day) === index).slice(0, 7) : [];
-    const value = ["string", "number", "boolean"].includes(typeof raw.value) ? raw.value : null;
+    const value = normalizeScheduledValue(setting, raw.value);
     if (value === null) {
       return null;
     }
+    const startDate = trimString(raw.startDate, 10, "");
+    const endDate = trimString(raw.endDate, 10, "");
+    const startTime = trimString(raw.startTime, 5, "");
+    const endTime = trimString(raw.endTime, 5, "");
+    if ((startDate && !isCanonicalLocalDate(startDate)) || (endDate && !isCanonicalLocalDate(endDate)) || (startDate && endDate && startDate > endDate)) return null;
+    if ((startTime && !isCanonicalLocalTime(startTime)) || (endTime && !isCanonicalLocalTime(endTime))) return null;
     return {
+      version: SCHEDULE_RULE_VERSION,
       id,
       label: trimString(raw.label, 160, setting) || setting,
       setting,
       value,
       enabled: raw.enabled !== false,
-      source: enumValue(raw.source, SCHEDULE_SOURCES, "local"),
-      startDate: trimString(raw.startDate, 10, ""),
-      endDate: trimString(raw.endDate, 10, ""),
-      startTime: trimString(raw.startTime, 5, ""),
-      endTime: trimString(raw.endTime, 5, ""),
+      source,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
       weekdays,
       priority: boundedInteger(raw.priority, 0, 999, 0)
     };
@@ -990,6 +1048,24 @@
 
   function getEffectiveSettings() {
     const settings = clone(state.settings);
+    const activeSchedules = getActiveScheduleValues();
+    const scheduledOverrides = {};
+    if (!settings.schoolMode.enabled) {
+      Object.keys(activeSchedules).forEach((setting) => {
+        const entry = activeSchedules[setting];
+        if (!entry) return;
+        if (setting === "languageMode") settings.languageMode = entry.value;
+        if (setting === "appearance.theme") settings.appearance.theme = entry.value;
+        if (setting === "appearance.density") settings.appearance.density = entry.value;
+        if (setting === "appearance.accent") settings.appearance.accent = entry.value;
+        if (setting === "appearance.font.family") settings.appearance.font.family = entry.value;
+        if (setting === "appearance.font.scale") settings.appearance.font.scale = entry.value;
+        if (setting === "appearance.font.weight") settings.appearance.font.weight = entry.value;
+        scheduledOverrides[setting] = { ruleId: entry.ruleId, label: entry.label, value: entry.value };
+      });
+    }
+    settings.scheduledOverrides = scheduledOverrides;
+    settings.schedulePresentationSuppressed = Boolean(settings.schoolMode.enabled && Object.keys(activeSchedules).length);
     settings.schoolMode.credentialConfigured = isConfiguredSchoolModeCredential(state.schoolModeCredential);
     if (settings.schoolMode.enabled) {
       settings.languageMode = "english";
@@ -1903,7 +1979,13 @@
 
   function createSchedule(input) {
     const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
-    const schedule = normalizeSchedule(Object.assign({}, raw, { id: raw.id || `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, source: "local" }));
+    if (hasOwn(raw, "source") && raw.source !== "local") return { ok: false, error: "Only browser-local schedules are available on this page." };
+    if (hasOwn(raw, "version") && Number(raw.version) !== SCHEDULE_RULE_VERSION) return { ok: false, error: "This browser-local schedule version is unsupported." };
+    const schedule = normalizeSchedule(Object.assign({}, raw, {
+      id: raw.id || `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      version: SCHEDULE_RULE_VERSION,
+      source: "local"
+    }));
     if (!schedule) return { ok: false, error: "A local schedule needs an id, a supported setting, and a scalar value." };
     const existing = state.schedules.findIndex((item) => item.id === schedule.id);
     if (existing < 0 && state.schedules.length >= LIMITS.schedules) return { ok: false, error: "The local schedule limit has been reached." };
@@ -1914,6 +1996,20 @@
     return { ok: true, schedule: clone(schedule) };
   }
 
+  function getSchedules() {
+    return state.schedules.map((schedule) => clone(schedule));
+  }
+
+  function removeSchedule(id) {
+    const safe = safeId(id, "");
+    const index = state.schedules.findIndex((schedule) => schedule.id === safe);
+    if (index < 0) return { ok: false, error: "The browser-local schedule was not found." };
+    const removed = state.schedules.splice(index, 1)[0];
+    writeAudit("Local schedule removed", removed.id, `${removed.label} was removed from this browser only.`);
+    persist({ type: "schedule" });
+    return { ok: true, schedule: clone(removed) };
+  }
+
   function minutesSinceMidnight(value) {
     if (!/^\d{2}:\d{2}$/.test(value || "")) return null;
     const [hours, minutes] = value.split(":").map(Number);
@@ -1921,18 +2017,32 @@
     return (hours * 60) + minutes;
   }
 
+  function localDateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  function scheduleAnchorDate(date, start, end) {
+    const anchor = new Date(date.getTime());
+    const current = (date.getHours() * 60) + date.getMinutes();
+    if (start !== null && end !== null && start > end && current < end) anchor.setDate(anchor.getDate() - 1);
+    return anchor;
+  }
+
   function scheduleMatches(rule, date) {
     if (!rule.enabled || rule.source !== "local") return false;
     const localDate = date || new Date();
-    const isoDate = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
-    if (rule.startDate && isoDate < rule.startDate) return false;
-    if (rule.endDate && isoDate > rule.endDate) return false;
-    if (rule.weekdays.length && !rule.weekdays.includes(localDate.getDay())) return false;
     const start = minutesSinceMidnight(rule.startTime);
     const end = minutesSinceMidnight(rule.endTime);
-    if (start === null || end === null) return true;
     const current = (localDate.getHours() * 60) + localDate.getMinutes();
-    if (start === end) return false;
+    if (start !== null && end !== null && start === end) return false;
+    const anchor = scheduleAnchorDate(localDate, start, end);
+    const isoDate = localDateKey(anchor);
+    if (rule.startDate && isoDate < rule.startDate) return false;
+    if (rule.endDate && isoDate > rule.endDate) return false;
+    if (rule.weekdays.length && !rule.weekdays.includes(anchor.getDay())) return false;
+    if (start === null && end === null) return true;
+    if (start !== null && end === null) return current >= start;
+    if (start === null && end !== null) return current < end;
     return start < end ? current >= start && current < end : current >= start || current < end;
   }
 
@@ -1996,7 +2106,13 @@
   function getNarratorCapabilities() {
     const synthesis = global.speechSynthesis;
     const supported = Boolean(synthesis && typeof synthesis.getVoices === "function");
-    const voices = supported ? synthesis.getVoices().map((voice) => ({ id: voice.voiceURI || voice.name, name: voice.name, lang: voice.lang, localService: Boolean(voice.localService), default: Boolean(voice.default) })) : [];
+    let rawVoices = [];
+    try {
+      rawVoices = supported ? synthesis.getVoices() : [];
+    } catch (_) {
+      rawVoices = [];
+    }
+    const voices = Array.isArray(rawVoices) ? rawVoices.filter((voice) => voice && typeof voice.voiceURI === "string" && voice.voiceURI.trim()).map((voice) => ({ id: voice.voiceURI, name: voice.name, lang: voice.lang, localService: Boolean(voice.localService), default: Boolean(voice.default) })) : [];
     return { supported, voices };
   }
 
@@ -2120,6 +2236,8 @@
     createTotpShell,
     markTotpEnrollment,
     createSchedule,
+    getSchedules,
+    removeSchedule,
     getActiveScheduleValues,
     prepareOllamaOperation,
     handOffOllamaOperation,
