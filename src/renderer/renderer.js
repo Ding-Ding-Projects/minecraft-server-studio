@@ -4,6 +4,9 @@ const state = {
   dependencies: null,
   dependencyErrors: {},
   logs: [],
+  localStatus: null,
+  buildToolsMetadata: null,
+  buildToolsPlan: null,
   activeTab: 'general',
   pluginPath: ''
 };
@@ -34,6 +37,64 @@ const ADVANCED_FIELDS = [
   { key: 'text-filtering-config', label: 'Text filtering configuration', type: 'url', help: 'Optional server-side text filtering service URL.' },
   { key: 'use-native-transport', label: 'Use native transport', type: 'boolean', help: 'Use the platform-native network transport when supported.' }
 ];
+
+const FALLBACK_COMMAND_CATALOG = {
+  source: 'Built-in registry seed',
+  families: [
+    { id: 'lifecycle', label: 'Lifecycle and diagnostics', actions: [
+      { id: 'save-all', label: 'Save all worlds', command: 'save-all', fields: [], risk: 'safe', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'save-on', label: 'Enable saving', command: 'save-on', fields: [], risk: 'safe', transports: ['local', 'rcon'] },
+      { id: 'save-off', label: 'Disable saving', command: 'save-off', fields: [], risk: 'consequential', transports: ['local', 'rcon'], backup: true },
+      { id: 'stop', label: 'Stop server', command: 'stop', fields: [], risk: 'consequential', transports: ['protocol', 'local', 'rcon'], backup: true },
+      { id: 'reload', label: 'Reload (deprecated warning)', command: 'reload', fields: [], risk: 'consequential', transports: ['local', 'rcon'], deprecated: true },
+      { id: 'tick', label: 'Tick diagnostics', command: 'tick query', fields: [], risk: 'safe', transports: ['local', 'rcon'] }
+    ] },
+    { id: 'moderation', label: 'Moderation and access', actions: [
+      { id: 'list', label: 'List online players', command: 'list', fields: [], risk: 'safe', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'op', label: 'Grant operator', command: 'op', fields: [{ id: 'player', label: 'Player name or UUID', type: 'text', required: true, maxLength: 64 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'deop', label: 'Remove operator', command: 'deop', fields: [{ id: 'player', label: 'Player name or UUID', type: 'text', required: true, maxLength: 64 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'allowlist-add', label: 'Add to allowlist', command: 'whitelist add', fields: [{ id: 'player', label: 'Player name or UUID', type: 'text', required: true, maxLength: 64 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'kick', label: 'Kick player', command: 'kick', fields: [{ id: 'player', label: 'Player name or UUID', type: 'text', required: true, maxLength: 64 }, { id: 'reason', label: 'Reason', type: 'text', maxLength: 256 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] }
+    ] },
+    { id: 'settings', label: 'Settings and gamerules', actions: [
+      { id: 'gamerule', label: 'Set gamerule', command: 'gamerule', fields: [{ id: 'rule', label: 'Rule name', type: 'text', required: true, maxLength: 128 }, { id: 'value', label: 'Value', type: 'text', required: true, maxLength: 256 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'difficulty', label: 'Set difficulty', command: 'difficulty', fields: [{ id: 'value', label: 'Difficulty', type: 'select', options: ['peaceful', 'easy', 'normal', 'hard'], required: true }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'defaultgamemode', label: 'Set default game mode', command: 'defaultgamemode', fields: [{ id: 'value', label: 'Default mode', type: 'select', options: ['survival', 'creative', 'adventure', 'spectator'], required: true }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] }
+    ] },
+    { id: 'world', label: 'World and gameplay', actions: [
+      { id: 'time', label: 'Set time', command: 'time set', fields: [{ id: 'value', label: 'Time', type: 'select', options: ['day', 'night', 'noon', 'midnight'], required: true }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'weather', label: 'Set weather', command: 'weather', fields: [{ id: 'value', label: 'Weather', type: 'select', options: ['clear', 'rain', 'thunder'], required: true }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'worldborder', label: 'Set world border', command: 'worldborder set', fields: [{ id: 'distance', label: 'Diameter', type: 'number', min: 1, max: 59999968, required: true }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'setworldspawn', label: 'Set world spawn', command: 'setworldspawn', fields: [{ id: 'position', label: 'Position', type: 'text', maxLength: 128 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] }
+    ] },
+    { id: 'entity', label: 'Entity and player', actions: [
+      { id: 'give', label: 'Give item', command: 'give', fields: [{ id: 'target', label: 'Target', type: 'text', required: true, maxLength: 128 }, { id: 'item', label: 'Item ID', type: 'text', required: true, maxLength: 256 }, { id: 'count', label: 'Count', type: 'number', min: 1, max: 2147483647 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'teleport', label: 'Teleport', command: 'teleport', fields: [{ id: 'target', label: 'Target', type: 'text', required: true, maxLength: 128 }, { id: 'destination', label: 'Destination', type: 'text', required: true, maxLength: 128 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'effect', label: 'Apply effect', command: 'effect give', fields: [{ id: 'target', label: 'Target', type: 'text', required: true, maxLength: 128 }, { id: 'effect', label: 'Effect ID', type: 'text', required: true, maxLength: 128 }, { id: 'seconds', label: 'Seconds', type: 'number', min: 1, max: 1000000 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'summon', label: 'Summon entity', command: 'summon', fields: [{ id: 'entity', label: 'Entity ID', type: 'text', required: true, maxLength: 256 }, { id: 'position', label: 'Position', type: 'text', maxLength: 128 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] }
+    ] },
+    { id: 'terrain', label: 'Terrain, data, and automation', actions: [
+      { id: 'setblock', label: 'Set block', command: 'setblock', fields: [{ id: 'position', label: 'Position', type: 'text', required: true, maxLength: 128 }, { id: 'block', label: 'Block ID', type: 'text', required: true, maxLength: 256 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'fill', label: 'Fill region', command: 'fill', fields: [{ id: 'from', label: 'From position', type: 'text', required: true, maxLength: 128 }, { id: 'to', label: 'To position', type: 'text', required: true, maxLength: 128 }, { id: 'block', label: 'Block ID', type: 'text', required: true, maxLength: 256 }], risk: 'destructive', transports: ['protocol', 'local', 'rcon'], backup: true },
+      { id: 'function', label: 'Run function', command: 'function', fields: [{ id: 'name', label: 'Function identifier', type: 'text', required: true, maxLength: 256 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'scoreboard', label: 'Scoreboard command', command: 'scoreboard', fields: [{ id: 'tokens', label: 'Structured scoreboard tokens', type: 'text', required: true, maxLength: 512 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] }
+    ] },
+    { id: 'communication', label: 'Communication and effects', actions: [
+      { id: 'say', label: 'Broadcast message', command: 'say', fields: [{ id: 'message', label: 'Message', type: 'text', required: true, maxLength: 512 }], risk: 'safe', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'tellraw', label: 'Send rich chat JSON', command: 'tellraw', fields: [{ id: 'target', label: 'Target', type: 'text', required: true, maxLength: 128 }, { id: 'json', label: 'Chat JSON', type: 'text', required: true, maxLength: 2048 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'title', label: 'Display title', command: 'title', fields: [{ id: 'target', label: 'Target', type: 'text', required: true, maxLength: 128 }, { id: 'tokens', label: 'Title tokens', type: 'text', required: true, maxLength: 512 }], risk: 'safe', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'playsound', label: 'Play sound', command: 'playsound', fields: [{ id: 'sound', label: 'Sound ID', type: 'text', required: true, maxLength: 256 }, { id: 'target', label: 'Target', type: 'text', required: true, maxLength: 128 }], risk: 'safe', transports: ['protocol', 'local', 'rcon'] }
+    ] },
+    { id: 'content', label: 'Data packs and content', actions: [
+      { id: 'datapack', label: 'Data pack action', command: 'datapack', fields: [{ id: 'tokens', label: 'Data pack tokens', type: 'text', required: true, maxLength: 512 }], risk: 'consequential', transports: ['protocol', 'local', 'rcon'] },
+      { id: 'paper', label: 'Paper command (capability-badged)', command: 'paper', fields: [{ id: 'tokens', label: 'Paper subcommand tokens', type: 'text', maxLength: 1024 }], risk: 'consequential', transports: ['local', 'rcon'], runtimeDiscovery: true },
+      { id: 'plugin', label: 'Plugin command', command: '', fields: [{ id: 'tokens', label: 'Plugin command tokens', type: 'text', required: true, maxLength: 1024 }], risk: 'consequential', transports: ['local', 'rcon'], runtimeDiscovery: true }
+    ] }
+  ]
+};
+
+let commandCatalog = FALLBACK_COMMAND_CATALOG;
+let selectedCommandAction = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -84,19 +145,15 @@ function settingsFromForm() {
     'spawn-protection': propertyValue('spawn-protection'),
     'max-world-size': propertyValue('max-world-size'),
     'generate-structures': propertyValue('generate-structures'),
-    'allow-nether': propertyValue('allow-nether'),
     'gamemode': propertyValue('gamemode'),
     'difficulty': propertyValue('difficulty'),
     'max-players': propertyValue('max-players'),
     'player-idle-timeout': propertyValue('player-idle-timeout'),
     'view-distance': propertyValue('view-distance'),
     'simulation-distance': propertyValue('simulation-distance'),
-    'pvp': propertyValue('pvp'),
     'hardcore': propertyValue('hardcore'),
     'allow-flight': propertyValue('allow-flight'),
     'spawn-animals': propertyValue('spawn-animals'),
-    'spawn-monsters': propertyValue('spawn-monsters'),
-    'enable-command-block': propertyValue('enable-command-block'),
     'force-gamemode': propertyValue('force-gamemode'),
     'server-port': propertyValue('server-port'),
     'query.port': propertyValue('query-port'),
@@ -119,6 +176,15 @@ function settingsFromForm() {
     settings[control.dataset.property] = control.type === 'checkbox' ? String(control.checked) : control.value;
   });
   return settings;
+}
+
+function gameRulesFromForm() {
+  return {
+    pvp: $('#gamerule-pvp').checked,
+    allowEnteringNetherUsingPortals: $('#gamerule-allowEnteringNetherUsingPortals').checked,
+    spawnMonsters: $('#gamerule-spawnMonsters').checked,
+    commandBlocksEnabled: $('#gamerule-commandBlocksEnabled').checked
+  };
 }
 
 function renderAdvancedControls() {
@@ -166,6 +232,307 @@ function renderAdvancedControls() {
   }
 }
 
+function currentCommandFamily() {
+  return commandCatalog.families.find((family) => family.id === $('#command-family')?.value) || commandCatalog.families[0] || null;
+}
+
+function currentCommandAction() {
+  const family = currentCommandFamily();
+  return family?.actions.find((action) => action.id === $('#command-action')?.value) || family?.actions[0] || null;
+}
+
+function commandFieldValue(field) {
+  const input = document.querySelector(`[data-command-field="${CSS.escape(field.id)}"]`);
+  return input ? String(input.value || '').trim() : '';
+}
+
+function buildStructuredCommand(action) {
+  if (!action) return '';
+  const tokens = String(action.command || '').trim().split(/\s+/).filter(Boolean);
+  for (const field of action.fields || []) {
+    const value = commandFieldValue(field);
+    if (field.required && !value) return '';
+    if (value) tokens.push(value);
+  }
+  return tokens.join(' ').trim();
+}
+
+function commandValuesFromForm(action) {
+  const values = {};
+  for (const field of action?.fields || []) values[field.id] = commandFieldValue(field);
+  return values;
+}
+
+function commandMethodFor(action) {
+  const selected = selectedServer();
+  const capabilities = selected?.management?.capabilities || [];
+  const exact = action?.protocolMethod || action?.protocolOperation || null;
+  if (exact && capabilities.includes(exact)) return exact;
+  const candidates = [
+    `commands.${action?.id}`,
+    `command.${action?.id}`,
+    `operations.${action?.id}`,
+    action?.id
+  ].filter(Boolean);
+  return candidates.find((candidate) => capabilities.includes(candidate)) || null;
+}
+
+function actionTransportState(action) {
+  const select = $('#command-transport');
+  const requested = select?.value || 'local';
+  const execution = action?.execution;
+  if (execution) {
+    const route = requested === 'protocol' ? execution.protocol
+      : requested === 'local' ? execution.localConsole
+        : requested === 'rcon' ? execution.rcon
+          : execution.hostLifecycle;
+    const source = requested === 'protocol' ? 'Discovered management protocol'
+      : requested === 'local' ? 'Local child-process console'
+        : requested === 'rcon' ? 'RCON fallback'
+          : 'Local lifecycle manager';
+    return {
+      executable: Boolean(route?.executable),
+      message: route?.executable ? `Available through ${source.toLowerCase()}.` : (execution.fallback || `This action is not currently available through ${source.toLowerCase()}.`),
+      source,
+      protocolMethod: execution.protocol?.method || null,
+      route: route?.route || registryRouteForTransport(requested),
+      metadata: execution
+    };
+  }
+  const supported = action?.transports || [];
+  const protocolMethod = commandMethodFor(action);
+  if (requested === 'protocol') {
+    if (!protocolMethod) return { executable: false, message: 'This action is not advertised by the discovered management protocol.', source: 'Protocol unavailable', protocolMethod: null };
+    return { executable: true, message: `Advertised as ${protocolMethod}.`, source: 'Management protocol', protocolMethod };
+  }
+  if (!supported.includes(requested)) return { executable: false, message: `This action is not represented by the ${requested} fallback.`, source: 'Registry constraint', protocolMethod: null };
+  if (requested === 'local' && selectedServer()?.status !== 'running') return { executable: false, message: 'Start the local server process before using its console transport.', source: 'Local console', protocolMethod: null };
+  if (requested === 'rcon') return { executable: true, message: 'RCON validates its own enabled/password/connection state when sent.', source: 'RCON fallback', protocolMethod: null };
+  return { executable: true, message: 'The command will be sent to the local managed process.', source: 'Local console fallback', protocolMethod: null };
+}
+
+function registryRouteForTransport(transport) {
+  return ({ protocol: 'runtime-protocol', local: 'local-console', rcon: 'rcon', lifecycle: 'host-lifecycle' })[transport] || 'local-console';
+}
+
+function updateCommandPreview() {
+  const action = currentCommandAction();
+  selectedCommandAction = action;
+  const structured = buildStructuredCommand(action);
+  const raw = $('#command-raw-tokens')?.value.trim();
+  const command = raw || structured;
+  const stateForAction = actionTransportState(action);
+  $('#command-preview').textContent = command ? `/${command}` : 'Complete the required rich fields or use the tokenized fallback.';
+  $('#command-source-badge').textContent = stateForAction.source;
+  $('#command-capability-state').textContent = stateForAction.message;
+  const risk = action?.risk || 'safe';
+  const notices = [];
+  if (action?.deprecated) notices.push('Deprecated in some server versions; inspect source/runtime help before use.');
+  if (action?.runtimeDiscovery) notices.push('Runtime help or plugin metadata determines availability.');
+  if (action?.backup) notices.push('A backup/affected-resource preview is required before this action can run.');
+  notices.push(risk === 'destructive' ? 'Destructive action: two-key confirmation and full slider are required.' : risk === 'consequential' ? 'Consequential action: two-key confirmation and full slider are required.' : 'Low-impact action: no destructive confirmation is required.');
+  $('#command-risk-copy').textContent = notices.join(' ');
+  $('#send-command-button').disabled = !command || !stateForAction.executable;
+}
+
+function renderCommandFieldEditor(action) {
+  const container = $('#command-field-editor');
+  if (!container) return;
+  container.replaceChildren();
+  for (const field of action?.fields || []) {
+    const label = document.createElement('label');
+    label.className = 'field';
+    const title = document.createElement('span');
+    title.textContent = `${field.label}${field.required ? ' *' : ''}`;
+    let control;
+    if (field.type === 'select' || ['segmented-select', 'enum-select', 'time-preset-or-stepper'].includes(field.control)) {
+      control = document.createElement('select');
+      for (const choice of field.options || []) {
+        const option = document.createElement('option');
+        option.value = choice;
+        option.textContent = choice;
+        control.append(option);
+      }
+    } else {
+      control = document.createElement('input');
+      control.type = field.type === 'number' || String(field.control || '').includes('stepper') ? 'number' : 'text';
+      if (field.min !== undefined) control.min = String(field.min);
+      if (field.max !== undefined) control.max = String(field.max);
+      if (field.maxLength !== undefined) control.maxLength = field.maxLength;
+    }
+    control.dataset.commandField = field.id;
+    control.required = Boolean(field.required);
+    control.addEventListener('input', updateCommandPreview);
+    control.addEventListener('change', updateCommandPreview);
+    label.append(title, control);
+    container.append(label);
+  }
+  updateCommandPreview();
+}
+
+function renderCommandCenter() {
+  const familySelect = $('#command-family');
+  const actionSelect = $('#command-action');
+  if (!familySelect || !actionSelect) return;
+  const previousFamily = familySelect.value;
+  familySelect.replaceChildren();
+  for (const family of commandCatalog.families || []) {
+    const option = document.createElement('option');
+    option.value = family.id;
+    option.textContent = family.label || family.title || family.id;
+    familySelect.append(option);
+  }
+  if ([...familySelect.options].some((option) => option.value === previousFamily)) familySelect.value = previousFamily;
+  const family = currentCommandFamily();
+  actionSelect.replaceChildren();
+  for (const action of family?.actions || []) {
+    const option = document.createElement('option');
+    option.value = action.id;
+    const label = action.label || action.title || action.id;
+    option.textContent = action.deprecated ? `${label} — deprecated warning` : label;
+    actionSelect.append(option);
+  }
+  renderCommandFieldEditor(currentCommandAction());
+}
+
+function renderManagement() {
+  const server = selectedServer();
+  if (!server || !$('#management-state')) return;
+  const management = server.management || {};
+  $('#management-state').textContent = String(management.state || 'not-configured').replace(/-/g, ' ');
+  $('#management-endpoint').value = management.endpoint || '';
+  $('#management-insecure-loopback').checked = Boolean(management.allowInsecureLoopback);
+  $('#management-capability-copy').textContent = management.discoveredAt
+    ? `Discovered ${management.capabilities?.length || 0} method(s) at ${new Date(management.discoveredAt).toLocaleString()}.`
+    : 'No capability discovery result is stored yet. Connection setup never enables a guessed method.';
+  const list = $('#management-capability-list');
+  list.replaceChildren();
+  for (const method of management.capabilities || []) {
+    const item = document.createElement('span');
+    item.textContent = method;
+    list.append(item);
+  }
+  renderCommandCenter();
+}
+
+function buildToolsInput() {
+  return {
+    revision: $('#buildtools-revision').value,
+    target: $('#buildtools-target').value,
+    workspace: $('#buildtools-workspace').value.trim(),
+    output: $('#buildtools-output').value.trim(),
+    compile: $('#buildtools-compile').checked,
+    reuse: $('#buildtools-reuse').checked,
+    update: $('#buildtools-update').checked,
+    pullRequest: undefined,
+    rawFallback: $('#buildtools-expert-tokens').value.trim(),
+    riskAcknowledgements: {}
+  };
+}
+
+function renderBuildToolsMetadata(metadata = state.buildToolsMetadata) {
+  const select = $('#buildtools-revision');
+  if (!select) return;
+  const current = select.value;
+  const versions = Array.isArray(metadata?.versions) ? metadata.versions : [];
+  select.replaceChildren();
+  if (!versions.length) {
+    const option = document.createElement('option');
+    option.value = selectedServer()?.minecraftVersion || '';
+    option.textContent = option.value || 'Refresh official versions first';
+    select.append(option);
+  } else {
+    versions.forEach((version) => {
+      const option = document.createElement('option');
+      option.value = version;
+      option.textContent = version;
+      select.append(option);
+    });
+  }
+  select.value = [...select.options].some((option) => option.value === current) ? current : (selectedServer()?.minecraftVersion || select.value);
+  $('#buildtools-java-state').textContent = metadata?.fetchedAt
+    ? `Official metadata refreshed ${new Date(metadata.fetchedAt).toLocaleString()}. BuildTools preflight remains the final compatibility authority.`
+    : 'The BuildTools preflight makes the final Java compatibility decision.';
+}
+
+function renderBuildToolsPlan(plan = state.buildToolsPlan) {
+  const executeButton = $('#execute-buildtools-button');
+  if (!plan) {
+    if (executeButton) executeButton.disabled = true;
+    return;
+  }
+  if (executeButton) executeButton.disabled = false;
+  $('#buildtools-java-state').textContent = `Prepared a non-executing ${plan.revision} plan. Requires Java ${plan.jdk?.feature || plan.jdk?.minimumFeature || 'as reported by BuildTools'} and explicit confirmation before execution.`;
+}
+
+function statusRecord(title, detail, state = 'idle') {
+  const record = document.createElement('article');
+  record.className = 'status-record';
+  record.dataset.state = state;
+  const heading = document.createElement('strong');
+  heading.textContent = title;
+  const copy = document.createElement('span');
+  copy.textContent = detail || 'No additional local detail is available.';
+  record.append(heading, copy);
+  return record;
+}
+
+function renderLocalStatus() {
+  const status = state.localStatus;
+  const current = $('#local-status-current');
+  if (!current) return;
+  if (!status?.snapshot) {
+    current.textContent = 'Not loaded';
+    $('#local-status-updated').textContent = 'Refresh to inspect local state';
+    $('#local-status-completeness').textContent = 'No inventory loaded';
+    $('#local-status-boundary').textContent = 'No local status snapshot has been loaded.';
+    ['#local-status-operations', '#local-status-evidence', '#local-status-next-steps', '#local-status-inventory'].forEach((selector) => $(selector).replaceChildren());
+    return;
+  }
+  const snapshot = status.snapshot;
+  const completeness = status.completeness || {};
+  current.textContent = String(snapshot.currentState || 'idle').replace(/-/g, ' ');
+  $('#local-status-updated').textContent = snapshot.lastUpdated ? new Date(snapshot.lastUpdated).toLocaleString() : 'No timestamp';
+  const summary = completeness.summary || {};
+  $('#local-status-completeness').textContent = `${summary.completeRows || 0}/${summary.totalRows || 0} rows fully evidenced`;
+  $('#local-status-boundary').textContent = snapshot.bridgeBoundary?.exactBoundary || 'This local status view has no external bridge.';
+  const renderList = (selector, records, mapper, empty) => {
+    const container = $(selector);
+    container.replaceChildren();
+    if (!records?.length) {
+      container.append(statusRecord('No local records', empty, 'idle'));
+      return;
+    }
+    records.forEach((record) => {
+      const view = mapper(record);
+      container.append(statusRecord(view.title, view.detail, view.state));
+    });
+  };
+  renderList('#local-status-operations', snapshot.activeOperations, (record) => ({
+    title: `${record.title} — ${record.state}`,
+    detail: record.detail || `Started ${new Date(record.startedAt).toLocaleString()}.`,
+    state: record.state
+  }), 'No installer, setup, or server lifecycle operation is currently active.');
+  renderList('#local-status-evidence', snapshot.localEvidence, (record) => ({
+    title: `${record.title} — ${record.state}`,
+    detail: [record.detail, record.localPath].filter(Boolean).join(' · '),
+    state: record.state
+  }), 'No local evidence records have been collected yet.');
+  renderList('#local-status-next-steps', snapshot.nextSteps, (record) => ({
+    title: `${record.label} — ${record.state}`,
+    detail: record.detail || 'No additional details were recorded.',
+    state: record.state
+  }), 'No next local step is currently recorded.');
+  renderList('#local-status-inventory', completeness.rows, (record) => {
+    const missing = (completeness.incompleteRows || []).find((item) => item.id === record.id)?.missing || [];
+    return {
+      title: `${record.title} — ${missing.length ? 'incomplete' : 'complete'}`,
+      detail: missing.length ? `Pending evidence: ${missing.join(', ')}.` : 'All declared evidence is present.',
+      state: missing.length ? 'waiting' : 'complete'
+    };
+  }, 'No completeness inventory rows are available.');
+}
+
 function renderServers() {
   const query = $('#server-search').value.trim().toLowerCase();
   const container = $('#server-list');
@@ -183,7 +550,7 @@ function renderServers() {
     item.type = 'button';
     item.className = `server-card ${server.id === state.selectedId ? 'selected' : ''}`;
     item.innerHTML = `<strong>${escapeHtml(server.name)}</strong><span class="server-meta"><span>${escapeHtml(server.software)} · ${escapeHtml(server.minecraftVersion)}</span><span><i class="dot ${server.status}"></i>${escapeHtml(server.status)}</span></span>`;
-    item.addEventListener('click', () => { state.selectedId = server.id; renderAll(); });
+    item.addEventListener('click', () => { state.selectedId = server.id; renderAll(); refreshCommandCatalog(); });
     container.append(item);
   }
 }
@@ -241,6 +608,9 @@ function renderEditor() {
   $('#edit-version').value = server.minecraftVersion;
   $('#edit-path').value = server.serverPath;
   $('#java-path').value = server.javaPath || '';
+  $('#jvm-gc').value = server.launchProfile?.gc || 'g1';
+  $('#jvm-diagnostics').value = server.launchProfile?.diagnostics || 'off';
+  $('#jvm-expert-tokens').value = Array.isArray(server.launchProfile?.expertTokens) ? server.launchProfile.expertTokens.join(' ') : '';
   $('#memory-gb').value = server.memoryGb;
   $('#memory-output').value = server.memoryGb;
   $('#eula-accepted').checked = server.eulaAccepted;
@@ -253,8 +623,14 @@ function renderEditor() {
     if (control.type === 'checkbox') control.checked = String(value) === 'true';
     else control.value = value;
   });
+  const gameRules = server.gameRules || {};
+  $('#gamerule-pvp').checked = Boolean(gameRules.pvp);
+  $('#gamerule-allowEnteringNetherUsingPortals').checked = Boolean(gameRules.allowEnteringNetherUsingPortals);
+  $('#gamerule-spawnMonsters').checked = Boolean(gameRules.spawnMonsters);
+  $('#gamerule-commandBlocksEnabled').checked = Boolean(gameRules.commandBlocksEnabled);
   $('#view-distance-output').value = $('#view-distance').value;
   $('#simulation-distance-output').value = $('#simulation-distance').value;
+  renderManagement();
   refreshPlugins();
 }
 
@@ -269,6 +645,7 @@ function renderAll() {
   renderDependencies();
   renderEditor();
   renderConsole();
+  renderLocalStatus();
   setActiveTab(state.activeTab);
 }
 
@@ -292,6 +669,7 @@ async function refreshServers() {
   state.servers = servers;
   if (!selectedServer() && servers.length) state.selectedId = servers[0].id;
   renderAll();
+  await refreshCommandCatalog();
 }
 
 async function refreshDependencies() {
@@ -305,6 +683,14 @@ async function refreshDependencies() {
   }
 }
 
+async function refreshLocalStatus() {
+  const status = await safely(() => window.studio.localStatus());
+  if (status) {
+    state.localStatus = status;
+    renderLocalStatus();
+  }
+}
+
 async function refreshVersions() {
   const versions = await safely(() => window.studio.paperVersions());
   if (!versions) return;
@@ -314,6 +700,105 @@ async function refreshVersions() {
     option.value = version;
     return option;
   }));
+}
+
+async function refreshCommandCatalog() {
+  const server = selectedServer();
+  if (!server) {
+    commandCatalog = FALLBACK_COMMAND_CATALOG;
+    renderCommandCenter();
+    return;
+  }
+  const catalog = await safely(() => window.studio.commandCatalog(server.id));
+  if (catalog) {
+    commandCatalog = catalog;
+    renderCommandCenter();
+  }
+}
+
+async function refreshSpigotVersions() {
+  const metadata = await safely(() => window.studio.refreshSpigotVersions());
+  if (metadata) {
+    state.buildToolsMetadata = metadata;
+    renderBuildToolsMetadata(metadata);
+    toast('Official Spigot version metadata refreshed from the selected in-app action.', 'success');
+  }
+}
+
+async function prepareBuildToolsPlan() {
+  const server = selectedServer();
+  if (!server) return;
+  if (server.software !== 'spigot') return toast('BuildTools plans apply only to the selected Spigot server.', 'error');
+  const plan = await safely(() => window.studio.buildToolsPreflight(server.id, buildToolsInput()));
+  if (plan) {
+    state.buildToolsPlan = plan;
+    $('#buildtools-output').value = plan.workspace?.outputDirectory || '';
+    renderBuildToolsPlan(plan);
+    toast('Non-executing BuildTools preflight prepared. It still requires explicit confirmation before a build can start.', 'success');
+  }
+}
+
+async function executeBuildToolsPlan() {
+  const server = selectedServer();
+  const plan = state.buildToolsPlan;
+  if (!server || !plan) return toast('Prepare a BuildTools plan before starting a build.', 'error');
+  const approved = window.confirm(`Build Spigot ${plan.revision} in the isolated workspace and then promote only the staged JAR? The plan retains the prior server JAR as a rollback record when one exists.`);
+  if (!approved) return;
+  const result = await safely(() => window.studio.executeBuildToolsPlan(server.id, {
+    confirmed: true,
+    digest: plan.authority?.digest,
+    confirmedAt: new Date().toISOString()
+  }), 'BuildTools completed and the staged JAR was promoted with a rollback record.');
+  if (result) await refreshServers();
+}
+
+function requiredJavaFeature(server) {
+  const version = String(server?.minecraftVersion || '0').split('.').map((part) => Number(part) || 0);
+  const [major, minor, patch] = version;
+  if (server?.software === 'paper') {
+    if (major >= 26 && minor >= 1) return 25;
+    if (major === 1 && minor <= 11) return 8;
+    if (major === 1 && minor <= 16 && patch <= 4) return 11;
+    if (major === 1 && minor === 16 && patch >= 5) return 16;
+    if (major === 1 && minor >= 17 && minor <= 19) return 17;
+    return 21;
+  }
+  if (major === 1 && minor < 17) return 8;
+  if (major === 1 && minor === 17 && patch <= 1) return 16;
+  if (major === 1 && (minor > 20 || (minor === 20 && patch > 5))) return 21;
+  return 17;
+}
+
+function updateRuntimeRequirement() {
+  const server = selectedServer();
+  if (!server || !$('#runtime-requirement-title')) return;
+  const required = requiredJavaFeature(server);
+  $('#runtime-requirement-title').textContent = `${server.software[0].toUpperCase() + server.software.slice(1)} ${server.minecraftVersion} requires Java ${required} or later`;
+  $('#runtime-requirement-copy').textContent = server.software === 'paper' && required === 25
+    ? 'Paper 26.1 and newer requires Java 25. The app fails closed if its runtime inventory has no compatible Java feature.'
+    : `The app uses a flavor- and version-aware Java compatibility rule. The selected JAR preflight remains the final authority before launch.`;
+}
+
+function renderRuntimeInventory(inventory = []) {
+  const select = $('#java-runtime');
+  if (!select) return;
+  const current = select.value;
+  select.replaceChildren();
+  const automatic = document.createElement('option');
+  automatic.value = '';
+  automatic.textContent = 'Use the best compatible discovered runtime';
+  select.append(automatic);
+  for (const runtime of inventory) {
+    const option = document.createElement('option');
+    option.value = runtime.path;
+    option.textContent = `Java ${runtime.feature || '?'} — ${runtime.path}${runtime.compatible === false ? ' (not compatible)' : ''}`;
+    option.disabled = runtime.compatible === false;
+    select.append(option);
+  }
+  if ([...select.options].some((option) => option.value === current)) select.value = current;
+  $('#java-runtime-state').textContent = inventory.length
+    ? `${inventory.length} runtime candidate(s) discovered. Compatibility is checked again when launch is requested.`
+    : 'No Java runtime inventory is available yet. Use Detect tools or Browse Java.';
 }
 
 async function refreshPlugins() {
@@ -375,11 +860,113 @@ async function saveSettings(event) {
   const saved = await safely(() => window.studio.updateServer(server.id, {
     name: $('#edit-name').value,
     memoryGb: $('#memory-gb').value,
-    javaPath: $('#java-path').value,
+    javaPath: $('#java-runtime').value || $('#java-path').value,
+    launchProfile: {
+      gc: $('#jvm-gc').value,
+      diagnostics: $('#jvm-diagnostics').value,
+      expertTokens: $('#jvm-expert-tokens').value
+    },
     eulaAccepted: $('#eula-accepted').checked,
-    settings: settingsFromForm()
+    settings: settingsFromForm(),
+    gameRules: gameRulesFromForm()
   }), 'Server settings saved.');
   if (saved) await refreshServers();
+}
+
+async function saveManagementConnection() {
+  const server = selectedServer();
+  if (!server) return null;
+  const endpoint = $('#management-endpoint').value.trim();
+  const allowInsecureLoopback = $('#management-insecure-loopback').checked;
+  const token = $('#management-token').value;
+  const result = await safely(() => window.studio.configureManagement(server.id, { endpoint, allowInsecureLoopback, token }), 'Protected management connection details saved.');
+  if (result) {
+    $('#management-token').value = '';
+    await refreshServers();
+  }
+  return result;
+}
+
+async function discoverManagement() {
+  const server = selectedServer();
+  if (!server) return;
+  const saved = await saveManagementConnection();
+  if (!saved) return;
+  const discovered = await safely(() => window.studio.discoverManagement(server.id), 'Live management capabilities discovered.');
+  if (discovered) await refreshServers();
+}
+
+function requiresSuperConfirmation(action) {
+  return action?.confirmationRequirement === 'super-confirmation' || ['consequential', 'destructive', 'world-mutation', 'content-mutation'].includes(action?.risk);
+}
+
+async function runCommandAction() {
+  const action = selectedCommandAction;
+  const rawCommand = $('#command-raw-tokens').value.trim();
+  const transport = $('#command-transport').value;
+  const transportState = actionTransportState(action);
+  const server = selectedServer();
+  if (!server || !action) return;
+  if (!transportState.executable) return toast(transportState.message || 'Complete the command fields first.', 'error');
+  const plan = await safely(() => window.studio.commandPlan(server.id, {
+    actionId: action.id,
+    values: commandValuesFromForm(action),
+    rawCommand,
+    route: registryRouteForTransport(transport)
+  }));
+  if (!plan) return;
+  const command = plan.command;
+  if (!command) return toast('Complete the required rich controls or use the bounded token composer.', 'error');
+  const plannedAction = { ...action, ...plan };
+  const plannedTransportState = {
+    ...transportState,
+    protocolMethod: plan.execution?.protocol?.method || transportState.protocolMethod,
+    route: plan.execution?.selected?.route || transportState.route
+  };
+  if (requiresSuperConfirmation(plannedAction)) {
+    openCommandConfirmation({ action: plannedAction, command, transport, transportState: plannedTransportState });
+  } else {
+    executeCommandAction({ action: plannedAction, command, transport, transportState: plannedTransportState });
+  }
+}
+
+async function executeCommandAction({ action, command, transport, transportState }) {
+  const server = selectedServer();
+  if (!server) return;
+  let result;
+  if (transport === 'protocol') result = await safely(() => window.studio.invokeManagement(server.id, transportState.protocolMethod, { command, action: action.id, tokens: action.tokens || [] }), 'Live operation requested.');
+  else if (transport === 'rcon') result = await safely(() => window.studio.rcon(server.id, command));
+  else result = await safely(() => window.studio.console(server.id, command));
+  if (result !== null) {
+    state.logs.push(`${transport.toUpperCase()} command: /${command}`);
+    renderConsole();
+  }
+}
+
+function openCommandConfirmation(payload) {
+  const dialog = $('#command-confirmation-dialog');
+  if (!dialog) return;
+  const label = payload.action.label || payload.action.title || payload.action.id;
+  $('#command-confirmation-title').textContent = `Confirm ${label}`;
+  $('#command-confirmation-copy').textContent = payload.action.backupRequirement === 'required' || payload.action.backup
+    ? 'This action can change world or server state. Review the affected server, create the required backup, operate both confirmation controls, then move the slider to authorize it.'
+    : 'This action can affect the selected server or connected players. Review the affected server, operate both confirmation controls, then move the slider to authorize it.';
+  $('#command-confirmation-target').textContent = `Affected resource: ${selectedServer()?.name || 'selected local server'} · command /${payload.command}`;
+  const first = $('#command-confirmation-first');
+  const second = $('#command-confirmation-second');
+  const slider = $('#command-confirmation-slider');
+  const confirm = $('#command-confirmation-accept');
+  first.checked = false;
+  second.checked = false;
+  slider.value = '0';
+  const update = () => { slider.disabled = !(first.checked && second.checked); confirm.disabled = !(first.checked && second.checked && Number(slider.value) >= 100); };
+  first.onchange = update;
+  second.onchange = update;
+  slider.oninput = update;
+  confirm.onclick = () => { dialog.close('confirmed'); executeCommandAction(payload); };
+  $('#command-confirmation-cancel').onclick = () => dialog.close('cancelled');
+  update();
+  dialog.showModal();
 }
 
 function logEvent(event) {
@@ -406,11 +993,12 @@ function bindEvents() {
   $('#server-search').addEventListener('input', renderServers);
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
+  $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
   $('#install-dependencies-button').addEventListener('click', async () => {
     const missing = Object.values(state.dependencies?.dependencies || {}).filter((item) => !item.available).map((item) => item.id);
     if (!missing.length) return toast('All required tools are already available.', 'success');
     $('#install-dependencies-button').disabled = true;
-    const result = await safely(() => window.studio.installDependencies(missing));
+    const result = await safely(() => window.studio.installDependencies(missing, selectedServer()?.id));
     if (result) {
       const failed = result.results.filter((item) => item.status === 'failed');
       toast(failed.length ? `Some tool installations need attention: ${failed.map((item) => item.id).join(', ')}.` : 'Requested tools installed or already present.', failed.length ? 'error' : 'success');
@@ -425,9 +1013,32 @@ function bindEvents() {
   $('#view-distance').addEventListener('input', () => { $('#view-distance-output').value = $('#view-distance').value; });
   $('#simulation-distance').addEventListener('input', () => { $('#simulation-distance-output').value = $('#simulation-distance').value; });
   $('#clear-java-button').addEventListener('click', () => { $('#java-path').value = ''; });
+  $('#browse-java-button').addEventListener('click', async () => { const selected = await safely(() => window.studio.pickJava()); if (selected) { $('#java-path').value = selected; $('#java-runtime').value = ''; } });
+  $('#refresh-runtimes-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const inventory = await safely(() => window.studio.runtimeInventory(server.id)); if (inventory) renderRuntimeInventory(inventory); });
+  $('#refresh-spigot-versions-button').addEventListener('click', refreshSpigotVersions);
+  $('#browse-buildtools-workspace').addEventListener('click', async () => { const folder = await safely(() => window.studio.pickFolder()); if (folder) $('#buildtools-workspace').value = folder; });
+  $('#plan-buildtools-button').addEventListener('click', prepareBuildToolsPlan);
+  $('#execute-buildtools-button').addEventListener('click', executeBuildToolsPlan);
+  $('#save-management-token-button').addEventListener('click', saveManagementConnection);
+  $('#discover-management-button').addEventListener('click', discoverManagement);
+  $$('.live-operation').forEach((button) => button.addEventListener('click', () => {
+    const server = selectedServer();
+    if (!server) return;
+    const method = button.dataset.liveOperation;
+    const available = server.management?.capabilities?.includes(method);
+    if (!available) return toast(`'${method}' is not advertised by this server's live management protocol.`, 'error');
+    safely(() => window.studio.invokeManagement(server.id, method, {}), 'Live management operation requested.');
+  }));
+  $('#command-family').addEventListener('change', renderCommandCenter);
+  $('#command-action').addEventListener('change', () => renderCommandFieldEditor(currentCommandAction()));
+  $('#command-transport').addEventListener('change', updateCommandPreview);
+  $('#command-raw-tokens').addEventListener('input', updateCommandPreview);
+  $('#send-command-button').addEventListener('click', runCommandAction);
+  $('#copy-command-button').addEventListener('click', async () => { const command = $('#command-raw-tokens').value.trim() || buildStructuredCommand(currentCommandAction()); if (!command) return; try { await navigator.clipboard.writeText(`/${command}`); toast('Composed Minecraft command copied.', 'success'); } catch { toast('Clipboard access was unavailable. Select the preview text instead.', 'error'); } });
+  $('#refresh-command-center-button').addEventListener('click', async () => { await refreshCommandCatalog(); toast('Command sources refreshed from local runtime, plugin, and protocol evidence.'); });
   $('#open-folder-button').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
   $('#edit-open-folder').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
-  $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });
+  $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (server.software === 'spigot') { setActiveTab('buildtools'); return toast('Spigot setup requires the isolated BuildTools plan and its explicit execution action.', 'error'); } await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });
   $('#start-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.start(server.id), 'Server start requested.'); });
   $('#stop-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.stop(server.id), 'Graceful server stop requested.'); });
   $('#browse-plugin-button').addEventListener('click', async () => { const selected = await safely(() => window.studio.pickPlugin()); if (selected) { state.pluginPath = selected; $('#plugin-path').value = selected; } });
@@ -444,7 +1055,8 @@ async function initialize() {
   window.studio.onEvent(logEvent);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus()]);
+  renderCommandCenter();
 }
 
 initialize();

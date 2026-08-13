@@ -71,6 +71,10 @@
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay">Gameplay</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network">Network</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime">Runtime</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools">BuildTools</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live">Live management</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands">Command Center</button>
+            <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status">Local status</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced">Advanced</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins">Plugins</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console">Console</button>
@@ -106,7 +110,6 @@
                 <label class="field"><span>Spawn protection radius</span><input id="spawn-protection" type="number" min="0" max="1024" step="1"></label>
                 <label class="field"><span>Maximum world size</span><input id="max-world-size" type="number" min="1" max="29999984" step="1"></label>
                 <label class="switch-field"><input id="generate-structures" type="checkbox"><span><strong>Generate structures</strong><small>Controls villages, temples, strongholds, and other world structures.</small></span></label>
-                <label class="switch-field"><input id="allow-nether" type="checkbox"><span><strong>Allow Nether travel</strong><small>Allow portals to the Nether dimension.</small></span></label>
               </div>
             </section>
 
@@ -119,12 +122,13 @@
                 <label class="field"><span>Player idle timeout (minutes)</span><input id="player-idle-timeout" type="number" min="0" max="1440" step="1"></label>
                 <label class="field"><span>View distance: <output id="view-distance-output">10</output> chunks</span><input id="view-distance" type="range" min="2" max="32" step="1"></label>
                 <label class="field"><span>Simulation distance: <output id="simulation-distance-output">10</output> chunks</span><input id="simulation-distance" type="range" min="3" max="32" step="1"></label>
-                <label class="switch-field"><input id="pvp" type="checkbox"><span><strong>Enable player-vs-player combat</strong><small>Allow players to damage one another.</small></span></label>
+                <label class="switch-field"><input id="gamerule-pvp" type="checkbox"><span><strong>Enable player-vs-player combat</strong><small>Current Minecraft versions expose this as the pvp gamerule, applied through a live management transport or the rich command center.</small></span></label>
                 <label class="switch-field"><input id="hardcore" type="checkbox"><span><strong>Hardcore mode</strong><small>Players who die are banned from the world.</small></span></label>
                 <label class="switch-field"><input id="allow-flight" type="checkbox"><span><strong>Allow flight</strong><small>Prevent flight-kick behavior for compatible clients and plugins.</small></span></label>
                 <label class="switch-field"><input id="spawn-animals" type="checkbox"><span><strong>Spawn animals</strong><small>Allow passive mobs to spawn naturally.</small></span></label>
-                <label class="switch-field"><input id="spawn-monsters" type="checkbox"><span><strong>Spawn monsters</strong><small>Allow hostile mobs to spawn naturally.</small></span></label>
-                <label class="switch-field"><input id="enable-command-block" type="checkbox"><span><strong>Enable command blocks</strong><small>Allow command block execution in this server.</small></span></label>
+                <label class="switch-field"><input id="gamerule-allowEnteringNetherUsingPortals" type="checkbox"><span><strong>Allow Nether portal travel</strong><small>Current Minecraft versions expose this as the allowEnteringNetherUsingPortals gamerule.</small></span></label>
+                <label class="switch-field"><input id="gamerule-spawnMonsters" type="checkbox"><span><strong>Spawn monsters</strong><small>Current Minecraft versions expose this as the spawnMonsters gamerule.</small></span></label>
+                <label class="switch-field"><input id="gamerule-commandBlocksEnabled" type="checkbox"><span><strong>Enable command blocks</strong><small>Current Minecraft versions expose this as the commandBlocksEnabled gamerule.</small></span></label>
                 <label class="switch-field"><input id="force-gamemode" type="checkbox"><span><strong>Force the default game mode</strong><small>Apply the selected default game mode when players join.</small></span></label>
               </div>
             </section>
@@ -147,16 +151,99 @@
             </section>
 
             <section id="panel-runtime" class="settings-panel" role="tabpanel" data-panel="runtime" hidden>
-              <div class="panel-heading"><div><p class="eyebrow">JAVA AND PERFORMANCE</p><h3>Runtime settings</h3></div><button class="primary-action" type="submit">Save runtime settings</button></div>
+              <div class="panel-heading"><div><p class="eyebrow">JAVA AND PERFORMANCE</p><h3>Runtime inventory and launch profile</h3></div><button class="primary-action" type="submit">Save runtime settings</button></div>
               <div class="settings-grid">
-                <label class="field wide"><span>Java executable (optional)</span><div class="browse-row"><input id="java-path" type="text" placeholder="Automatic Java discovery is used when this is blank"><button id="clear-java-button" type="button" class="icon-action" aria-label="Clear custom Java path">×</button></div><small>Use a full java.exe path only when automatic discovery should not be used.</small></label>
+                <section class="runtime-requirement-card wide" aria-labelledby="runtime-requirement-title"><div><p class="eyebrow">VERSION-AWARE REQUIREMENT</p><h4 id="runtime-requirement-title">Discovering the required Java feature…</h4><p id="runtime-requirement-copy" class="muted">Paper and Spigot use different Java compatibility ranges. The selected version controls this requirement.</p></div><button id="refresh-runtimes-button" type="button" class="outlined-action">Refresh runtime inventory</button></section>
+                <label class="field wide"><span>Selected Java runtime</span><div class="browse-row"><select id="java-runtime"><option value="">Use the best compatible discovered runtime</option></select><button id="browse-java-button" type="button" class="outlined-action">Browse Java</button></div><small id="java-runtime-state">The inventory has not been refreshed yet.</small></label>
+                <label class="field wide"><span>Java executable override (advanced)</span><div class="browse-row"><input id="java-path" type="text" placeholder="Use Browse Java or choose an inventory entry"><button id="clear-java-button" type="button" class="icon-action" aria-label="Clear custom Java path">×</button></div><small>Only a verified absolute Java executable can be used. Raw operating-system command flags are rejected.</small></label>
                 <label class="field wide"><span>Allocated memory: <output id="memory-output">4</output> GB</span><input id="memory-gb" type="range" min="1" max="32" step="1"><small>Startup uses the same value for Java -Xms and -Xmx so the allocation is predictable.</small></label>
+                <label class="field"><span>Garbage collector profile</span><select id="jvm-gc"><option value="g1">G1 GC (recommended)</option><option value="zgc">ZGC when the selected runtime supports it</option><option value="serial">Serial GC for very small local servers</option></select></label>
+                <label class="field"><span>Launch diagnostics</span><select id="jvm-diagnostics"><option value="off">Off</option><option value="gc-log">GC log file</option><option value="jfr">Java Flight Recorder</option><option value="jcmd-ready">Enable same-runtime jcmd diagnostics</option></select></label>
+                <label class="field wide"><span>Expert JVM tokens (optional)</span><input id="jvm-expert-tokens" type="text" maxlength="2048" placeholder="Space-separated JVM tokens; agents, native libraries, classpaths, and OS-command flags are blocked"><small>Expert tokens are individually validated and stay before the server JAR. The standard profile remains the recommended path.</small></label>
                 <label class="field"><span>Entity broadcast range (%)</span><input id="entity-broadcast-range" type="number" min="10" max="1000" step="10"></label>
                 <label class="field"><span>Resource pack URL</span><input id="resource-pack" type="url" inputmode="url" placeholder="Optional HTTPS URL"></label>
                 <label class="field wide"><span>Resource pack prompt</span><textarea id="resource-pack-prompt" rows="2" maxlength="256" placeholder="Optional message shown before download"></textarea></label>
                 <label class="switch-field"><input id="sync-chunk-writes" type="checkbox"><span><strong>Synchronize chunk writes</strong><small>Use the server's safer synchronous chunk write behavior.</small></span></label>
                 <label class="switch-field"><input id="hide-online-players" type="checkbox"><span><strong>Hide online players in status responses</strong><small>Limit player-name disclosure through server-list ping responses.</small></span></label>
               </div>
+            </section>
+
+            <section id="panel-buildtools" class="settings-panel" role="tabpanel" data-panel="buildtools" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">SPIGOT BUILD WORKSPACE</p><h3>Safe BuildTools plan</h3><p class="muted">This tab is active for Spigot. It keeps BuildTools sources, caches, and staging output separate from the server folder.</p></div><button id="refresh-spigot-versions-button" type="button" class="outlined-action">Refresh official versions</button></div>
+              <div class="settings-grid">
+                <label class="field"><span>Official BuildTools revision</span><select id="buildtools-revision"><option value="">Refresh official versions first</option></select><small id="buildtools-java-state">The BuildTools preflight makes the final Java compatibility decision.</small></label>
+                <label class="field"><span>Build target</span><select id="buildtools-target"><option value="spigot">Spigot server JAR</option><option value="craftbukkit">CraftBukkit server JAR</option><option value="both">Spigot and CraftBukkit</option></select></label>
+                <label class="field wide"><span>Dedicated BuildTools workspace</span><div class="browse-row"><input id="buildtools-workspace" type="text" placeholder="Choose a local folder outside the server and repository"><button id="browse-buildtools-workspace" type="button" class="outlined-action">Browse</button></div><small>Unsafe, synced, temporary, repository, and server-home locations are rejected before BuildTools can run.</small></label>
+                <label class="field wide"><span>Calculated staged output folder</span><div class="browse-row"><input id="buildtools-output" type="text" readonly placeholder="Prepared from the safe workspace after preflight"></div><small>The app derives this folder inside the verified BuildTools workspace. Generated JARs are staged and inspected before a controlled swap with rollback.</small></label>
+                <label class="switch-field"><input id="buildtools-compile" type="checkbox"><span><strong>Compile requested artifacts</strong><small>Build the selected target rather than reusing an existing staged artifact.</small></span></label>
+                <label class="switch-field"><input id="buildtools-reuse" type="checkbox"><span><strong>Reuse supported caches</strong><small>Reuse only the dedicated workspace cache, never files inside a server home.</small></span></label>
+                <label class="switch-field"><input id="buildtools-update" type="checkbox"><span><strong>Refresh BuildTools workspace</strong><small>Fetch the latest official BuildTools material before the staged run.</small></span></label>
+                <label class="switch-field"><input id="buildtools-pr" type="checkbox"><span><strong>Enable advanced pull-request flags</strong><small>Requires explicit risk confirmation because an upstream change may alter the resulting server binary.</small></span></label>
+                <label class="field wide"><span>Advanced BuildTools tokens</span><input id="buildtools-expert-tokens" type="text" maxlength="2048" placeholder="Optional tokenized flags; shell operators and control characters are rejected"><small>Use documented BuildTools arguments only. This remains a tokenized fallback, not a shell command field.</small></label>
+                <div class="wide guarded-action-card"><div><h4>Stage, inspect, swap, and retain rollback</h4><p>BuildTools output is never copied directly over a live server JAR. The release path stages the JAR, validates it, backs up the current server JAR, swaps atomically, and preserves rollback evidence.</p></div><button id="plan-buildtools-button" type="button" class="primary-action">Prepare BuildTools plan</button></div>
+                <div class="wide guarded-action-card"><div><h4>Run the confirmed BuildTools plan</h4><p>After reviewing the generated workspace, arguments, and rollback plan, start the build explicitly. This action never uses a shell and does not overwrite a running server.</p></div><button id="execute-buildtools-button" type="button" class="danger-action" disabled>Build and promote staged JAR</button></div>
+              </div>
+            </section>
+
+            <section id="panel-live" class="settings-panel" role="tabpanel" data-panel="live" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">MINECRAFT SERVER MANAGEMENT PROTOCOL</p><h3>Capability-first live management</h3><p class="muted">The app calls <code>rpc.discover</code> before enabling any live operation. Advertised methods become rich controls; non-advertised actions remain unavailable or route to the explicit RCON/raw-console fallbacks.</p></div><span id="management-state" class="status-chip">Not configured</span></div>
+              <div class="settings-grid">
+                <label class="field wide"><span>Management endpoint</span><input id="management-endpoint" type="url" inputmode="url" placeholder="https://server.example:port/rpc"><small>HTTPS is required by default. HTTP is allowed only for an explicitly selected loopback development endpoint.</small></label>
+                <label class="switch-field"><input id="management-insecure-loopback" type="checkbox"><span><strong>Allow HTTP only for localhost development</strong><small>This never permits HTTP for a remote host.</small></span></label>
+                <label class="field"><span>Optional bearer credential reference</span><input id="management-token" type="password" autocomplete="new-password" placeholder="Stored with Windows protection"><small>The token is cleared from this field after use and never enters server settings, exports, or console logs. The generic WebSocket transport does not invent a nonstandard bearer handshake; use this reference only with a compatible authenticated provider.</small></label>
+                <div class="live-connection-actions"><button id="save-management-token-button" type="button" class="outlined-action">Save protected credential reference</button><button id="discover-management-button" type="button" class="primary-action">Discover live capabilities</button></div>
+                <section class="wide capability-card"><div><h4>Advertised live capabilities</h4><p id="management-capability-copy" class="muted">No capability discovery result is stored yet.</p></div><div id="management-capability-list" class="capability-list" aria-live="polite"></div></section>
+                <section class="wide live-resource-grid">
+                  <article><h4>Players</h4><p>Live player list and targeted actions appear only when advertised.</p><button type="button" class="outlined-action live-operation" data-live-operation="players.list">Refresh players</button></article>
+                  <article><h4>Allowlist and operators</h4><p>Manage access with typed player identifiers and an affected-player preview.</p><button type="button" class="outlined-action live-operation" data-live-operation="allowlist.list">Refresh access lists</button></article>
+                  <article><h4>Settings and gamerules</h4><p>The live schema may add, rename, or remove gamerules; the discovered registry is authoritative.</p><button type="button" class="outlined-action live-operation" data-live-operation="gamerules.list">Refresh live rules</button></article>
+                  <article><h4>Save and lifecycle</h4><p>Save, stop, and notification actions require advertised methods and a guarded confirmation when consequential.</p><button type="button" class="outlined-action live-operation" data-live-operation="save.all">Save all</button></article>
+                </section>
+              </div>
+            </section>
+
+            <section id="panel-commands" class="settings-panel" role="tabpanel" data-panel="commands" hidden>
+              <div class="panel-heading"><div><p class="eyebrow">VERSION · FLAVOR · CAPABILITY COMMAND CENTER</p><h3>Structured commands with a raw fallback</h3><p class="muted">Known command families provide typed controls. The selected transport displays its source badge: live protocol, Paper runtime usage, Spigot JAR help, plugin metadata, local console, or RCON.</p></div><button id="refresh-command-center-button" type="button" class="outlined-action">Refresh command sources</button></div>
+              <div class="settings-grid command-center-grid">
+                <label class="field"><span>Command family</span><select id="command-family"></select></label>
+                <label class="field"><span>Structured action</span><select id="command-action"></select></label>
+                <label class="field"><span>Transport</span><select id="command-transport"><option value="protocol">Management protocol (advertised only)</option><option value="local">Local process console</option><option value="rcon">RCON fallback</option></select></label>
+                <div class="command-source-card"><span>Source badge</span><strong id="command-source-badge">Registry seed</strong><small id="command-capability-state">Choose an action to see availability and risk.</small></div>
+                <div id="command-field-editor" class="wide command-field-editor" aria-live="polite"></div>
+                <label class="field wide"><span>Tokenized raw composer</span><input id="command-raw-tokens" type="text" maxlength="4096" placeholder="A bounded token fallback; shell operators and control characters are rejected"><small>This is a Minecraft command token fallback, not an operating-system command shell.</small></label>
+                <pre id="command-preview" class="command-preview" aria-live="polite">Select a structured action to compose a command.</pre>
+                <div class="wide command-action-row"><button id="send-command-button" type="button" class="primary-action">Run selected operation</button><button id="copy-command-button" type="button" class="outlined-action">Copy command</button><span id="command-risk-copy" class="muted">No action selected.</span></div>
+              </div>
+            </section>
+
+            <section id="panel-status" class="settings-panel" role="tabpanel" data-panel="status" hidden aria-labelledby="status-tab">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">LOCAL STATUS DESTINATION</p>
+                  <h3>Current local work and completeness</h3>
+                  <p class="muted">This is an in-app, local-only status view. It has no chat bridge and does not connect to an external status service.</p>
+                </div>
+                <button id="refresh-status-button" type="button" class="outlined-action">Refresh local status</button>
+              </div>
+              <div class="status-summary-grid" aria-live="polite">
+                <article class="status-summary-card"><span>Current state</span><strong id="local-status-current">Loading</strong></article>
+                <article class="status-summary-card"><span>Last updated</span><strong id="local-status-updated">Not loaded</strong></article>
+                <article class="status-summary-card"><span>Completeness inventory</span><strong id="local-status-completeness">Not loaded</strong></article>
+              </div>
+              <section class="wide status-detail-card">
+                <div><h4>Active operations</h4><p class="muted">Install, setup, start, stop, and discovery work reports here when the app has observed it.</p></div>
+                <div id="local-status-operations" class="status-record-list" aria-live="polite"></div>
+              </section>
+              <section class="wide status-detail-card">
+                <div><h4>Local evidence and next steps</h4><p class="muted">Evidence describes records this app observed locally. Unrun verification stays visibly pending.</p></div>
+                <div id="local-status-evidence" class="status-record-list" aria-live="polite"></div>
+                <div id="local-status-next-steps" class="status-record-list" aria-live="polite"></div>
+              </section>
+              <section class="wide status-detail-card">
+                <div><h4>Completeness inventory</h4><p class="muted">Each desktop surface names its implementation and documentation record. Verification evidence is deliberately not inferred.</p></div>
+                <div id="local-status-inventory" class="status-record-list" aria-live="polite"></div>
+              </section>
+              <p id="local-status-boundary" class="muted">No local status snapshot has been loaded.</p>
             </section>
 
             <section id="panel-advanced" class="settings-panel" role="tabpanel" data-panel="advanced" hidden>
@@ -200,6 +287,18 @@
         </div>
         <div class="dialog-actions"><button type="button" id="cancel-create-button" class="outlined-action">Cancel</button><button type="submit" class="primary-action">Create server</button></div>
       </form>
+    </dialog>
+
+    <dialog id="command-confirmation-dialog" aria-labelledby="command-confirmation-title">
+      <section class="confirmation-dialog">
+        <div class="dialog-heading"><div><p class="eyebrow">CONSEQUENTIAL SERVER ACTION</p><h2 id="command-confirmation-title">Confirm operation</h2></div></div>
+        <p id="command-confirmation-copy">Review this operation before it is sent.</p>
+        <p id="command-confirmation-target" class="confirmation-target"></p>
+        <label class="switch-field"><input id="command-confirmation-first" type="checkbox"><span><strong>First independent confirmation</strong><small>I reviewed the affected local server and the action's impact.</small></span></label>
+        <label class="switch-field"><input id="command-confirmation-second" type="checkbox"><span><strong>Second independent confirmation</strong><small>I understand that this operation can change live server or world state.</small></span></label>
+        <label class="field"><span>Slide to authorize</span><input id="command-confirmation-slider" type="range" min="0" max="100" value="0" disabled><small>Both confirmations are required before the full-range authorization control becomes available.</small></label>
+        <div class="dialog-actions"><button id="command-confirmation-cancel" type="button" class="outlined-action">Emergency exit</button><button id="command-confirmation-accept" type="button" class="danger-action" disabled>Authorize operation</button></div>
+      </section>
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>

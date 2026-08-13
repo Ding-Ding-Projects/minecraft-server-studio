@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('studio', {
   updateServer: (id, patch) => ipcRenderer.invoke('studio:update-server', id, patch),
   paperVersions: () => ipcRenderer.invoke('studio:paper-versions'),
   inspectDependencies: () => ipcRenderer.invoke('studio:inspect-dependencies'),
-  installDependencies: (ids) => ipcRenderer.invoke('studio:install-dependencies', ids),
+  installDependencies: (ids, serverId) => ipcRenderer.invoke('studio:install-dependencies', ids, serverId),
   provision: (id) => ipcRenderer.invoke('studio:provision', id),
   start: (id) => ipcRenderer.invoke('studio:start', id),
   stop: (id) => ipcRenderer.invoke('studio:stop', id),
@@ -18,6 +18,17 @@ contextBridge.exposeInMainWorld('studio', {
   pickPlugin: () => ipcRenderer.invoke('studio:pick-plugin'),
   openFolder: (folder) => ipcRenderer.invoke('studio:open-folder', folder),
   dataDirectory: () => ipcRenderer.invoke('studio:data-directory'),
+  localStatus: () => ipcRenderer.invoke('studio:local-status'),
+  refreshSpigotVersions: () => ipcRenderer.invoke('studio:refresh-spigot-versions'),
+  buildToolsPreflight: (id, input) => ipcRenderer.invoke('studio:buildtools-preflight', id, input),
+  executeBuildToolsPlan: (id, confirmation) => ipcRenderer.invoke('studio:execute-buildtools-plan', id, confirmation),
+  pickJava: () => ipcRenderer.invoke('studio:pick-java'),
+  runtimeInventory: (id) => ipcRenderer.invoke('studio:runtime-inventory', id),
+  configureManagement: (id, configuration) => ipcRenderer.invoke('studio:configure-management', id, configuration),
+  discoverManagement: (id) => ipcRenderer.invoke('studio:discover-management', id),
+  invokeManagement: (id, method, params) => ipcRenderer.invoke('studio:invoke-management', id, method, params),
+  commandCatalog: (id) => ipcRenderer.invoke('studio:command-catalog', id),
+  commandPlan: (id, request) => ipcRenderer.invoke('studio:command-plan', id, request),
   onEvent: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('studio:event', listener);

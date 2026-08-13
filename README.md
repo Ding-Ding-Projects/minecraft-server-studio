@@ -8,20 +8,23 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Select a Minecraft version, memory allocation, server ports, and EULA acceptance before setup.
 - Download official Paper builds with publisher-provided SHA-256 validation.
 - Build Spigot from the official BuildTools process for the selected revision.
-- Detect Java 21 and Git, install missing tools from Windows package managers, and fall back to an app-private portable toolchain when no package manager is available.
+- Detect Java and Git, select the Java feature required by the chosen Paper or Spigot/BuildTools revision, install missing tools from Windows package managers, and fall back to an app-private portable toolchain when no package manager is available.
 - Configure gameplay, world generation, network/RCON, Java runtime, resource-pack, plugin, and server-property settings with switches, sliders, number steppers, selects, type-ahead version input, file pickers, and browse controls.
 - Start and stop a local Java process safely without a shell, read live output, and send console commands.
 - Install local Paper/Spigot plugin JARs through a file picker.
 - Use the CLI for setup, foreground operation, RCON commands, plugin installation, and configuration automation.
+- Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
+- Use the capability-first Command Center for structured command families, source badges, typed controls, tokenized Minecraft-only raw fallback, and guarded consequential operations.
+- Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory without a chat or external status-service bridge.
 
 ## Desktop workflow
 
 1. Open **Create server** and choose Paper or Spigot, a version, a root folder, capacity, and initial network port.
 2. Read and accept the Minecraft EULA for that server.
-3. Use **Install missing tools** if Java or Git is not detected. The app uses Winget or Chocolatey where available, then downloads a user-scoped portable Java/Git fallback itself. The app never requires a manual prerequisite installation before setup can continue.
+3. Use **Install missing tools** if the Java runtime required by the selected version or Git is not detected. The app uses Winget or Chocolatey where available, then downloads a user-scoped portable Java/Git fallback itself. The app never requires a manual prerequisite installation before setup can continue.
 4. Select **Set up server**. Paper is downloaded from the Paper API; Spigot is built through BuildTools with the selected revision.
-5. Edit the structured controls on the General, World, Gameplay, Network, Runtime, Plugins, and Console tabs.
-6. Start the server and use the local console. Enable RCON and set its password only when the external CLI must issue commands to a running server.
+5. Edit the structured controls on the General, World, Gameplay, Network, Runtime, BuildTools, Live management, Command Center, Plugins, Console, and Local status tabs.
+6. Start the server and use the local console. Enable RCON and save its protected password only when the external CLI must issue commands to a running server.
 
 ## Command-line interface
 
@@ -53,18 +56,23 @@ Run `build-installer.bat` to create the unsigned Squirrel.Windows installer asse
 - Server Java commands use direct executable arguments with `shell: false`; the app does not compose user settings into shell commands.
 - The app keeps its own server registry and portable toolchain in the per-user application-data directory. It does not write a `.git` directory into server folders.
 - Paper downloads are selected from official project metadata and validated when the upstream API provides a SHA-256 value.
-- Spigot setup obtains the official BuildTools JAR and needs Java and Git; both are automatically detected and installable from the app.
-- RCON passwords are written by Minecraft to `server.properties`. Treat that file as sensitive and avoid exposing it through backups, screenshots, or logs.
+- Spigot setup uses a dedicated BuildTools workspace and a preflight-driven stage/swap/rollback plan. Java and Git are automatically detected and installable from the app.
+- The management protocol is TLS-first and stores any bearer credential reference through protected storage. The generic WebSocket transport does not invent a provider-specific bearer handshake; it never enables methods before `rpc.discover` advertises them and is not a Paper HTTP API.
+- RCON passwords and management bearer credentials are stored through the operating system protected-storage boundary and omitted from the local registry, exports, and console logs. Minecraft still requires its active RCON password in its local configuration; treat the server folder as sensitive.
 - Plugins are local JARs selected through the operating-system file picker. Minecraft Server Studio does not claim to audit third-party plugin safety.
 
 ## Companion Sites source
 
-The `site/` directory contains a Sites-compatible companion operations dashboard. It is an explicitly local UI source baseline: it mirrors the product workflow and rich controls but does not impersonate a running server backend. A deployed site must be wired to a protected local bridge before it can execute server operations.
+The `site/` directory contains a Pages-ready public marketing landing page with browser-local interaction equivalents and a separate local Status destination. Its browser state remains local to the visitor and it never claims to install, create, launch, operate, or contact a Minecraft server. It loads `contract.js` before `app.js` and keeps unavailable desktop-only operations visibly unavailable until an installed app or verified release provides them.
 
 ## Documentation
 
 - [Server lifecycle and Paper/Spigot setup](docs/features/server-orchestration.md)
 - [Automatic dependency installation](docs/features/dependency-bootstrap.md)
+- [Version-aware Java runtime and launch profiles](docs/features/java-runtime-and-launch.md)
+- [Spigot BuildTools planning](docs/features/spigot-buildtools.md)
+- [Command Center](docs/features/command-center.md)
+- [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Feature documentation index](docs/features/README.md)
 - [Changelog](CHANGELOG.md)
 - [Handoff](HANDOFF.md)

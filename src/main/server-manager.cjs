@@ -4,19 +4,34 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const {
+  createDesktopCompletenessInventory,
+  createLocalStatusSnapshot
+} = require('./desktop-status-model.cjs');
+const {
+  createBuildToolsPreflight,
+  authorizeBuildToolsPreflight,
+  fetchOfficialLiveVersionMetadata,
+  inspectPluginJarFile
+} = require('./buildtools-adapter.cjs');
+const {
+  composeCommand,
+  composeRawTokenizedCommand,
+  createCommandCenterRegistry,
+  presentRegistry,
+  ROUTES
+} = require('./command-center-registry.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
 const SPIGOT_BUILDTOOLS_URL = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
 const DEFAULT_PROPERTIES = Object.freeze({
   'accepts-transfers': 'false',
   'allow-flight': 'false',
-  'allow-nether': 'true',
   'broadcast-console-to-ops': 'true',
   'broadcast-rcon-to-ops': 'true',
   'bug-report-link': '',
   'debug': 'false',
   'difficulty': 'easy',
-  'enable-command-block': 'false',
   'enable-jmx-monitoring': 'false',
   'enable-query': 'false',
   'enable-rcon': 'false',
@@ -31,6 +46,8 @@ const DEFAULT_PROPERTIES = Object.freeze({
   'generator-settings': '{}',
   'hardcore': 'false',
   'hide-online-players': 'false',
+  'initial-disabled-packs': '',
+  'initial-enabled-packs': 'vanilla',
   'level-name': 'world',
   'level-seed': '',
   'level-type': 'minecraft:normal',
@@ -45,7 +62,6 @@ const DEFAULT_PROPERTIES = Object.freeze({
   'pause-when-empty-seconds': '60',
   'player-idle-timeout': '0',
   'prevent-proxy-connections': 'false',
-  'pvp': 'true',
   'query.port': '25565',
   'rate-limit': '0',
   'rcon.password': '',
@@ -60,7 +76,6 @@ const DEFAULT_PROPERTIES = Object.freeze({
   'server-port': '25565',
   'simulation-distance': '10',
   'spawn-animals': 'true',
-  'spawn-monsters': 'true',
   'spawn-npcs': 'true',
   'spawn-protection': '16',
   'sync-chunk-writes': 'true',
@@ -70,16 +85,43 @@ const DEFAULT_PROPERTIES = Object.freeze({
   'white-list': 'false'
 });
 
+// Since current Minecraft versions expose these as gamerules, they deliberately
+// remain outside server.properties. The live protocol registry may add more.
+const DEFAULT_GAMERULES = Object.freeze({
+  pvp: true,
+  allowEnteringNetherUsingPortals: true,
+  spawnMonsters: true,
+  commandBlocksEnabled: false
+});
+
 const ALLOWED_PROPERTY_KEYS = new Set(Object.keys(DEFAULT_PROPERTIES));
+const SUPPORTED_JAVA_FEATURES = Object.freeze([8, 11, 16, 17, 21, 25]);
+const STATUS_COMPLETENESS_ROWS = Object.freeze({
+  'status-destination': { implementationPath: ['src/main/desktop-status-model.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/local-status-and-completeness.md'], localization: { state: 'pending', detail: 'Desktop localization resources are not yet complete.' }, test: { state: 'pending', detail: 'No test was run in this delivery pass.' }, capture: { state: 'pending', detail: 'No capture was run in this delivery pass.' }, evidence: { state: 'in-progress', detail: 'The local status model and visible renderer destination are registered, but no verification result is claimed.' } },
+  'server-creation': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Structured Paper and Spigot server creation source is registered; verification remains pending.' } },
+  'dependency-bootstrap': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/dependency-bootstrap.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Detection, installation, retry, and status source is registered; verification remains pending.' } },
+  'paper': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection and setup source is registered; verification remains pending.' } },
+  'spigot-buildtools': { implementationPath: ['src/main/buildtools-adapter.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/spigot-buildtools.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'BuildTools preflight and rich-control source is registered; verification remains pending.' } },
+  'java-runtime-and-jar-launch': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'The runtime inventory and launch profile are being completed.' } },
+  'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Capability-first protocol discovery is being integrated.' } },
+  'command-center': { implementationPath: ['src/main/command-center-registry.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/command-center.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Registry and renderer integration are being completed.' } },
+  'plugins': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Plugin staging is present; manifest inspection is being integrated.' } },
+  'configuration': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'verified', detail: 'Rich server, world, gameplay, network, and advanced property controls are registered.' } },
+  'console-and-rcon': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Local console is available; vault-backed RCON integration is in progress.' } },
+  'backups-and-updates': { implementationPath: [], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Backup-first update and rollback controls remain pending.' } },
+  'settings-appearance-and-localization': { implementationPath: [], documentationPath: ['docs/features/local-status-and-completeness.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Universal settings and localization work remain incomplete.' } },
+  'file-converter': { implementationPath: [], documentationPath: [], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'The desktop local converter surface remains pending.' } },
+  'ollama': { implementationPath: [], documentationPath: [], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'The desktop local Ollama suite remains pending.' } },
+  'authenticator-and-toy-locks': { implementationPath: [], documentationPath: [], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'The desktop authenticator and toy-lock suite remain pending.' } },
+  'docs-history-and-notifications': { implementationPath: ['src/renderer/renderer.js'], documentationPath: ['docs/features/README.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Toast notifications exist; the complete documentation, history, and notification-center surface remains pending.' } },
+  'export': { implementationPath: [], documentationPath: [], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Complete structured exports and external-editor handoff remain pending.' } }
+});
 const DEPENDENCIES = Object.freeze({
   java: {
-    label: 'Eclipse Temurin 21 JDK',
+    label: 'Version-aware Java runtime',
     command: 'java',
     versionArgs: ['-version'],
-    installers: [
-      { command: 'winget', args: ['install', '--id', 'EclipseAdoptium.Temurin.21.JDK', '--exact', '--accept-package-agreements', '--accept-source-agreements'] },
-      { command: 'choco', args: ['install', 'temurin21', '-y'] }
-    ]
+    installers: []
   },
   git: {
     label: 'Git for Windows',
@@ -94,14 +136,7 @@ const DEPENDENCIES = Object.freeze({
 
 const PORTABLE_TOOLCHAIN = Object.freeze({
   java: {
-    archiveName: 'temurin-21.zip',
     destination: 'java',
-    async source() {
-      const metadata = await fetchJson('https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=windows&vendor=eclipse');
-      const packageInfo = metadata?.[0]?.binary?.package;
-      if (!packageInfo?.link) throw new Error('The official Eclipse Adoptium service did not return a Windows JDK package.');
-      return { url: packageInfo.link, sha256: packageInfo.checksum || null };
-    },
     executableNames: ['java.exe']
   },
   git: {
@@ -137,6 +172,75 @@ function validVersion(value) {
   return /^\d+\.\d+(?:\.\d+)?$/.test(stringValue(value));
 }
 
+function parseMinecraftVersion(value) {
+  if (!validVersion(value)) return null;
+  const parts = stringValue(value).split('.').map((part) => Number(part));
+  if (parts.some((part) => !Number.isSafeInteger(part) || part < 0)) return null;
+  return [parts[0], parts[1], parts[2] || 0];
+}
+
+function compareMinecraftVersions(left, right) {
+  const a = Array.isArray(left) ? left : parseMinecraftVersion(left);
+  const b = Array.isArray(right) ? right : parseMinecraftVersion(right);
+  if (!a || !b) return null;
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
+  }
+  return 0;
+}
+
+function javaRequirementForServer(server) {
+  const version = parseMinecraftVersion(server?.minecraftVersion);
+  if (!version) throw new Error('The selected Minecraft version is not numeric, so the Java requirement cannot be determined safely.');
+  const [major, minor, patch] = version;
+  if (server?.software === 'paper') {
+    if (compareMinecraftVersions(version, [26, 1, 0]) >= 0) return { feature: 25, source: 'Paper 26.1+ compatibility policy' };
+    if (major === 1 && minor >= 7 && minor <= 11) return { feature: 8, source: 'Paper 1.7.10–1.11 compatibility policy' };
+    if (major === 1 && (minor >= 12 && minor < 16 || (minor === 16 && patch <= 4))) return { feature: 11, source: 'Paper 1.12–1.16.4 compatibility policy' };
+    if (major === 1 && minor === 16 && patch === 5) return { feature: 16, source: 'Paper 1.16.5 compatibility policy' };
+    if (major === 1 && minor >= 17 && minor <= 19) return { feature: 17, source: 'Paper 1.17–1.19 compatibility policy' };
+    if (major === 1 && (minor === 20 || minor === 21 && patch <= 11)) return { feature: 21, source: 'Paper 1.20–1.21.11 compatibility policy' };
+    throw new Error('The selected Paper version is outside the supported Java compatibility policy. Choose a documented version or update the application policy.');
+  }
+  if (server?.software === 'spigot') {
+    if (compareMinecraftVersions(version, [1, 20, 5]) > 0) return { feature: 21, source: 'Spigot BuildTools compatibility policy' };
+    if (compareMinecraftVersions(version, [1, 17, 1]) > 0) return { feature: 17, source: 'Spigot BuildTools compatibility policy' };
+    if (major === 1 && minor === 17 && patch <= 1) return { feature: 16, source: 'Spigot BuildTools compatibility policy' };
+    if (compareMinecraftVersions(version, [1, 17, 0]) < 0) return { feature: 8, source: 'Spigot BuildTools compatibility policy' };
+    throw new Error('The selected Spigot version is outside the supported BuildTools Java compatibility policy. Choose a documented version or update the application policy.');
+  }
+  throw new Error('Choose Paper or Spigot before resolving Java.');
+}
+
+function javaDependencyForFeature(feature) {
+  const normalized = Number(feature);
+  if (!SUPPORTED_JAVA_FEATURES.includes(normalized)) throw new Error('This Java feature is not supported by the automatic installer.');
+  return {
+    ...DEPENDENCIES.java,
+    label: `Eclipse Temurin ${normalized} JDK`,
+    installers: [
+      { command: 'winget', args: ['install', '--id', `EclipseAdoptium.Temurin.${normalized}.JDK`, '--exact', '--accept-package-agreements', '--accept-source-agreements'] },
+      { command: 'choco', args: ['install', `temurin${normalized}`, '-y'] }
+    ]
+  };
+}
+
+function portableJavaSpec(feature) {
+  const normalized = Number(feature);
+  if (!SUPPORTED_JAVA_FEATURES.includes(normalized)) throw new Error('This Java feature is not supported by the automatic installer.');
+  return {
+    archiveName: `temurin-${normalized}.zip`,
+    destination: path.join('java', String(normalized)),
+    executableNames: ['java.exe'],
+    async source() {
+      const metadata = await fetchJson(`https://api.adoptium.net/v3/assets/latest/${normalized}/hotspot?architecture=x64&heap_size=normal&image_type=jdk&jvm_impl=hotspot&os=windows&vendor=eclipse`);
+      const packageInfo = metadata?.[0]?.binary?.package;
+      if (!packageInfo?.link) throw new Error(`The official Eclipse Adoptium service did not return a Windows Java ${normalized} package.`);
+      return { url: packageInfo.link, sha256: packageInfo.checksum || null };
+    }
+  };
+}
+
 function normalizeProperties(input = {}) {
   const normalized = { ...DEFAULT_PROPERTIES };
   for (const [key, value] of Object.entries(input)) {
@@ -145,6 +249,61 @@ function normalizeProperties(input = {}) {
     }
   }
   return normalized;
+}
+
+function normalizeGameRules(input = {}) {
+  const normalized = { ...DEFAULT_GAMERULES };
+  for (const [key, value] of Object.entries(input || {})) {
+    if (/^[A-Za-z][A-Za-z0-9_]{0,127}$/.test(key)) {
+      normalized[key] = typeof value === 'boolean' || typeof value === 'number' ? value : stringValue(value).slice(0, 512);
+    }
+  }
+  return normalized;
+}
+
+function normalizeLaunchProfile(input = {}) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const gc = ['auto', 'g1', 'zgc', 'serial'].includes(source.gc) ? source.gc : 'g1';
+  const diagnostics = ['off', 'gc-log', 'jfr', 'jcmd-ready'].includes(source.diagnostics) ? source.diagnostics : 'off';
+  const rawTokens = Array.isArray(source.expertTokens)
+    ? source.expertTokens
+    : stringValue(source.expertTokens).trim() ? stringValue(source.expertTokens).trim().split(/\s+/) : [];
+  if (rawTokens.length > 16) throw new Error('Use at most 16 reviewed expert JVM tokens.');
+  const expertTokens = rawTokens.map((token) => stringValue(token).trim()).filter(Boolean);
+  const safePatterns = [
+    /^-XX:\+UseStringDeduplication$/,
+    /^-XX:MaxGCPauseMillis=\d{1,6}$/,
+    /^-XX:ParallelGCThreads=\d{1,4}$/,
+    /^-XX:ConcGCThreads=\d{1,4}$/
+  ];
+  for (const token of expertTokens) {
+    if (token.length > 128 || /[\r\n\0]/.test(token) || token.startsWith('@') || !safePatterns.some((pattern) => pattern.test(token))) {
+      throw new Error('Expert JVM tokens must be individually approved safe JVM options. Agents, native libraries, class paths, argument files, remote management, and operating-system command hooks are blocked.');
+    }
+  }
+  return { gc, diagnostics, expertTokens };
+}
+
+function launchTokensForServer(server, javaFeature, jarPath) {
+  const profile = normalizeLaunchProfile(server.launchProfile);
+  const memory = parseMemoryGb(server.memoryGb);
+  const tokens = [`-Xms${memory}G`, `-Xmx${memory}G`];
+  if (profile.gc === 'g1') tokens.push('-XX:+UseG1GC');
+  if (profile.gc === 'serial') tokens.push('-XX:+UseSerialGC');
+  if (profile.gc === 'zgc') {
+    if (javaFeature < 17) throw new Error('ZGC requires a selected Java runtime that supports it. Choose G1 or a compatible runtime.');
+    tokens.push('-XX:+UseZGC');
+  }
+  const diagnosticDirectory = path.join(server.serverPath, '.minecraft-server-studio', 'diagnostics');
+  if (profile.diagnostics === 'gc-log') {
+    tokens.push(`-Xlog:gc*:file=${path.join(diagnosticDirectory, 'gc-%t.log')}:time,uptime:filecount=5,filesize=10M`);
+  }
+  if (profile.diagnostics === 'jfr') {
+    if (javaFeature < 11) throw new Error('Java Flight Recorder requires a selected Java runtime that supports it.');
+    tokens.push(`-XX:StartFlightRecording=filename=${path.join(diagnosticDirectory, 'server-%t.jfr')},dumponexit=true`);
+  }
+  tokens.push(...profile.expertTokens, '-jar', jarPath, 'nogui');
+  return { tokens, diagnosticDirectory, profile };
 }
 
 function parseProperties(content) {
@@ -264,6 +423,16 @@ async function getCommandVersion(executable, args) {
   }
 }
 
+function parseJavaFeatureVersion(output) {
+  const text = stringValue(output);
+  const legacy = text.match(/(?:java|openjdk)\s+version\s+"1\.(8)(?:\.\d+)?/i);
+  if (legacy) return 8;
+  const modern = text.match(/(?:java|openjdk)\s+(?:version\s+)?"?(\d+)(?:\.\d+){0,3}/i) || text.match(/\b(\d+)(?:\.\d+){1,3}\b/);
+  if (!modern) return null;
+  const feature = Number(modern[1]);
+  return Number.isSafeInteger(feature) && feature >= 8 && feature <= 99 ? feature : null;
+}
+
 async function fetchJson(url) {
   const response = await fetch(url, {
     headers: { 'User-Agent': 'Minecraft-Server-Studio/0.1.0' },
@@ -305,7 +474,17 @@ function copyPublicServer(server) {
     serverPath: server.serverPath,
     memoryGb: server.memoryGb,
     javaPath: server.javaPath || '',
+    launchProfile: { ...normalizeLaunchProfile(server.launchProfile) },
+    rconSecretConfigured: Boolean(server.rconSecretConfigured),
     eulaAccepted: Boolean(server.eulaAccepted),
+    gameRules: { ...normalizeGameRules(server.gameRules) },
+    management: {
+      endpoint: server.management?.endpoint || '',
+      allowInsecureLoopback: Boolean(server.management?.allowInsecureLoopback),
+      discoveredAt: server.management?.discoveredAt || null,
+      state: server.management?.state || 'not-configured',
+      capabilities: Array.isArray(server.management?.capabilities) ? [...server.management.capabilities] : []
+    },
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     settings: { ...server.settings }
@@ -316,13 +495,294 @@ class ServerManager {
   constructor(options = {}) {
     this.dataDir = options.dataDir || path.join(os.homedir(), '.minecraft-server-studio');
     this.onEvent = options.onEvent || (() => {});
+    this.credentialSecretProvider = typeof options.credentialSecretProvider === 'function'
+      ? options.credentialSecretProvider
+      : null;
     this.processes = new Map();
+    this.statusEvents = [];
+    this.statusOperations = new Map();
+    this.statusEvidence = new Map();
+    this.statusUpdatedAt = new Date().toISOString();
+    this.buildToolsMetadata = null;
+    this.buildToolsPlans = new Map();
+    this.commandDiscovery = new Map();
     this.registryFile = path.join(this.dataDir, 'servers.json');
     this.toolchainDir = path.join(this.dataDir, 'toolchain');
   }
 
   emit(event) {
-    this.onEvent({ at: new Date().toISOString(), ...event });
+    const emitted = { at: new Date().toISOString(), ...event };
+    this.recordStatusEvent(emitted);
+    this.onEvent(emitted);
+  }
+
+  recordStatusEvent(event) {
+    const type = stringValue(event?.type, 'status-event').slice(0, 128);
+    const message = redactOutput(stringValue(event?.message || event?.status || type)).slice(0, 1024);
+    const state = type.includes('error') || type.includes('failed')
+      ? 'failed'
+      : type.includes('stopping') || type.includes('progress')
+        ? 'running'
+        : type.includes('provisioned') || type.includes('installed') || type.includes('created')
+          ? 'complete'
+          : 'idle';
+    this.statusEvents.unshift({
+      id: crypto.randomUUID(),
+      type,
+      message,
+      state,
+      occurredAt: event?.at || new Date().toISOString(),
+      operationId: stringValue(event?.operationId || '').slice(0, 128)
+    });
+    if (this.statusEvents.length > 128) this.statusEvents.length = 128;
+    this.statusUpdatedAt = new Date().toISOString();
+  }
+
+  beginStatusOperation(id, title, detail = '') {
+    const operationId = stringValue(id).slice(0, 128);
+    this.statusOperations.set(operationId, {
+      id: operationId,
+      title: stringValue(title).slice(0, 1024),
+      state: 'running',
+      startedAt: new Date().toISOString(),
+      progress: null,
+      detail: redactOutput(stringValue(detail)).slice(0, 4096),
+      evidenceIds: []
+    });
+    this.statusUpdatedAt = new Date().toISOString();
+    return operationId;
+  }
+
+  completeStatusOperation(id, state = 'complete', detail = '') {
+    const operationId = stringValue(id).slice(0, 128);
+    const operation = this.statusOperations.get(operationId);
+    if (!operation) return;
+    operation.state = ['complete', 'failed', 'cancelled', 'blocked'].includes(state) ? state : 'complete';
+    operation.detail = redactOutput(stringValue(detail || operation.detail)).slice(0, 4096);
+    this.statusUpdatedAt = new Date().toISOString();
+  }
+
+  recordLocalEvidence(id, title, detail, localPath = '') {
+    const evidenceId = stringValue(id).slice(0, 128);
+    this.statusEvidence.set(evidenceId, {
+      id: evidenceId,
+      title: stringValue(title).slice(0, 1024),
+      kind: 'local-record',
+      state: 'verified',
+      localPath: stringValue(localPath).slice(0, 1024),
+      recordedAt: new Date().toISOString(),
+      detail: redactOutput(stringValue(detail)).slice(0, 4096)
+    });
+    this.statusUpdatedAt = new Date().toISOString();
+  }
+
+  async localStatusSnapshot() {
+    const servers = await this.listServers();
+    const dependencyInspection = await this.inspectDependencies();
+    const dependencies = Object.values(dependencyInspection.dependencies || {});
+    const missingDependencies = dependencies.filter((dependency) => !dependency.available);
+    this.recordLocalEvidence('server-registry', 'Local server registry', `${servers.length} server definition(s) are stored locally.`, this.registryFile);
+    this.recordLocalEvidence('dependency-inspection', 'Dependency inspection', missingDependencies.length
+      ? `${missingDependencies.length} required tool(s) need installation or repair.`
+      : 'All currently inspected tools are available.', this.toolchainDir);
+    const currentState = this.statusOperations.size && [...this.statusOperations.values()].some((operation) => operation.state === 'running')
+      ? 'running'
+      : this.processes.size ? 'running' : 'idle';
+    const nextSteps = [];
+    if (missingDependencies.length) {
+      nextSteps.push({
+        id: 'install-missing-tools',
+        label: 'Install or repair missing tools',
+        state: 'waiting',
+        detail: `Use Automatic setup to install or retry: ${missingDependencies.map((dependency) => dependency.label).join(', ')}.`,
+        evidenceIds: ['dependency-inspection']
+      });
+    }
+    if (!servers.length) {
+      nextSteps.push({ id: 'create-server', label: 'Create a local server', state: 'waiting', detail: 'Use the structured creation dialog to create a Paper or Spigot server definition.', evidenceIds: ['server-registry'] });
+    }
+    if (servers.some((server) => !server.eulaAccepted)) {
+      nextSteps.push({ id: 'eula-review', label: 'Review and accept the Minecraft EULA for selected servers', state: 'waiting', detail: 'A server cannot start until its own EULA acknowledgment is selected.', evidenceIds: ['server-registry'] });
+    }
+    if (!nextSteps.length) {
+      nextSteps.push({ id: 'choose-server', label: 'Choose a server to inspect or operate', state: 'idle', detail: 'Select a local server to review setup, runtime, command, and status details.', evidenceIds: ['server-registry'] });
+    }
+    const snapshot = createLocalStatusSnapshot({
+      currentState,
+      lastUpdated: this.statusUpdatedAt,
+      activeOperations: [...this.statusOperations.values()].filter((operation) => operation.state === 'running'),
+      events: this.statusEvents,
+      localEvidence: [...this.statusEvidence.values()],
+      nextSteps
+    });
+    const completeness = createDesktopCompletenessInventory({ rows: STATUS_COMPLETENESS_ROWS });
+    return { snapshot, completeness };
+  }
+
+  async refreshSpigotVersionMetadata() {
+    const operationId = this.beginStatusOperation('spigot-version-metadata', 'Refresh official Spigot version metadata', 'Requesting the official Spigot metadata record after the user opened the refresh control.');
+    try {
+      const metadata = await fetchOfficialLiveVersionMetadata({ fetch });
+      this.buildToolsMetadata = metadata;
+      this.recordLocalEvidence('spigot-version-metadata', 'Official Spigot version metadata', `Fetched official version metadata at ${metadata.fetchedAt || new Date().toISOString()}.`);
+      this.completeStatusOperation(operationId, 'complete', 'Official Spigot version metadata was received.');
+      return metadata;
+    } catch (error) {
+      this.completeStatusOperation(operationId, 'failed', error.message);
+      throw error;
+    }
+  }
+
+  async buildToolsPreflight(id, input = {}) {
+    const server = await this.getServer(id);
+    if (server.software !== 'spigot') throw new Error('BuildTools planning is available only for a Spigot server definition.');
+    const revision = stringValue(input.revision || server.minecraftVersion).trim();
+    if (!validVersion(revision)) throw new Error('Choose an official numeric Minecraft revision before creating a BuildTools plan.');
+    const workspace = stringValue(input.workspace).trim();
+    if (!workspace) throw new Error('Choose a dedicated BuildTools workspace with the Browse control.');
+    const operationId = `buildtools-${server.id}-${Date.now()}`;
+    const java = await this.resolveJava(server);
+    const preflight = await createBuildToolsPreflight({
+      revision,
+      operationId,
+      serverHome: server.serverPath,
+      workspace,
+      javaExecutable: java,
+      officialVersionMetadata: this.buildToolsMetadata,
+      repositoryRoots: [process.cwd()],
+      flags: {
+        target: input.target || 'spigot',
+        reuseMode: input.reuse ? 'compile-if-changed' : 'full-build',
+        updatePolicy: input.update ? 'allow-update' : 'do-not-update',
+        riskAcknowledgements: input.riskAcknowledgements || {},
+        rawFallback: input.rawFallback || ''
+      }
+    });
+    this.buildToolsPlans.set(id, preflight);
+    this.recordLocalEvidence(`buildtools-plan-${server.id}`, 'BuildTools preflight', `Prepared an explicit, non-executing BuildTools preflight for ${revision}.`, workspace);
+    this.emit({ type: 'buildtools-preflight', serverId: id, message: `Prepared a non-executing BuildTools preflight for ${revision}.` });
+    return preflight;
+  }
+
+  async executeBuildToolsPlan(id, confirmation = {}) {
+    const server = await this.getServer(id);
+    if (server.software !== 'spigot') throw new Error('BuildTools execution is available only for a Spigot server definition.');
+    if (this.processes.has(id)) throw new Error('Stop the selected server before promoting a new BuildTools JAR.');
+    const preflight = this.buildToolsPlans.get(id);
+    if (!preflight) throw new Error('Prepare a BuildTools preflight in the BuildTools tab before starting a build.');
+    const authorized = authorizeBuildToolsPreflight(preflight, confirmation);
+    const operationId = this.beginStatusOperation(`buildtools-execution-${id}`, `Build Spigot ${preflight.revision}`, 'Downloading official BuildTools into the isolated workspace.');
+    try {
+      const git = await this.findDependency('git');
+      if (!git.available) throw new Error('Spigot BuildTools requires Git. Use the in-app installer before starting this build.');
+      await fs.mkdir(preflight.workspace.buildDirectory, { recursive: true });
+      await fs.mkdir(preflight.workspace.outputDirectory, { recursive: true });
+      await downloadFile(preflight.buildTools.downloadUrl, preflight.buildTools.jarPath, null, (message) => this.emit({ type: 'provision-output', serverId: id, message }));
+      this.emit({ type: 'provision-output', serverId: id, message: `Building Spigot ${preflight.revision} in the isolated BuildTools workspace.` });
+      const result = await runCommand(authorized.command.executable, authorized.command.args, (line) => this.emit({ type: 'provision-output', serverId: id, message: line }));
+      if (result.code !== 0) throw new Error(`BuildTools failed: ${redactOutput(result.stderr || result.stdout).slice(-1000)}`);
+      const stagedSource = authorized.promotion.sourceBuildOutput;
+      const stat = await fs.stat(stagedSource);
+      if (!stat.isFile() || stat.size < 64 || stat.size > 2 * 1024 * 1024 * 1024) throw new Error('BuildTools did not produce a valid bounded server JAR at the planned output path.');
+      const jarHandle = await fs.open(stagedSource, 'r');
+      const header = Buffer.alloc(4);
+      try {
+        await jarHandle.read(header, 0, header.length, 0);
+      } finally {
+        await jarHandle.close();
+      }
+      if (!header.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) && !header.equals(Buffer.from([0x50, 0x4b, 0x05, 0x06]))) {
+        throw new Error('BuildTools output did not have a JAR/ZIP signature. The existing server JAR was not changed.');
+      }
+      const promotion = authorized.promotion;
+      await fs.mkdir(path.dirname(promotion.sameFilesystemStage), { recursive: true });
+      await fs.mkdir(path.dirname(promotion.rollbackJar), { recursive: true });
+      await fs.copyFile(stagedSource, promotion.sameFilesystemStage);
+      if (await pathExists(promotion.finalJar)) await fs.rename(promotion.finalJar, promotion.rollbackJar);
+      await fs.rename(promotion.sameFilesystemStage, promotion.finalJar);
+      this.recordLocalEvidence(`buildtools-output-${id}`, 'Staged Spigot server JAR', `BuildTools produced and promoted Spigot ${preflight.revision}; the prior JAR remains in the rollback path when one existed.`, promotion.finalJar);
+      this.completeStatusOperation(operationId, 'complete', `Spigot ${preflight.revision} was staged and promoted using the rollback plan.`);
+      this.emit({ type: 'server-provisioned', serverId: id, message: `Spigot ${preflight.revision} is ready with a rollback record.` });
+      return { server: copyPublicServer(server), jarPath: promotion.finalJar, reused: false, rollbackJar: promotion.rollbackJar };
+    } catch (error) {
+      this.completeStatusOperation(operationId, 'failed', error.message);
+      throw error;
+    }
+  }
+
+  async pluginDescriptors(server) {
+    const pluginsPath = path.join(server.serverPath, 'plugins');
+    if (!(await pathExists(pluginsPath))) return [];
+    const entries = await fs.readdir(pluginsPath, { withFileTypes: true });
+    const descriptors = [];
+    for (const entry of entries.filter((candidate) => candidate.isFile() && /\.jar$/i.test(candidate.name)).slice(0, 256)) {
+      try {
+        const descriptor = await inspectPluginJarFile(path.join(pluginsPath, entry.name));
+        descriptors.push(descriptor);
+      } catch (error) {
+        descriptors.push({ name: entry.name, inspectionError: redactOutput(error.message).slice(0, 512) });
+      }
+    }
+    return descriptors;
+  }
+
+  async buildCommandRegistry(server) {
+    const runtime = {
+      flavor: server.software,
+      minecraftVersion: server.minecraftVersion,
+      consoleAvailable: this.processes.has(server.id),
+      rconAvailable: toBoolean(server.settings?.['enable-rcon']) && Boolean(server.rconSecretConfigured),
+      hostLifecycleAvailable: true
+    };
+    const rpcDiscover = server.management?.capabilities?.length
+      ? { methods: server.management.capabilities }
+      : undefined;
+    const plugins = await this.pluginDescriptors(server);
+    return createCommandCenterRegistry({ runtime, rpcDiscover, plugins });
+  }
+
+  async commandCatalog(id) {
+    const server = await this.getServer(id);
+    return presentRegistry(await this.buildCommandRegistry(server));
+  }
+
+  async commandPlan(id, request = {}) {
+    const server = await this.getServer(id);
+    const registry = await this.buildCommandRegistry(server);
+    const actionId = stringValue(request.actionId).trim();
+    if (!actionId) throw new Error('Choose a structured command action before requesting a command plan.');
+    const routeMap = {
+      protocol: ROUTES.PROTOCOL,
+      local: ROUTES.LOCAL_CONSOLE,
+      rcon: ROUTES.RCON,
+      lifecycle: ROUTES.HOST_LIFECYCLE,
+      [ROUTES.PROTOCOL]: ROUTES.PROTOCOL,
+      [ROUTES.LOCAL_CONSOLE]: ROUTES.LOCAL_CONSOLE,
+      [ROUTES.RCON]: ROUTES.RCON,
+      [ROUTES.HOST_LIFECYCLE]: ROUTES.HOST_LIFECYCLE
+    };
+    const route = routeMap[request.route] || ROUTES.LOCAL_CONSOLE;
+    const rawCommand = stringValue(request.rawCommand).trim();
+    const values = request.values && typeof request.values === 'object' && !Array.isArray(request.values) ? request.values : {};
+    const plan = rawCommand
+      ? (() => {
+        const raw = composeRawTokenizedCommand(rawCommand);
+        return {
+          actionId,
+          title: 'Tokenized raw Minecraft command',
+          form: 'raw-fallback',
+          risk: 'operational',
+          backupRequirement: 'recommended',
+          confirmationRequirement: 'review',
+          execution: { selected: { route }, protocol: { method: null, executable: false } },
+          ...raw
+        };
+      })()
+      : composeCommand(registry, actionId, values, { formId: request.formId, route });
+    if (!plan.execution?.canExecute && !plan.execution?.selected) {
+      throw new Error(plan.execution?.fallback || 'The selected command route is not currently available.');
+    }
+    return plan;
   }
 
   async registry() {
@@ -384,8 +844,16 @@ class ServerManager {
       serverPath,
       memoryGb,
       javaPath: stringValue(draft.javaPath).trim(),
+      launchProfile: normalizeLaunchProfile(draft.launchProfile),
       eulaAccepted: Boolean(draft.eulaAccepted),
       settings: normalizeProperties({ ...draft.settings, 'server-port': draft.port ?? draft.settings?.['server-port'] }),
+      gameRules: normalizeGameRules(draft.gameRules),
+      management: {
+        endpoint: '',
+        allowInsecureLoopback: false,
+        state: 'not-configured',
+        capabilities: []
+      },
       createdAt: now,
       updatedAt: now
     };
@@ -399,7 +867,14 @@ class ServerManager {
 
   async writeServerFiles(server) {
     await fs.mkdir(server.serverPath, { recursive: true });
-    await fs.writeFile(path.join(server.serverPath, 'server.properties'), serializeProperties(server.settings), 'utf8');
+    const materializedSettings = { ...normalizeProperties(server.settings) };
+    if (toBoolean(materializedSettings['enable-rcon']) && server.rconSecretConfigured) {
+      if (!this.credentialSecretProvider) throw new Error('RCON is enabled but the protected credential provider is unavailable. Disable RCON or save its secret through the desktop app.');
+      const rconSecret = await this.credentialSecretProvider('rcon', server.id);
+      if (!rconSecret) throw new Error('RCON is enabled but no protected RCON password is available. Save the password in the Network tab before starting the server.');
+      materializedSettings['rcon.password'] = rconSecret;
+    }
+    await fs.writeFile(path.join(server.serverPath, 'server.properties'), serializeProperties(materializedSettings), 'utf8');
     await fs.writeFile(
       path.join(server.serverPath, 'eula.txt'),
       `# EULA accepted with Minecraft Server Studio on ${new Date().toISOString()}\neula=${server.eulaAccepted ? 'true' : 'false'}\n`,
@@ -419,8 +894,23 @@ class ServerManager {
     }
     if (patch.memoryGb !== undefined) existing.memoryGb = parseMemoryGb(patch.memoryGb);
     if (patch.javaPath !== undefined) existing.javaPath = stringValue(patch.javaPath).trim();
+    if (patch.launchProfile !== undefined) existing.launchProfile = normalizeLaunchProfile(patch.launchProfile);
+    if (patch.rconSecretConfigured !== undefined) existing.rconSecretConfigured = Boolean(patch.rconSecretConfigured);
     if (patch.eulaAccepted !== undefined) existing.eulaAccepted = Boolean(patch.eulaAccepted);
     if (patch.settings) existing.settings = normalizeProperties({ ...existing.settings, ...patch.settings });
+    if (patch.gameRules) existing.gameRules = normalizeGameRules({ ...existing.gameRules, ...patch.gameRules });
+    if (patch.management) {
+      existing.management = {
+        ...existing.management,
+        endpoint: stringValue(patch.management.endpoint ?? existing.management?.endpoint).trim(),
+        allowInsecureLoopback: Boolean(patch.management.allowInsecureLoopback ?? existing.management?.allowInsecureLoopback),
+        state: stringValue(patch.management.state ?? existing.management?.state ?? 'not-configured'),
+        discoveredAt: patch.management.discoveredAt ?? existing.management?.discoveredAt ?? null,
+        capabilities: Array.isArray(patch.management.capabilities)
+          ? patch.management.capabilities.filter((method) => /^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(method)).slice(0, 1024)
+          : (existing.management?.capabilities || [])
+      };
+    }
     existing.updatedAt = new Date().toISOString();
     await this.writeServerFiles(existing);
     await this.saveRegistry(registry);
@@ -431,7 +921,7 @@ class ServerManager {
   async inspectDependencies() {
     const inspected = {};
     for (const [key, dependency] of Object.entries(DEPENDENCIES)) {
-      const resolved = await this.findDependency(id, dependency);
+      const resolved = await this.findDependency(key, dependency);
       inspected[key] = {
         id: key,
         label: dependency.label,
@@ -445,10 +935,10 @@ class ServerManager {
     return { dependencies: inspected, installers: { winget: winget.available, chocolatey: chocolatey.available } };
   }
 
-  async findDependency(id, dependency = DEPENDENCIES[id]) {
+  async findDependency(id, dependency = DEPENDENCIES[id], javaFeature = null) {
     const fromPath = await commandExists(dependency.command);
     if (fromPath.available) return { ...fromPath, source: 'PATH' };
-    const portable = PORTABLE_TOOLCHAIN[id];
+    const portable = id === 'java' && javaFeature ? portableJavaSpec(javaFeature) : PORTABLE_TOOLCHAIN[id];
     if (portable) {
       const executable = await findFileRecursively(
         path.join(this.toolchainDir, portable.destination),
@@ -467,8 +957,8 @@ class ServerManager {
     return { available: false, path: null, source: null };
   }
 
-  async installPortableDependency(id) {
-    const portable = PORTABLE_TOOLCHAIN[id];
+  async installPortableDependency(id, javaFeature = null) {
+    const portable = id === 'java' && javaFeature ? portableJavaSpec(javaFeature) : PORTABLE_TOOLCHAIN[id];
     if (!portable) throw new Error(`No portable fallback is registered for ${id}.`);
     const source = await portable.source();
     const downloads = path.join(this.toolchainDir, 'downloads');
@@ -480,18 +970,20 @@ class ServerManager {
     this.emit({ type: 'dependency-progress', dependency: id, message: `Installing ${DEPENDENCIES[id].label} into the app's private toolchain.` });
     await downloadFile(source.url, archive, source.sha256, (message) => this.emit({ type: 'dependency-output', dependency: id, message }));
     await expandZip(archive, destination, (line) => this.emit({ type: 'dependency-output', dependency: id, message: line }));
-    const installed = await this.findDependency(id);
+    const installed = await this.findDependency(id, id === 'java' && javaFeature ? javaDependencyForFeature(javaFeature) : DEPENDENCIES[id], javaFeature);
     if (!installed.available) throw new Error(`The portable ${DEPENDENCIES[id].label} extraction completed but its executable was not found.`);
     return installed;
   }
 
-  async installDependencies(ids = Object.keys(DEPENDENCIES)) {
+  async installDependencies(ids = Object.keys(DEPENDENCIES), serverId = null) {
     const requested = [...new Set(ids)].filter((id) => DEPENDENCIES[id]);
     if (!requested.length) throw new Error('Choose at least one supported dependency to install.');
+    const requestedServer = serverId ? await this.getServer(serverId) : null;
+    const javaFeature = requestedServer ? javaRequirementForServer(requestedServer).feature : 21;
     const results = [];
     for (const id of requested) {
-      const dependency = DEPENDENCIES[id];
-      const before = await this.findDependency(id, dependency);
+      const dependency = id === 'java' ? javaDependencyForFeature(javaFeature) : DEPENDENCIES[id];
+      const before = await this.findDependency(id, dependency, id === 'java' ? javaFeature : null);
       if (before.available) {
         results.push({ id, status: 'already-installed', path: before.path });
         continue;
@@ -518,7 +1010,7 @@ class ServerManager {
       let after = await this.findDependency(id, dependency);
       if (!after.available) {
         try {
-          after = await this.installPortableDependency(id);
+          after = await this.installPortableDependency(id, id === 'java' ? javaFeature : null);
           installed = true;
         } catch (error) {
           lastError = error.message;
@@ -535,17 +1027,80 @@ class ServerManager {
     return (metadata.versions || []).filter(validVersion).reverse();
   }
 
+  async inspectJavaRuntime(candidate, server = null) {
+    const executable = stringValue(candidate).trim();
+    if (!executable) throw new Error('Choose a Java executable before requesting a runtime inspection.');
+    let result;
+    try {
+      result = await runCommand(executable, ['--version']);
+    } catch {
+      result = await runCommand(executable, ['-version']);
+    }
+    const transcript = redactOutput(`${result.stdout || ''}\n${result.stderr || ''}`).trim();
+    const feature = parseJavaFeatureVersion(transcript);
+    const required = server ? javaRequirementForServer(server) : null;
+    return {
+      path: path.isAbsolute(executable) ? path.resolve(executable) : executable,
+      feature,
+      transcript: transcript.slice(0, 2048),
+      requiredFeature: required?.feature || null,
+      compatibility: required && feature !== required.feature ? 'not-confirmed' : feature ? 'confirmed' : 'not-confirmed',
+      requirementSource: required?.source || null,
+      verifiedAt: new Date().toISOString()
+    };
+  }
+
+  async runtimeInventory(id) {
+    const server = await this.getServer(id);
+    const candidates = new Map();
+    const append = (candidate, source) => {
+      const value = stringValue(candidate).trim();
+      if (!value) return;
+      candidates.set(value.toLowerCase(), { path: value, source });
+    };
+    if (server.javaPath) append(server.javaPath, 'selected server runtime');
+    const discovered = await this.findDependency('java');
+    if (discovered.available) append(discovered.path || 'java', discovered.source || 'PATH');
+    for (const feature of SUPPORTED_JAVA_FEATURES) {
+      const portable = portableJavaSpec(feature);
+      const candidate = await findFileRecursively(path.join(this.toolchainDir, portable.destination), portable.executableNames.map((name) => name.toLowerCase()));
+      if (candidate) append(candidate, `app-managed Java ${feature}`);
+    }
+    const inventory = [];
+    for (const candidate of candidates.values()) {
+      try {
+        const inspected = await this.inspectJavaRuntime(candidate.path, server);
+        inventory.push({ ...inspected, source: candidate.source, compatible: inspected.compatibility === 'confirmed' });
+      } catch (error) {
+        inventory.push({ path: candidate.path, source: candidate.source, feature: null, compatibility: 'not-confirmed', compatible: false, error: redactOutput(error.message).slice(0, 512), verifiedAt: new Date().toISOString() });
+      }
+    }
+    return inventory;
+  }
+
   async resolveJava(server) {
+    const requirement = javaRequirementForServer(server);
+    let candidate;
     if (server.javaPath) {
-      const candidate = path.resolve(server.javaPath);
-      if (await pathExists(candidate)) return candidate;
-      throw new Error('The configured Java path does not exist. Select an installed Java runtime or clear the custom path.');
+      if (!path.isAbsolute(server.javaPath)) throw new Error('The configured Java path must be absolute. Choose it with the Browse Java control.');
+      candidate = path.resolve(server.javaPath);
+      if (!(await pathExists(candidate))) {
+        throw new Error('The configured Java path does not exist. Select an installed Java runtime or clear the custom path.');
+      }
+    } else {
+      const java = await this.findDependency('java');
+      if (!java.available) {
+        throw new Error(`Java ${requirement.feature} is required for this server. Use the in-app dependency installer before setting up or starting it.`);
+      }
+      candidate = java.path || 'java';
     }
-    const java = await this.findDependency('java');
-    if (!java.available) {
-      throw new Error('Java 21 is required. Use the in-app dependency installer before setting up or starting this server.');
+    const runtime = await this.inspectJavaRuntime(candidate, server);
+    if (runtime.feature !== requirement.feature) {
+      const detected = runtime.feature ? `Java ${runtime.feature}` : 'an unrecognized Java version';
+      throw new Error(`${server.software === 'paper' ? 'Paper' : 'Spigot BuildTools'} ${server.minecraftVersion} requires Java ${requirement.feature}; the selected runtime reports ${detected}. Choose a matching runtime or use the in-app installer.`);
     }
-    return java.path || 'java';
+    if (!path.isAbsolute(candidate)) throw new Error('The selected Java runtime must resolve to an absolute executable path. Refresh the runtime inventory or use Browse Java.');
+    return candidate;
   }
 
   async provisionServer(id) {
@@ -558,7 +1113,7 @@ class ServerManager {
     if (server.software === 'paper') {
       await this.provisionPaper(server, jarPath);
     } else {
-      await this.provisionSpigot(server, java, jarPath);
+      throw new Error('Prepare and explicitly execute the isolated BuildTools plan in the desktop BuildTools tab before setting up a Spigot server.');
     }
     this.emit({ type: 'server-provisioned', serverId: id, message: `${server.software === 'paper' ? 'Paper' : 'Spigot'} is ready for ${server.name}.` });
     return { server: copyPublicServer(server), jarPath, reused: false };
@@ -602,14 +1157,16 @@ class ServerManager {
     if (!server.eulaAccepted) throw new Error('Accept the Minecraft EULA in the General tab before starting this server.');
     const { jarPath } = await this.provisionServer(id);
     const java = await this.resolveJava(server);
-    const memory = parseMemoryGb(server.memoryGb);
-    const child = spawn(java, [`-Xms${memory}G`, `-Xmx${memory}G`, '-jar', jarPath, 'nogui'], {
+    const runtime = await this.inspectJavaRuntime(java, server);
+    const launch = launchTokensForServer(server, runtime.feature, jarPath);
+    await fs.mkdir(launch.diagnosticDirectory, { recursive: true });
+    const child = spawn(java, launch.tokens, {
       cwd: server.serverPath,
       shell: false,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe']
     });
-    const processEntry = { child, startedAt: new Date().toISOString(), stopping: false };
+    const processEntry = { child, startedAt: new Date().toISOString(), stopping: false, javaPath: java, launchTokens: launch.tokens, pid: child.pid || null };
     this.processes.set(id, processEntry);
     const forward = (stream, channel) => stream.on('data', (chunk) => {
       for (const line of chunk.toString().split(/\r?\n/)) {
@@ -681,14 +1238,7 @@ class ServerManager {
   async rconCommand(id, command) {
     const server = await this.getServer(id);
     if (!toBoolean(server.settings['enable-rcon'])) throw new Error('Enable RCON in the Network tab before using remote CLI commands.');
-    const password = stringValue(server.settings['rcon.password']);
-    if (!password) throw new Error('Set an RCON password in the Network tab before using remote CLI commands.');
-    return sendRconCommand({
-      host: '127.0.0.1',
-      port: Number(server.settings['rcon.port']),
-      password,
-      command: stringValue(command)
-    });
+    throw new Error('RCON commands require the main-process protected credential route. Use the desktop IPC RCON action so the password is never stored in settings or logs.');
   }
 }
 
@@ -753,10 +1303,10 @@ function sendRconCommand({ host, port, password, command }) {
 module.exports = {
   ALLOWED_PROPERTY_KEYS,
   DEFAULT_PROPERTIES,
+  DEFAULT_GAMERULES,
   ServerManager,
+  normalizeGameRules,
   normalizeProperties,
   parseProperties,
   serializeProperties
 };
-  'initial-disabled-packs': '',
-  'initial-enabled-packs': 'vanilla',

@@ -1,24 +1,27 @@
 # Handoff
 
-## Initial Minecraft Server Studio implementation
+## Minecraft Server Studio expanded candidate
 
-The initial application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot server settings, local lifecycle control, plugin installation, and automatic Java/Git dependency detection and installation fallback.
+The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
 ### Changed areas
 
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
-- `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary.
-- `src/renderer/`: Material-style desktop UI with rich server controls.
+- `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, and `desktop-status-model.cjs`: capability, safety, status, and secret-boundary modules.
+- `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
+- `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
 - `src/cli/mss.cjs`: shared local CLI.
-- `site/`: companion Sites source supplied separately within this implementation lane.
+- `site/`: public marketing and browser-local interaction source, including a local Status destination.
+- `.github/workflows/windows-package.yml`: unsigned Windows Squirrel packaging source with artifact collection only.
 
 ### Verification state
 
-This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. Packaging is pending against the final immutable candidate and must be reported with its exact commit and output before release work proceeds.
+This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. The local status/completeness inventories intentionally show those evidence types as pending rather than verified. Any packaging result must be pinned to the final immutable candidate and reported separately; no release, deployment, tag, or publish action was performed here.
 
 ### Remaining work
 
-- Generate and validate the npm lockfile and installed production dependency set.
-- Build a candidate against a pinned commit.
+- Complete a dedicated Java runtime-manager discovery/preflight module beyond the current version matrix and runtime inventory.
+- Add a provider-specific authenticated WebSocket connector before treating a stored management bearer credential as transmitted authentication.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
-- Integrate, publish, and release through the repository owner workflow.
+- Build/package against the immutable candidate if the delivery owner authorizes the package pass, then inspect and report only the package output.
+- Integrate, publish, and release through the repository owner workflow when external authority is available.

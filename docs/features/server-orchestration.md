@@ -23,17 +23,17 @@ For Paper, the app reads the official Paper project metadata, selects the latest
 
 ## Spigot setup
 
-For Spigot, the app downloads the official BuildTools JAR, requires Java and Git, executes BuildTools with the selected revision through direct executable arguments, and promotes the generated Spigot JAR to `server.jar`. BuildTools can take several minutes because it assembles the requested revision locally.
+For Spigot, the app exposes an explicit BuildTools preflight before an execution request can be prepared. It refreshes official version metadata only when the user requests it, verifies a dedicated workspace outside both the server home and source repository, derives structured BuildTools arguments, and prepares a stage/swap/rollback plan. The generated JAR is never put in the public source repository. BuildTools can take several minutes because it assembles the requested revision locally.
 
 ## Operate
 
 The desktop lifecycle controls start Java with the configured fixed memory allocation and `nogui`, keep standard output and error in the built-in console, and send console commands through the child process standard input. Stop requests send Minecraft's `stop` command first and only terminate the local Java process after a 20-second grace period.
 
-The CLI shares the registry. `start` remains foreground so the operator can observe the process. `command` and `stop` use RCON and intentionally require that the server's Network settings enable RCON and provide a password.
+The CLI shares the registry. `start` remains foreground so the operator can observe the process. The desktop app defaults to a local child-process console; RCON is an explicit fallback that requires the Network settings and a protected credential.
 
 ## Plugin installation
 
-The Plugins tab accepts a user-selected local `.jar` file and copies it into the selected server's `plugins` directory. The app lists installed JARs, but it does not claim that a third-party plugin is compatible or safe. Restart the server after installing a plugin.
+The Plugins tab accepts a user-selected local `.jar` file and copies it into the selected server's `plugins` directory. Command discovery can inspect bounded `plugin.yml` metadata without extracting arbitrary plugin files. The app does not claim that a third-party plugin is compatible or safe. Restart the server after installing a plugin; ordinary plugin reload is not the update path.
 
 ## Failure modes
 
@@ -45,7 +45,7 @@ The Plugins tab accepts a user-selected local `.jar` file and copies it into the
 
 ## Security considerations
 
-The app runs server Java with `shell: false`, does not interpolate settings into shell commands, redacts password-like output patterns in its own console feed, and uses a private application-data registry rather than a repository inside a server folder. The Minecraft server itself still owns `server.properties`, including RCON configuration; protect that folder according to your local access policy.
+The app runs server Java with `shell: false`, does not interpolate settings into shell commands, redacts password-like output patterns in its own console feed, and uses a private application-data registry rather than a repository inside a server folder. RCON and management-protocol secrets use the operating system protected-storage boundary and are excluded from the registry, exports, and console logs. When RCON is enabled, Minecraft still needs its password in the local server configuration to operate; protect the server folder according to your local access policy.
 
 ## Verification boundary
 

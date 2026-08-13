@@ -1,6 +1,8 @@
 # Automatic dependency bootstrap
 
-Minecraft Server Studio requires a Java 21 runtime for Paper and Spigot. Spigot setup additionally needs Git because BuildTools uses Git while assembling the selected server revision.
+Minecraft Server Studio selects Java by the selected Paper or Spigot/BuildTools revision. It does not assume Java 21 for every server. Spigot setup additionally needs Git because BuildTools uses Git while assembling the selected server revision.
+
+The current compatibility policy includes Java 8, 11, 16, 17, 21, and 25. Paper 26.1+ requires Java 25; older Paper ranges use the documented version-specific Java feature. BuildTools keeps its own version-aware preflight and is the final authority for its build operation.
 
 ## In-app flow
 

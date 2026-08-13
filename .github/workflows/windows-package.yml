@@ -1,0 +1,76 @@
+name: Windows package
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Dependency inventory: the runner supplies Windows; setup-node supplies Node.js 22
+# and npm; npm ci restores the versions pinned in package-lock.json. The package
+# command invokes the repository's Squirrel.Windows configuration only.
+jobs:
+  package:
+    name: Build unsigned Squirrel package
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      CSC_LINK: ""
+      CSC_KEY_PASSWORD: ""
+      CSC_NAME: ""
+      WIN_CSC_LINK: ""
+      WIN_CSC_KEY_PASSWORD: ""
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Restore declared dependencies
+        run: npm ci
+
+      - name: Build unsigned Squirrel.Windows package
+        run: npm run package
+
+      - name: Collect package evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $evidenceRoot = Join-Path $env:RUNNER_TEMP 'windows-package-evidence'
+          $artifactRoot = Join-Path $evidenceRoot 'squirrel-windows'
+          New-Item -ItemType Directory -Force -Path $artifactRoot | Out-Null
+
+          $metadata = [ordered]@{
+            runId = $env:GITHUB_RUN_ID
+            runAttempt = $env:GITHUB_RUN_ATTEMPT
+            commit = $env:GITHUB_SHA
+            job = $env:GITHUB_JOB
+            jobStatus = '${{ job.status }}'
+            runnerOs = $env:RUNNER_OS
+            runnerArchitecture = $env:RUNNER_ARCH
+            node = (node --version)
+            npm = (npm --version)
+          }
+          $metadata | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $evidenceRoot 'build-context.json')
+
+          $squirrelOutput = Join-Path $env:GITHUB_WORKSPACE 'dist\squirrel-windows'
+          if (Test-Path -LiteralPath $squirrelOutput) {
+            Copy-Item -LiteralPath (Join-Path $squirrelOutput '*') -Destination $artifactRoot -Recurse -Force
+          }
+
+      - name: Upload package evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-squirrel-package-${{ github.run_id }}
+          path: ${{ runner.temp }}/windows-package-evidence
+          if-no-files-found: warn
+          retention-days: 7
