@@ -13,6 +13,8 @@
 - Version/flavor/capability Command Center registry with typed action families, source badges, tokenized Minecraft-only fallback, and high-impact confirmation metadata.
 - Official Spigot metadata and BuildTools preflight source, safe workspace planning, structured flag composer, generated configuration preservation, plugin metadata inspection, and staged JAR rollback plan.
 - Protected main-process credential-vault source for RCON and management-protocol credentials.
+- Bounded local directory-snapshot backups for world, configuration, plugin JAR/configuration, logs, and `server.jar`, with free-space preflight, manifest hashes, local save acknowledgement for running managed servers, and explicit restore confirmation.
+- Explicit stopped-server Paper stable-update and retained-JAR rollback source using official Downloads Service metadata, reviewed byte size/SHA-256, local staging, pre-replacement backup, and plugin-update exclusion.
 - Independent local desktop status destination and browser-local public-site status destination, both with explicit no-external-bridge boundaries and incomplete-evidence disclosure.
 - Pages-ready public marketing source with `contract.js` loaded before its browser-local interaction engine.
 - Windows-only GitHub Actions release workflow source for every push and manual dispatch: unsigned Squirrel.Windows packaging, artifact-set and `NotSigned` verification, safe package-evidence upload, line-count release notes, and a rerun-unique non-draft GitHub Release when the workflow reaches publication. The workflow intentionally has no test or lint jobs.

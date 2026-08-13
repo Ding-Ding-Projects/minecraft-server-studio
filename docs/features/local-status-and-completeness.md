@@ -77,3 +77,4 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Server orchestration](server-orchestration.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)
 - [Spigot BuildTools adapter](spigot-buildtools.md)
+- [Bounded backups and Paper updates](backups-and-paper-updates.md)

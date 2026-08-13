@@ -23,6 +23,7 @@ const {
 } = require('./command-center-registry.cjs');
 const { discoverySnapshotStatus } = require('./minecraft-management-protocol.cjs');
 const javaRuntime = require('./java-runtime-manager.cjs');
+const backupLifecycle = require('./server-backup-manager.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
 const SPIGOT_BUILDTOOLS_URL = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
@@ -109,7 +110,7 @@ const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'plugins': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Plugin staging is present; manifest inspection is being integrated.' } },
   'configuration': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'verified', detail: 'Rich server, world, gameplay, network, and advanced property controls are registered.' } },
   'console-and-rcon': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Local console is available; vault-backed RCON integration is in progress.' } },
-  'backups-and-updates': { implementationPath: [], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Backup-first update and rollback controls remain pending.' } },
+  'backups-and-updates': { implementationPath: ['src/main/server-backup-manager.cjs', 'src/main/server-manager.cjs', 'src/main/main.cjs', 'src/main/preload.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/backups-and-paper-updates.md'], localization: { state: 'pending' }, test: { state: 'pending', detail: 'No test was run in this delivery pass.' }, capture: { state: 'pending', detail: 'No capture was run in this delivery pass.' }, evidence: { state: 'in-progress', detail: 'Bounded local snapshot, restore, Paper stable-update, and rollback source is registered; verification remains pending.' } },
   'settings-appearance-and-localization': { implementationPath: [], documentationPath: ['docs/features/local-status-and-completeness.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Universal settings and localization work remain incomplete.' } },
   'file-converter': { implementationPath: [], documentationPath: [], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'The desktop local converter surface remains pending.' } },
   'ollama': { implementationPath: [], documentationPath: [], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'The desktop local Ollama suite remains pending.' } },
@@ -510,6 +511,32 @@ function copyPublicManagement(server) {
   };
 }
 
+function pathIsWithin(root, candidate) {
+  if (!root || !candidate) return false;
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return Boolean(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function backupDirectoryForDisplay(storageRoot, server) {
+  const serverId = stringValue(server?.id).trim();
+  if (!/^[A-Za-z0-9._-]{1,160}$/.test(serverId)) throw new Error('The selected server has an invalid local backup identifier.');
+  return path.join(path.resolve(storageRoot), serverId);
+}
+
+function copyPublicPaperUpdate(record) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  return {
+    state: stringValue(record.state).slice(0, 64) || 'unknown',
+    updatedAt: record.updatedAt || null,
+    rolledBackAt: record.rolledBackAt || null,
+    build: Number.isSafeInteger(record.build) ? record.build : null,
+    minecraftVersion: stringValue(record.minecraftVersion).slice(0, 64) || null,
+    releaseSha256: /^[a-f0-9]{64}$/i.test(stringValue(record.releaseSha256)) ? stringValue(record.releaseSha256).toLowerCase() : null,
+    backupId: /^[A-Za-z0-9._-]{1,160}$/.test(stringValue(record.backupId)) ? stringValue(record.backupId) : null,
+    rollbackAvailable: Boolean(record.rollbackJar)
+  };
+}
+
 function copyPublicServer(server) {
   return {
     id: server.id,
@@ -524,6 +551,7 @@ function copyPublicServer(server) {
     eulaAccepted: Boolean(server.eulaAccepted),
     gameRules: { ...normalizeGameRules(server.gameRules) },
     management: copyPublicManagement(server),
+    paperUpdate: copyPublicPaperUpdate(server.lastPaperUpdate),
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     settings: { ...server.settings }
@@ -545,6 +573,11 @@ class ServerManager {
     this.buildToolsMetadata = null;
     this.buildToolsPlans = new Map();
     this.commandDiscovery = new Map();
+    this.backupStorageDir = path.join(this.dataDir, 'backups');
+    this.backupPlans = new Map();
+    this.restorePlans = new Map();
+    this.paperUpdatePlans = new Map();
+    this.paperRollbackPlans = new Map();
     this.registryFile = path.join(this.dataDir, 'servers.json');
     this.toolchainDir = path.join(this.dataDir, 'toolchain');
     this.javaPortableSources = options.javaPortableSources && typeof options.javaPortableSources === 'object'
@@ -828,6 +861,266 @@ class ServerManager {
       throw new Error(plan.execution?.fallback || 'The selected command route is not currently available.');
     }
     return plan;
+  }
+
+  pruneLifecyclePlans() {
+    const now = Date.now();
+    for (const plans of [this.backupPlans, this.restorePlans, this.paperUpdatePlans, this.paperRollbackPlans]) {
+      for (const [serverId, plan] of plans) {
+        if (!plan?.expiresAt || Date.parse(plan.expiresAt) <= now) plans.delete(serverId);
+      }
+    }
+  }
+
+  backupConsistencyPreview(id) {
+    return this.processes.has(id)
+      ? {
+          state: 'requires-local-save-acknowledgement',
+          message: 'The server is running. Starting this backup will send save-all and wait for the local managed process to acknowledge it. If no acknowledgement arrives, the backup is refused.'
+        }
+      : {
+          state: 'server-stopped',
+          message: 'The server is stopped. No live save acknowledgement is required before the snapshot is copied.'
+        };
+  }
+
+  async prepareBackupPlan(id) {
+    const server = await this.getServer(id);
+    const plan = await backupLifecycle.createServerBackupPlan({ server, backupStorageRoot: this.backupStorageDir });
+    plan.consistency = this.backupConsistencyPreview(id);
+    this.backupPlans.set(id, plan);
+    this.pruneLifecyclePlans();
+    this.recordLocalEvidence(`backup-plan-${id}`, 'Server backup preview', `Prepared a ${plan.state} bounded local snapshot preview for ${server.name}.`, plan.destination.finalPath);
+    this.emit({ type: 'backup-preflight', serverId: id, message: `Prepared a ${plan.state} backup preview for ${server.name}.` });
+    return backupLifecycle.publicBackupPlan(plan);
+  }
+
+  async executeBackupPlanForServer(server, plan, operationId) {
+    const consistency = await this.awaitLocalSaveAcknowledgement(server.id);
+    const result = await backupLifecycle.executeServerBackupPlan(plan, {
+      onProgress: ({ relativePath, completedFiles, totalFiles }) => {
+        this.emit({
+          type: 'backup-progress',
+          serverId: server.id,
+          operationId,
+          message: `Snapshotting ${completedFiles}/${totalFiles}: ${relativePath}`
+        });
+      }
+    });
+    return { ...result, consistency };
+  }
+
+  async createBackup(id, confirmation = {}) {
+    const server = await this.getServer(id);
+    const plan = this.backupPlans.get(id);
+    if (!plan) throw new Error('Prepare a backup preview before starting a local snapshot.');
+    if (text(confirmation.digest).trim() !== plan.authority?.digest) throw new Error('The backup request does not match the current preview. Refresh the preview before starting the snapshot.');
+    const operationId = this.beginStatusOperation(`backup-${id}-${Date.now()}`, `Create backup for ${server.name}`, 'Waiting for the required local save acknowledgement, then creating a bounded directory snapshot.');
+    try {
+      const backup = await this.executeBackupPlanForServer(server, plan, operationId);
+      this.completeStatusOperation(operationId, 'complete', `Created backup ${backup.backupId} with ${backup.fileCount} files.`);
+      this.recordLocalEvidence(`backup-${backup.backupId}`, 'Local server backup', `Created a bounded local snapshot with ${backup.fileCount} files and manifest hashes.`, backup.manifestPath);
+      this.emit({ type: 'backup-created', serverId: id, operationId, message: `Created local backup ${backup.backupId}.` });
+      this.backupPlans.delete(id);
+      return backup;
+    } catch (error) {
+      this.completeStatusOperation(operationId, 'failed', error.message);
+      this.emit({ type: 'backup-failed', serverId: id, operationId, message: error.message });
+      throw error;
+    }
+  }
+
+  async backupOverview(id) {
+    const server = await this.getServer(id);
+    const backups = await backupLifecycle.listServerBackups({ server, backupStorageRoot: this.backupStorageDir });
+    const rollbackPath = stringValue(server.lastPaperUpdate?.rollbackJar).trim();
+    const rollbackRoot = path.join(server.serverPath, '.minecraft-server-studio', 'jar-rollbacks');
+    const rollbackExists = Boolean(rollbackPath) && pathIsWithin(rollbackRoot, rollbackPath) && await pathExists(rollbackPath);
+    const rollback = rollbackExists
+      ? { available: true, reason: null }
+      : {
+          available: false,
+          reason: rollbackPath
+            ? 'The recorded Paper JAR rollback is unavailable or outside the app-controlled rollback directory.'
+            : 'No Paper JAR rollback has been recorded for this server.'
+        };
+    return {
+      serverId: server.id,
+      serverStatus: this.processes.has(id) ? 'running' : 'stopped',
+      backupStoragePath: backupDirectoryForDisplay(this.backupStorageDir, server),
+      backups,
+      latestBackup: backups[0] || null,
+      rollback,
+      lastPaperUpdate: copyPublicPaperUpdate(server.lastPaperUpdate),
+      consistency: this.backupConsistencyPreview(id)
+    };
+  }
+
+  async prepareRestorePlan(id, backupId) {
+    const server = await this.getServer(id);
+    const backup = await backupLifecycle.findServerBackup({ server, backupStorageRoot: this.backupStorageDir, backupId });
+    const plan = backupLifecycle.createServerRestorePlan({ server, backup });
+    if (this.processes.has(id)) {
+      plan.state = 'blocked';
+      plan.blockers = ['Stop the local server before restoring a snapshot. The app will not replace world, configuration, plugin, log, or server JAR state while the server is running.'];
+    }
+    this.restorePlans.set(id, plan);
+    this.pruneLifecyclePlans();
+    this.emit({ type: 'restore-preflight', serverId: id, message: `Prepared a ${plan.state} restore preview for backup ${backup.record.backupId}.` });
+    return backupLifecycle.publicRestorePlan(plan);
+  }
+
+  async persistLifecycleMetadata(id, update) {
+    const registry = await this.registry();
+    const server = registry.servers.find((candidate) => candidate.id === id);
+    if (!server) throw new Error('The selected server no longer exists in the local registry.');
+    update(server);
+    server.updatedAt = new Date().toISOString();
+    await this.saveRegistry(registry);
+    return server;
+  }
+
+  async restoreBackup(id, confirmation = {}) {
+    const server = await this.getServer(id);
+    const plan = this.restorePlans.get(id);
+    if (!plan) throw new Error('Prepare a restore preview before replacing managed server state.');
+    backupLifecycle.assertDestructiveConfirmation(plan, confirmation, 'Snapshot restore');
+    if (this.processes.has(id)) throw new Error('Stop the local server before restoring a snapshot. The app will not replace managed server state while it is running.');
+    if (plan.state !== 'ready') throw new Error(plan.blockers?.[0] || 'The prepared restore plan is blocked.');
+    const operationId = this.beginStatusOperation(`restore-${id}-${Date.now()}`, `Restore backup for ${server.name}`, 'Creating a pre-restore safety snapshot before replacing the reviewed managed server roots.');
+    try {
+      const safetyPlan = await backupLifecycle.createServerBackupPlan({ server, backupStorageRoot: this.backupStorageDir });
+      if (safetyPlan.state !== 'ready') throw new Error(safetyPlan.blockers[0] || 'A pre-restore safety backup could not be prepared.');
+      const preRestoreBackup = await this.executeBackupPlanForServer(server, safetyPlan, operationId);
+      const restored = await backupLifecycle.restoreServerSnapshot(plan);
+      if (plan.targets.includes('server.jar')) {
+        await this.persistLifecycleMetadata(id, (record) => { record.lastPaperUpdate = null; });
+      }
+      this.completeStatusOperation(operationId, 'complete', `Restored backup ${restored.restoredBackupId} after creating safety backup ${preRestoreBackup.backupId}.`);
+      this.recordLocalEvidence(`restore-${id}`, 'Local server restore', `Restored ${restored.targets.length} reviewed managed roots after creating pre-restore backup ${preRestoreBackup.backupId}.`, preRestoreBackup.manifestPath);
+      this.emit({ type: 'backup-restored', serverId: id, operationId, message: `Restored backup ${restored.restoredBackupId} after a new safety backup was created.` });
+      this.restorePlans.delete(id);
+      return { ...restored, preRestoreBackup };
+    } catch (error) {
+      this.completeStatusOperation(operationId, 'failed', error.message);
+      this.emit({ type: 'backup-restore-failed', serverId: id, operationId, message: error.message });
+      throw error;
+    }
+  }
+
+  async preparePaperUpdatePlan(id) {
+    const server = await this.getServer(id);
+    if (server.software !== 'paper') {
+      return {
+        kind: 'paper-server-update',
+        state: 'blocked',
+        blockers: ['Paper updates apply only to Paper server definitions. Spigot uses its explicit BuildTools workflow.'],
+        backupPreflight: null,
+        replacement: { requiresStoppedServer: true, requiresBackupFirst: true, autoUpdatesPlugins: false }
+      };
+    }
+    if (this.processes.has(id)) {
+      return {
+        kind: 'paper-server-update',
+        state: 'blocked',
+        blockers: ['Stop the local Paper server before checking or applying a server JAR replacement.'],
+        backupPreflight: null,
+        replacement: { requiresStoppedServer: true, requiresBackupFirst: true, autoUpdatesPlugins: false }
+      };
+    }
+    const backupPlan = await backupLifecycle.createServerBackupPlan({ server, backupStorageRoot: this.backupStorageDir });
+    const plan = await backupLifecycle.createPaperUpdatePlan({ server, backupPlan });
+    this.paperUpdatePlans.set(id, plan);
+    this.pruneLifecyclePlans();
+    this.emit({ type: 'paper-update-preflight', serverId: id, message: `Prepared a ${plan.state} official stable Paper update preview.` });
+    return backupLifecycle.publicPaperUpdatePlan(plan);
+  }
+
+  async applyPaperUpdate(id, confirmation = {}) {
+    const server = await this.getServer(id);
+    const plan = this.paperUpdatePlans.get(id);
+    if (!plan) throw new Error('Prepare a Paper update preview before replacing server.jar.');
+    backupLifecycle.assertDestructiveConfirmation(plan, confirmation, 'Paper server JAR replacement');
+    if (this.processes.has(id)) throw new Error('Stop the local Paper server before replacing server.jar.');
+    if (plan.state !== 'ready') throw new Error(plan.state === 'up-to-date' ? 'The selected server JAR already matches the latest reviewed stable Paper build.' : (plan.blockers?.[0] || 'The Paper update plan is blocked.'));
+    const operationId = this.beginStatusOperation(`paper-update-${id}-${Date.now()}`, `Update Paper for ${server.name}`, 'Creating the required pre-update backup before downloading and validating the official stable server JAR.');
+    try {
+      const backup = await this.executeBackupPlanForServer(server, plan.backupPlan, operationId);
+      const applied = await backupLifecycle.applyPaperUpdatePlan(plan, {
+        onProgress: ({ bytes, expectedBytes }) => this.emit({ type: 'paper-update-progress', serverId: id, operationId, message: `Downloading reviewed Paper JAR: ${bytes.toLocaleString()} of ${expectedBytes.toLocaleString()} bytes.` })
+      });
+      await this.persistLifecycleMetadata(id, (record) => {
+        record.lastPaperUpdate = {
+          state: 'updated',
+          updatedAt: applied.updatedAt,
+          build: applied.release.build,
+          minecraftVersion: applied.release.minecraftVersion,
+          releaseSha256: applied.release.sha256,
+          backupId: backup.backupId,
+          rollbackJar: applied.rollbackJar
+        };
+      });
+      this.completeStatusOperation(operationId, 'complete', `Updated Paper build ${applied.release.build}; backup ${backup.backupId} and a server JAR rollback record are available.`);
+      this.recordLocalEvidence(`paper-update-${id}`, 'Paper update and rollback record', `Promoted official stable Paper build ${applied.release.build} after creating backup ${backup.backupId}.`, applied.rollbackJar);
+      this.emit({ type: 'paper-updated', serverId: id, operationId, message: `Updated Paper build ${applied.release.build}; the prior server JAR remains available for rollback.` });
+      this.paperUpdatePlans.delete(id);
+      return { ...applied, backupReference: backup };
+    } catch (error) {
+      this.completeStatusOperation(operationId, 'failed', error.message);
+      this.emit({ type: 'paper-update-failed', serverId: id, operationId, message: error.message });
+      throw error;
+    }
+  }
+
+  async preparePaperRollbackPlan(id) {
+    const server = await this.getServer(id);
+    if (server.software !== 'paper') {
+      return { kind: 'paper-server-rollback', state: 'blocked', blockers: ['Paper rollback applies only to Paper server definitions.'], backupPreflight: null };
+    }
+    if (this.processes.has(id)) {
+      return { kind: 'paper-server-rollback', state: 'blocked', blockers: ['Stop the local Paper server before replacing server.jar from a rollback record.'], backupPreflight: null };
+    }
+    const backupPlan = await backupLifecycle.createServerBackupPlan({ server, backupStorageRoot: this.backupStorageDir });
+    const plan = await backupLifecycle.createPaperRollbackPlan({ server, lastPaperUpdate: server.lastPaperUpdate, backupPlan });
+    this.paperRollbackPlans.set(id, plan);
+    this.pruneLifecyclePlans();
+    this.emit({ type: 'paper-rollback-preflight', serverId: id, message: `Prepared a ${plan.state} Paper rollback preview.` });
+    return backupLifecycle.publicPaperRollbackPlan(plan);
+  }
+
+  async applyPaperRollback(id, confirmation = {}) {
+    const server = await this.getServer(id);
+    const plan = this.paperRollbackPlans.get(id);
+    if (!plan) throw new Error('Prepare a Paper rollback preview before replacing server.jar.');
+    backupLifecycle.assertDestructiveConfirmation(plan, confirmation, 'Paper server JAR rollback');
+    if (this.processes.has(id)) throw new Error('Stop the local Paper server before replacing server.jar from the rollback record.');
+    if (plan.state !== 'ready') throw new Error(plan.blockers?.[0] || 'The Paper rollback plan is blocked.');
+    const operationId = this.beginStatusOperation(`paper-rollback-${id}-${Date.now()}`, `Rollback Paper for ${server.name}`, 'Creating the required pre-rollback backup before replacing server.jar from the retained rollback record.');
+    try {
+      const backup = await this.executeBackupPlanForServer(server, plan.backupPlan, operationId);
+      const applied = await backupLifecycle.applyPaperRollbackPlan(plan);
+      await this.persistLifecycleMetadata(id, (record) => {
+        record.lastPaperUpdate = {
+          state: 'rolled-back',
+          updatedAt: new Date().toISOString(),
+          rolledBackAt: applied.rolledBackAt,
+          build: null,
+          minecraftVersion: record.minecraftVersion,
+          releaseSha256: applied.restoredJar.sha256,
+          backupId: backup.backupId,
+          rollbackJar: applied.rollbackJar
+        };
+      });
+      this.completeStatusOperation(operationId, 'complete', `Restored the retained server JAR and created backup ${backup.backupId}.`);
+      this.recordLocalEvidence(`paper-rollback-${id}`, 'Paper rollback record', `Restored the retained Paper server JAR after creating backup ${backup.backupId}.`, applied.rollbackJar);
+      this.emit({ type: 'paper-rolled-back', serverId: id, operationId, message: 'Restored the retained Paper server JAR and preserved the replaced JAR as the next rollback record.' });
+      this.paperRollbackPlans.delete(id);
+      return { ...applied, backupReference: backup };
+    } catch (error) {
+      this.completeStatusOperation(operationId, 'failed', error.message);
+      this.emit({ type: 'paper-rollback-failed', serverId: id, operationId, message: error.message });
+      throw error;
+    }
   }
 
   async registry() {
@@ -1238,19 +1531,32 @@ class ServerManager {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe']
     });
-    const processEntry = { child, startedAt: new Date().toISOString(), stopping: false, javaPath: java, launchTokens: launch.args, pid: child.pid || null };
+    const processEntry = {
+      child,
+      startedAt: new Date().toISOString(),
+      stopping: false,
+      javaPath: java,
+      launchTokens: launch.args,
+      pid: child.pid || null,
+      saveWaiters: new Set()
+    };
     this.processes.set(id, processEntry);
     const forward = (stream, channel) => stream.on('data', (chunk) => {
       for (const line of chunk.toString().split(/\r?\n/)) {
-        if (line.trim()) this.emit({ type: 'server-output', serverId: id, channel, message: redactOutput(line) });
+        if (line.trim()) {
+          this.observeServerOutput(id, line);
+          this.emit({ type: 'server-output', serverId: id, channel, message: redactOutput(line) });
+        }
       }
     });
     forward(child.stdout, 'stdout');
     forward(child.stderr, 'stderr');
     child.once('error', (error) => {
+      this.rejectPendingSaveWaiters(id, new Error('The local server process reported an error before it acknowledged save-all.'));
       this.emit({ type: 'server-output', serverId: id, channel: 'stderr', message: error.message });
     });
     child.once('close', (code, signal) => {
+      this.rejectPendingSaveWaiters(id, new Error('The local server stopped before it acknowledged save-all.'));
       this.processes.delete(id);
       this.emit({ type: 'server-state', serverId: id, status: 'stopped', exitCode: code, signal: signal || null });
     });
@@ -1272,6 +1578,55 @@ class ServerManager {
       }
     }, 20_000).unref();
     return { id, status: 'stopping' };
+  }
+
+  observeServerOutput(id, line) {
+    const running = this.processes.get(id);
+    if (!running?.saveWaiters?.size) return;
+    const normalized = stringValue(line);
+    if (!/(?:saved the game|save complete|saved .*chunks|saved .*world)/i.test(normalized)) return;
+    for (const waiter of [...running.saveWaiters]) {
+      clearTimeout(waiter.timer);
+      running.saveWaiters.delete(waiter);
+      waiter.resolve({ state: 'acknowledged', line: redactOutput(normalized).slice(0, 512), acknowledgedAt: new Date().toISOString() });
+    }
+  }
+
+  rejectPendingSaveWaiters(id, error) {
+    const running = this.processes.get(id);
+    if (!running?.saveWaiters?.size) return;
+    for (const waiter of [...running.saveWaiters]) {
+      clearTimeout(waiter.timer);
+      running.saveWaiters.delete(waiter);
+      waiter.reject(error);
+    }
+  }
+
+  async awaitLocalSaveAcknowledgement(id) {
+    const running = this.processes.get(id);
+    if (!running) return { state: 'not-running', message: 'The server is stopped; no live save acknowledgement is required.' };
+    if (!running.child?.stdin?.writable) {
+      throw new Error('The local server process cannot accept save-all. The app refuses a consistency-sensitive backup while it is running.');
+    }
+    const acknowledgement = new Promise((resolve, reject) => {
+      const waiter = {
+        resolve,
+        reject,
+        timer: setTimeout(() => {
+          running.saveWaiters.delete(waiter);
+          reject(new Error('The local server did not acknowledge save-all within 12 seconds. The app refused the consistency-sensitive backup while the server remains running.'));
+        }, 12_000)
+      };
+      running.saveWaiters.add(waiter);
+    });
+    try {
+      running.child.stdin.write('save-all\n');
+    } catch (error) {
+      this.rejectPendingSaveWaiters(id, new Error(`The local server could not accept save-all: ${error.message}`));
+      throw new Error('The local server could not accept save-all. The app refused the consistency-sensitive backup while the server remains running.');
+    }
+    this.emit({ type: 'backup-save-requested', serverId: id, message: 'Requested save-all and waiting for the local server acknowledgement before copying a consistency-sensitive backup.' });
+    return acknowledgement;
   }
 
   async sendConsoleCommand(id, command) {

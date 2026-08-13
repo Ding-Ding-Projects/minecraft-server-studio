@@ -72,6 +72,7 @@
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network">Network</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime">Runtime</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools">BuildTools</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-backups" data-tab="backups">Backups + updates</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live">Live management</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands">Command Center</button>
             <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status">Local status</button>
@@ -182,6 +183,68 @@
                 <label class="field wide"><span>Advanced BuildTools tokens</span><input id="buildtools-expert-tokens" type="text" maxlength="2048" placeholder="Optional tokenized flags; shell operators and control characters are rejected"><small>Use documented BuildTools arguments only. This remains a tokenized fallback, not a shell command field.</small></label>
                 <div class="wide guarded-action-card"><div><h4>Stage, inspect, swap, and retain rollback</h4><p>BuildTools output is never copied directly over a live server JAR. The release path stages the JAR, validates it, backs up the current server JAR, swaps atomically, and preserves rollback evidence.</p></div><button id="plan-buildtools-button" type="button" class="primary-action">Prepare BuildTools plan</button></div>
                 <div class="wide guarded-action-card"><div><h4>Run the confirmed BuildTools plan</h4><p>After reviewing the generated workspace, arguments, and rollback plan, start the build explicitly. This action never uses a shell and does not overwrite a running server.</p></div><button id="execute-buildtools-button" type="button" class="danger-action" disabled>Build and promote staged JAR</button></div>
+              </div>
+            </section>
+
+            <section id="panel-backups" class="settings-panel" role="tabpanel" data-panel="backups" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">LOCAL SNAPSHOTS AND PAPER LIFECYCLE</p>
+                  <h3>Backups and Paper updates</h3>
+                  <p class="muted">Backups are bounded local directory snapshots with a manifest and per-file SHA-256 values. The app never reads or serializes its credential vault into a snapshot. Paper replacement is explicit, stopped-server-only, backup-first, checksum-validated, and limited to <code>server.jar</code>.</p>
+                </div>
+                <span id="backup-server-state" class="status-chip">No server selected</span>
+              </div>
+              <div class="settings-grid">
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Snapshot readiness</h4>
+                    <p id="backup-consistency-copy" class="muted">Choose a local server to inspect its backup and update lifecycle.</p>
+                    <p id="backup-storage-copy" class="muted">No local backup storage is selected.</p>
+                    <p id="backup-latest-copy" class="muted">No complete local backup is available yet.</p>
+                  </div>
+                  <div class="live-connection-actions">
+                    <button id="backup-refresh-button" class="outlined-action" type="button">Refresh backup state</button>
+                    <button id="backup-preflight-button" class="primary-action" type="button">Prepare backup preview</button>
+                    <button id="backup-create-button" class="danger-action" type="button" disabled>Create bounded backup</button>
+                  </div>
+                </section>
+
+                <section class="wide guarded-action-card">
+                  <div>
+                    <h4>Backup preview</h4>
+                    <p id="backup-plan-copy">Prepare a bounded backup preview to inventory world, configuration, plugin, log, and server JAR state before copying.</p>
+                    <p id="backup-plan-detail" class="muted">The app never reads or serializes the credential vault into a backup snapshot.</p>
+                  </div>
+                </section>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Restore a local snapshot</h4>
+                    <p id="restore-plan-copy" class="muted">Choose a complete local snapshot, then prepare a stopped-server restore preview.</p>
+                    <p id="restore-plan-detail" class="muted">No restore preview has been prepared.</p>
+                  </div>
+                  <label class="field wide"><span>Complete local backup</span><select id="restore-backup-select"><option value="">No complete local backups available</option></select><small>Restore creates a new safety backup first, then requires both independent confirmations and the full authorization slider before replacing the reviewed roots.</small></label>
+                  <div class="live-connection-actions"><button id="restore-preflight-button" class="outlined-action" type="button" disabled>Prepare restore preview</button><button id="restore-backup-button" class="danger-action" type="button" disabled>Restore reviewed snapshot</button></div>
+                </section>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Official stable Paper update</h4>
+                    <p id="paper-update-plan-copy" class="muted">Check the official Paper Downloads Service for a stable JAR and a SHA-256-verified replacement preview.</p>
+                    <p id="paper-update-plan-detail" class="muted">Only a stopped Paper server can receive a reviewed server.jar replacement. Plugins are never auto-updated.</p>
+                  </div>
+                  <div class="live-connection-actions"><button id="paper-update-preflight-button" class="outlined-action" type="button">Check official stable Paper build</button><button id="paper-update-apply-button" class="danger-action" type="button" disabled>Back up and replace server JAR</button></div>
+                </section>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Retained Paper JAR rollback</h4>
+                    <p id="paper-rollback-copy" class="muted">No Paper JAR rollback record is available.</p>
+                    <p id="paper-rollback-plan-copy" class="muted">A Paper rollback also requires a fresh pre-replacement backup and destructive confirmation.</p>
+                  </div>
+                  <div class="live-connection-actions"><button id="paper-rollback-preflight-button" class="outlined-action" type="button" disabled>Prepare rollback preview</button><button id="paper-rollback-apply-button" class="danger-action" type="button" disabled>Back up and restore retained JAR</button></div>
+                </section>
               </div>
             </section>
 
