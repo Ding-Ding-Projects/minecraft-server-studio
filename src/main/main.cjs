@@ -502,6 +502,10 @@ ipcMain.handle('studio:update-experience-settings', (_event, patch) => {
   requireStudioSettings().updateLocal(patch);
   return experienceSnapshot();
 });
+ipcMain.handle('studio:update-appearance-navigation', (_event, patch) => {
+  requireStudioSettings().updateAppearanceNavigation(patch);
+  return experienceSnapshot();
+});
 ipcMain.handle('studio:narration-schedule-settings', () => experienceSnapshot().narrationSchedule);
 ipcMain.handle('studio:update-narrator-settings', (_event, patch) => {
   requireNarrationScheduleSettings().updateNarrator(patch);

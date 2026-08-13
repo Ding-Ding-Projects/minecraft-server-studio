@@ -55,7 +55,8 @@ const state = {
     statusHubBridge: false,
     authenticatorEntry: false,
     toyLockDraft: false,
-    toyLockUnlock: false
+    toyLockUnlock: false,
+    appearance: false
   }
 };
 
@@ -162,8 +163,54 @@ const regexSearches = {
   schedules: { mode: 'plain', query: '', pattern: '', flags: 'i' }
 };
 
+const SERVER_TAB_IDS = Object.freeze([
+  'general', 'world', 'gameplay', 'network', 'runtime', 'paper-cli', 'buildtools', 'backups',
+  'live', 'commands', 'status', 'advanced', 'plugins', 'console'
+]);
+const DEFAULT_APPEARANCE_NAVIGATION = Object.freeze({
+  state: 'unavailable',
+  detail: 'Appearance and tab-navigation settings have not loaded.',
+  settings: Object.freeze({
+    theme: 'system',
+    density: 'comfortable',
+    seedColor: '#6750A4',
+    typography: Object.freeze({ family: 'system-ui', scale: 1, weight: 400 }),
+    tabs: Object.freeze({ dock: 'left', activeTab: 'general' }),
+    elementOverrides: Object.freeze({
+      shell: Object.freeze({ surface: null, onSurface: null, radius: null }),
+      tabStrip: Object.freeze({ surface: null, onSurface: null, radius: null }),
+      primaryAction: Object.freeze({ surface: null, onSurface: null, radius: null })
+    })
+  })
+});
+const APPEARANCE_TARGET_DEFAULTS = Object.freeze({
+  dark: Object.freeze({
+    shell: Object.freeze({ surface: '#10131A', onSurface: '#E0E5F0', radius: 0 }),
+    tabStrip: Object.freeze({ surface: '#181C25', onSurface: '#C1C7D7', radius: 18 }),
+    primaryAction: Object.freeze({ surface: '#9CCAFF', onSurface: '#003258', radius: 999 })
+  }),
+  light: Object.freeze({
+    shell: Object.freeze({ surface: '#FFFBFE', onSurface: '#1C1B1F', radius: 0 }),
+    tabStrip: Object.freeze({ surface: '#F4EFF4', onSurface: '#49454F', radius: 18 }),
+    primaryAction: Object.freeze({ surface: '#6750A4', onSurface: '#FFFFFF', radius: 999 })
+  })
+});
+const FONT_FAMILY_CSS = Object.freeze({
+  'system-ui': 'system-ui, "Segoe UI", Roboto, Arial, sans-serif',
+  'Segoe UI': '"Segoe UI", system-ui, Arial, sans-serif',
+  Arial: 'Arial, Helvetica, sans-serif',
+  Georgia: 'Georgia, "Times New Roman", serif',
+  Consolas: 'Consolas, "Cascadia Mono", monospace'
+});
+const appearanceContextSearches = {
+  tab: { mode: 'plain', query: '', pattern: '', flags: { i: true, m: false, u: true } },
+  appearance: { mode: 'plain', query: '', pattern: '', flags: { i: true, m: false, u: true } }
+};
+let tabPersistenceTimer = null;
+
 const FALLBACK_EXPERIENCE = Object.freeze({
   local: Object.freeze({ language: 'english', funnyLevels: Object.freeze({ english: 2, cantonese: 3 }), dialogEmoji: true, displayName: 'Minecraft Server Studio' }),
+  appearanceNavigation: DEFAULT_APPEARANCE_NAVIGATION,
   shared: Object.freeze({ state: 'not-loaded', effectiveSchoolMode: true, schoolMode: Object.freeze({ enabled: false, label: 'Mode' }) }),
   credential: Object.freeze({ state: 'unavailable', configured: false })
 });
@@ -182,6 +229,88 @@ function currentExperienceLocal() {
 
 function currentSchoolMode() {
   return currentExperience().shared || FALLBACK_EXPERIENCE.shared;
+}
+
+function currentAppearanceNavigation() {
+  const appearance = currentExperience().appearanceNavigation;
+  if (!appearance || typeof appearance !== 'object' || !appearance.settings || typeof appearance.settings !== 'object') {
+    return DEFAULT_APPEARANCE_NAVIGATION;
+  }
+  return appearance;
+}
+
+function currentAppearanceSettings() {
+  return currentAppearanceNavigation().settings || DEFAULT_APPEARANCE_NAVIGATION.settings;
+}
+
+function effectiveAppearanceTheme(settings = currentAppearanceSettings()) {
+  if (settings.theme === 'light' || settings.theme === 'dark') return settings.theme;
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function appearanceTargetDefaults(target, settings = currentAppearanceSettings()) {
+  return APPEARANCE_TARGET_DEFAULTS[effectiveAppearanceTheme(settings)][target] || APPEARANCE_TARGET_DEFAULTS.dark.shell;
+}
+
+function appearanceTargetValue(target, settings = currentAppearanceSettings()) {
+  const fallback = appearanceTargetDefaults(target, settings);
+  const override = settings.elementOverrides?.[target] || {};
+  return {
+    surface: override.surface || fallback.surface,
+    onSurface: override.onSurface || fallback.onSurface,
+    radius: override.radius ?? fallback.radius,
+    inherited: override.surface === null && override.onSurface === null && override.radius === null
+  };
+}
+
+function setAppearanceCssValue(name, value) {
+  const root = document.documentElement;
+  if (value === null || value === undefined || value === '') root.style.removeProperty(name);
+  else root.style.setProperty(name, String(value));
+}
+
+function applyAppearanceNavigation() {
+  const record = currentAppearanceNavigation();
+  const settings = currentAppearanceSettings();
+  const root = document.documentElement;
+  const editor = $('#server-editor');
+  const navigation = $('#server-tab-navigation');
+  const strip = $('#server-tab-strip');
+  const shell = appearanceTargetValue('shell', settings);
+  const tabStrip = appearanceTargetValue('tabStrip', settings);
+  const primaryAction = appearanceTargetValue('primaryAction', settings);
+  const typography = settings.typography || DEFAULT_APPEARANCE_NAVIGATION.settings.typography;
+  const tabs = settings.tabs || DEFAULT_APPEARANCE_NAVIGATION.settings.tabs;
+
+  root.dataset.theme = ['system', 'light', 'dark'].includes(settings.theme) ? settings.theme : 'system';
+  document.body.dataset.density = ['comfortable', 'compact', 'spacious'].includes(settings.density) ? settings.density : 'comfortable';
+  setAppearanceCssValue('--appearance-seed-color', settings.seedColor || DEFAULT_APPEARANCE_NAVIGATION.settings.seedColor);
+  setAppearanceCssValue('--appearance-font-family', FONT_FAMILY_CSS[typography.family] || FONT_FAMILY_CSS['system-ui']);
+  setAppearanceCssValue('--appearance-type-scale', Number.isFinite(Number(typography.scale)) ? Number(typography.scale) : 1);
+  setAppearanceCssValue('--appearance-font-weight', [400, 500, 600, 700].includes(Number(typography.weight)) ? Number(typography.weight) : 400);
+  setAppearanceCssValue('--appearance-shell-surface', shell.surface);
+  setAppearanceCssValue('--appearance-shell-on-surface', shell.onSurface);
+  setAppearanceCssValue('--appearance-shell-radius', `${shell.radius}px`);
+  setAppearanceCssValue('--appearance-tab-strip-surface', tabStrip.surface);
+  setAppearanceCssValue('--appearance-tab-strip-on-surface', tabStrip.onSurface);
+  setAppearanceCssValue('--appearance-tab-strip-radius', `${tabStrip.radius}px`);
+  setAppearanceCssValue('--appearance-primary-action-surface', primaryAction.surface);
+  setAppearanceCssValue('--appearance-primary-action-on-surface', primaryAction.onSurface);
+  setAppearanceCssValue('--appearance-primary-action-radius', `${primaryAction.radius}px`);
+
+  const dock = ['left', 'right', 'top', 'bottom'].includes(tabs.dock) ? tabs.dock : 'left';
+  if (editor) editor.dataset.tabDock = dock;
+  if (navigation) navigation.dataset.dock = dock;
+  if (strip) strip.setAttribute('aria-orientation', ['left', 'right'].includes(dock) ? 'vertical' : 'horizontal');
+  if (SERVER_TAB_IDS.includes(tabs.activeTab) && tabs.activeTab !== state.activeTab) setActiveTab(tabs.activeTab, { persist: false });
+  hydrateAppearanceNavigationControls();
+  applyAppearanceContextSearch('tab');
+  applyAppearanceContextSearch('appearance');
+  const status = $('#appearance-target-status');
+  if (status && record.state !== 'ready') {
+    status.dataset.state = record.state || 'unavailable';
+    status.textContent = record.detail || 'Appearance and tab-navigation settings are unavailable.';
+  }
 }
 
 function currentNarrationSchedule() {
@@ -763,6 +892,136 @@ function hydrateExperienceControls() {
   $('#experience-display-name').value = local.displayName;
   renderFunnyLevelOutputs();
   renderSchoolModeControls();
+  hydrateAppearanceNavigationControls();
+}
+
+function appearanceNavigationIsReady() {
+  return currentAppearanceNavigation().state === 'ready';
+}
+
+function setAppearanceNavigationControlsDisabled(disabled) {
+  [
+    '#appearance-theme', '#appearance-density', '#appearance-seed-color', '#appearance-font-family',
+    '#appearance-font-scale', '#appearance-font-weight', '#tab-dock', '#save-appearance-navigation-button',
+    '#appearance-target', '#appearance-target-surface', '#appearance-target-on-surface',
+    '#appearance-target-radius', '#reset-appearance-target-button'
+  ].forEach((selector) => {
+    const control = $(selector);
+    if (control) control.disabled = disabled;
+  });
+}
+
+function renderAppearanceTargetEditor() {
+  const target = $('#appearance-target')?.value || 'shell';
+  const settings = currentAppearanceSettings();
+  const override = settings.elementOverrides?.[target] || { surface: null, onSurface: null, radius: null };
+  const effective = appearanceTargetValue(target, settings);
+  const status = $('#appearance-target-status');
+  const surface = $('#appearance-target-surface');
+  const onSurface = $('#appearance-target-on-surface');
+  const radius = $('#appearance-target-radius');
+  if (surface) surface.value = effective.surface;
+  if (onSurface) onSurface.value = effective.onSurface;
+  if (radius) radius.value = String(effective.radius);
+  if (status) {
+    const inherited = override.surface === null && override.onSurface === null && override.radius === null;
+    status.dataset.state = appearanceNavigationIsReady() ? 'ready' : currentAppearanceNavigation().state || 'unavailable';
+    status.textContent = appearanceNavigationIsReady()
+      ? (inherited ? 'This target currently inherits the active theme values.' : 'This target has a local appearance override. Reset it to inherit the active theme again.')
+      : (currentAppearanceNavigation().detail || 'Appearance and tab-navigation settings are unavailable.');
+  }
+}
+
+function previewSelectedAppearanceTarget() {
+  const target = $('#appearance-target')?.value;
+  const surface = $('#appearance-target-surface')?.value;
+  const onSurface = $('#appearance-target-on-surface')?.value;
+  const radius = Number($('#appearance-target-radius')?.value);
+  const status = $('#appearance-target-status');
+  if (!appearanceNavigationIsReady() || !target || !surface || !onSurface || !Number.isInteger(radius) || radius < 0 || radius > 999) return;
+  const prefix = target === 'shell' ? 'shell' : target === 'tabStrip' ? 'tab-strip' : 'primary-action';
+  setAppearanceCssValue(`--appearance-${prefix}-surface`, surface);
+  setAppearanceCssValue(`--appearance-${prefix}-on-surface`, onSurface);
+  setAppearanceCssValue(`--appearance-${prefix}-radius`, `${radius}px`);
+  state.unsaved.appearance = true;
+  if (status) {
+    status.dataset.state = 'ready';
+    status.textContent = 'Preview applied to the selected target. Apply appearance and tabs to persist it.';
+  }
+}
+
+function hydrateAppearanceNavigationControls() {
+  const record = currentAppearanceNavigation();
+  const settings = currentAppearanceSettings();
+  const typography = settings.typography || DEFAULT_APPEARANCE_NAVIGATION.settings.typography;
+  const tabs = settings.tabs || DEFAULT_APPEARANCE_NAVIGATION.settings.tabs;
+  if ($('#appearance-theme')) $('#appearance-theme').value = settings.theme || 'system';
+  if ($('#appearance-density')) $('#appearance-density').value = settings.density || 'comfortable';
+  if ($('#appearance-seed-color')) $('#appearance-seed-color').value = settings.seedColor || '#6750A4';
+  if ($('#appearance-font-family')) $('#appearance-font-family').value = typography.family || 'system-ui';
+  if ($('#appearance-font-scale')) $('#appearance-font-scale').value = String(typography.scale || 1);
+  if ($('#appearance-font-scale-output')) $('#appearance-font-scale-output').textContent = `${Math.round(Number(typography.scale || 1) * 100)}%`;
+  if ($('#appearance-font-weight')) $('#appearance-font-weight').value = String(typography.weight || 400);
+  if ($('#tab-dock')) $('#tab-dock').value = tabs.dock || 'left';
+  setAppearanceNavigationControlsDisabled(record.state !== 'ready');
+  renderAppearanceTargetEditor();
+}
+
+async function persistAppearanceNavigation(patch, successMessage) {
+  const snapshot = await safely(() => window.studio.updateAppearanceNavigation(patch), successMessage);
+  if (snapshot) applyExperienceSnapshot(snapshot);
+  return snapshot;
+}
+
+async function saveAppearanceNavigation() {
+  const target = $('#appearance-target')?.value;
+  if (!target) return;
+  const settings = currentAppearanceSettings();
+  const snapshot = await persistAppearanceNavigation({
+    theme: $('#appearance-theme').value,
+    density: $('#appearance-density').value,
+    seedColor: $('#appearance-seed-color').value,
+    typography: {
+      family: $('#appearance-font-family').value,
+      scale: Number($('#appearance-font-scale').value),
+      weight: Number($('#appearance-font-weight').value)
+    },
+    tabs: { ...settings.tabs, dock: $('#tab-dock').value, activeTab: state.activeTab },
+    elementOverrides: {
+      [target]: {
+        surface: $('#appearance-target-surface').value,
+        onSurface: $('#appearance-target-on-surface').value,
+        radius: Number($('#appearance-target-radius').value)
+      }
+    }
+  }, 'Appearance and tab-navigation settings applied.');
+  if (snapshot) state.unsaved.appearance = false;
+  else renderAppearanceTargetEditor();
+}
+
+async function resetAppearanceTarget() {
+  const target = $('#appearance-target')?.value;
+  if (!target) return;
+  const snapshot = await persistAppearanceNavigation({
+    elementOverrides: { [target]: { surface: null, onSurface: null, radius: null } }
+  }, 'Selected appearance target now inherits the active theme.');
+  if (snapshot) state.unsaved.appearance = false;
+}
+
+function persistActiveTab(tab) {
+  if (!appearanceNavigationIsReady()) return;
+  if (tabPersistenceTimer) clearTimeout(tabPersistenceTimer);
+  tabPersistenceTimer = setTimeout(() => {
+    tabPersistenceTimer = null;
+    const settings = currentAppearanceSettings();
+    void persistAppearanceNavigation({ tabs: { ...settings.tabs, activeTab: tab } });
+  }, 180);
+}
+
+function changeTabDock() {
+  if (!appearanceNavigationIsReady()) return;
+  const settings = currentAppearanceSettings();
+  void persistAppearanceNavigation({ tabs: { ...settings.tabs, dock: $('#tab-dock').value, activeTab: state.activeTab } });
 }
 
 function applyExperienceSnapshot(snapshot) {
@@ -775,6 +1034,7 @@ function applyExperienceSnapshot(snapshot) {
     state.narratorRuntime || {}
   );
   applyLocalizedCopy();
+  applyAppearanceNavigation();
   hydrateExperienceControls();
   renderNarrationScheduleControls(narratorSnapshot);
   renderPreferenceSearch();
@@ -791,6 +1051,10 @@ function openExperienceSettings() {
 
 function closeExperienceSettings() {
   const dialog = $('#experience-settings-dialog');
+  if (state.unsaved.appearance) {
+    state.unsaved.appearance = false;
+    applyAppearanceNavigation();
+  }
   if (dialog?.open) dialog.close();
 }
 
@@ -2787,18 +3051,268 @@ function renderAll() {
   setActiveTab(state.activeTab);
 }
 
-function setActiveTab(tab) {
+function appearanceContextSearchElements(id) {
+  if (id === 'tab') return $$('#server-editor .tab');
+  if (id === 'appearance') return $$('.appearance-searchable');
+  return [];
+}
+
+function appearanceContextSearchLabel(id, element) {
+  if (id === 'tab') return String(element.textContent || '').replace(/\s+/g, ' ').trim();
+  return String(element.dataset.appearanceSearch || element.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function appearanceContextSearchControls(id) {
+  return {
+    input: $(`#${id}-search`),
+    toggle: $(`#${id}-search-regex-toggle`),
+    builder: $(`#${id}-search-regex-builder`),
+    pattern: $(`#${id}-search-pattern`),
+    sample: $(`#${id}-search-sample`),
+    feedback: $(`#${id}-search-regex-feedback`),
+    captures: $(`#${id}-search-regex-captures`),
+    status: $(`#${id}-search-status`),
+    flags: ['i', 'm', 'u'].reduce((result, flag) => ({ ...result, [flag]: $(`#${id}-search-flag-${flag}`) }), {})
+  };
+}
+
+function appearanceContextSearchFlags(id) {
+  const controls = appearanceContextSearchControls(id);
+  return ['i', 'm', 'u'].filter((flag) => controls.flags[flag]?.checked).join('');
+}
+
+function buildAppearanceContextSearchMatcher(id) {
+  const search = appearanceContextSearches[id];
+  const controls = appearanceContextSearchControls(id);
+  const query = String(controls.input?.value || '').slice(0, 256);
+  search.query = query;
+  if (search.mode !== 'regex') {
+    const normalized = query.trim().toLocaleLowerCase();
+    return {
+      kind: 'plain',
+      query,
+      detail: normalized ? `Plain-text matching for “${query.trim()}”.` : 'Plain-text matching with no query shows every item.',
+      test: (label) => ({ matches: !normalized || label.toLocaleLowerCase().includes(normalized), captures: [] })
+    };
+  }
+  const pattern = String(controls.pattern?.value ?? search.pattern ?? '').slice(0, 256);
+  search.pattern = pattern;
+  search.query = pattern;
+  const flags = appearanceContextSearchFlags(id);
+  try {
+    const expression = new RegExp(pattern, flags);
+    return {
+      kind: 'regex',
+      query: pattern,
+      detail: pattern ? `Regex /${pattern}/${flags} is active.` : `Regex /(?:)/${flags} is active and matches every item.`,
+      test: (label) => {
+        const match = label.match(expression);
+        return { matches: Boolean(match), captures: match ? match.slice(1) : [] };
+      }
+    };
+  } catch (error) {
+    return {
+      kind: 'invalid',
+      query: pattern,
+      detail: `Regex is invalid: ${error?.message || 'pattern could not be compiled.'}`,
+      test: () => ({ matches: true, captures: [] })
+    };
+  }
+}
+
+function renderAppearanceContextSearchFeedback(id, matcher, matches, firstCapture) {
+  const controls = appearanceContextSearchControls(id);
+  if (controls.feedback) {
+    controls.feedback.dataset.state = matcher.kind;
+    controls.feedback.textContent = matcher.detail;
+  }
+  if (controls.captures) {
+    const sample = String(controls.sample?.value || '').slice(0, 512);
+    const sampleResult = matcher.kind === 'regex' && sample ? matcher.test(sample) : null;
+    const captures = sampleResult?.captures?.length ? sampleResult.captures : firstCapture;
+    controls.captures.textContent = matcher.kind === 'regex'
+      ? (sample
+        ? (sampleResult?.matches ? `Sample matches. Capture groups: ${captures?.map((value, index) => `$${index + 1}=${value || '∅'}`).join(' · ') || 'none'}` : 'Sample does not match the current pattern.')
+        : (captures?.length ? `First matching capture groups: ${captures.map((value, index) => `$${index + 1}=${value || '∅'}`).join(' · ')}` : 'Add sample text to inspect captures.'))
+      : 'Regex is off. Plain-text search is active.';
+  }
+  if (controls.status) {
+    const noun = id === 'tab' ? 'tab' : 'control group';
+    controls.status.dataset.state = matcher.kind === 'invalid' ? 'invalid' : matches.length ? 'ready' : 'empty';
+    controls.status.textContent = matcher.kind === 'invalid'
+      ? 'The regex is invalid, so no items were hidden.'
+      : matches.length
+        ? `${matches.length} ${noun}${matches.length === 1 ? '' : 's'} match${matches.length === 1 ? 'es' : ''} the current ${matcher.kind === 'regex' ? 'regex' : 'plain-text'} filter.`
+        : `No ${noun}s match the current filter.`;
+  }
+}
+
+function renderTabOverflow() {
+  const list = $('#tab-overflow-list');
+  if (!list) return;
+  list.replaceChildren();
+  const visibleTabs = $$('#server-editor .tab').filter((tab) => !tab.hidden);
+  if (!visibleTabs.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No settings tabs match the current filter.';
+    list.append(empty);
+    return;
+  }
+  visibleTabs.forEach((tab) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tab-overflow-item';
+    button.setAttribute('role', 'listitem');
+    button.dataset.tab = tab.dataset.tab;
+    button.setAttribute('aria-current', String(tab.dataset.tab === state.activeTab));
+    button.textContent = tab.textContent;
+    button.addEventListener('click', () => {
+      setActiveTab(tab.dataset.tab, { persist: true, focus: true });
+      closeTabOverflow(false);
+    });
+    list.append(button);
+  });
+}
+
+function applyAppearanceContextSearch(id) {
+  const matcher = buildAppearanceContextSearchMatcher(id);
+  const matches = [];
+  let firstCapture = null;
+  appearanceContextSearchElements(id).forEach((element) => {
+    const result = matcher.test(appearanceContextSearchLabel(id, element));
+    element.hidden = matcher.kind === 'invalid' ? false : !result.matches;
+    if (result.matches) {
+      matches.push(element);
+      if (!firstCapture && result.captures?.length) firstCapture = result.captures;
+    }
+  });
+  if (id === 'tab') {
+    const activeVisible = matches.some((tab) => tab.dataset.tab === state.activeTab);
+    if (matches.length && !activeVisible) setActiveTab(matches[0].dataset.tab, { persist: false });
+    renderTabOverflow();
+  }
+  renderAppearanceContextSearchFeedback(id, matcher, matches, firstCapture);
+}
+
+function toggleAppearanceRegexBuilder(id) {
+  const controls = appearanceContextSearchControls(id);
+  if (!controls.builder || !controls.toggle) return;
+  const nextOpen = controls.builder.hidden;
+  controls.builder.hidden = !nextOpen;
+  controls.toggle.setAttribute('aria-expanded', String(nextOpen));
+  if (nextOpen) {
+    if (controls.pattern && !controls.pattern.value) controls.pattern.value = controls.input?.value || '';
+    controls.pattern?.focus();
+  }
+}
+
+function insertAppearanceRegexToken(id, token) {
+  const controls = appearanceContextSearchControls(id);
+  const pattern = controls.pattern;
+  if (!pattern) return;
+  const start = pattern.selectionStart ?? pattern.value.length;
+  const end = pattern.selectionEnd ?? start;
+  pattern.value = `${pattern.value.slice(0, start)}${token}${pattern.value.slice(end)}`.slice(0, 256);
+  pattern.selectionStart = pattern.selectionEnd = Math.min(start + token.length, pattern.value.length);
+  appearanceContextSearches[id].mode = 'regex';
+  if (controls.input) controls.input.value = pattern.value;
+  applyAppearanceContextSearch(id);
+  pattern.focus();
+}
+
+function usePlainAppearanceContextSearch(id) {
+  const controls = appearanceContextSearchControls(id);
+  appearanceContextSearches[id].mode = 'plain';
+  if (controls.input && controls.pattern) controls.input.value = controls.pattern.value;
+  applyAppearanceContextSearch(id);
+}
+
+function bindAppearanceContextSearch(id) {
+  const controls = appearanceContextSearchControls(id);
+  controls.input?.addEventListener('input', () => {
+    if (appearanceContextSearches[id].mode === 'regex' && controls.pattern) controls.pattern.value = controls.input.value;
+    applyAppearanceContextSearch(id);
+  });
+  controls.toggle?.addEventListener('click', () => toggleAppearanceRegexBuilder(id));
+  controls.pattern?.addEventListener('input', () => {
+    appearanceContextSearches[id].mode = 'regex';
+    if (controls.input) controls.input.value = controls.pattern.value;
+    applyAppearanceContextSearch(id);
+  });
+  controls.sample?.addEventListener('input', () => applyAppearanceContextSearch(id));
+  Object.values(controls.flags).forEach((control) => control?.addEventListener('change', () => {
+    appearanceContextSearches[id].mode = 'regex';
+    applyAppearanceContextSearch(id);
+  }));
+  $$(`[data-appearance-regex-insert="${id}"]`).forEach((button) => button.addEventListener('click', () => insertAppearanceRegexToken(id, button.dataset.appearanceRegexToken || '')));
+  $$(`[data-appearance-regex-plain="${id}"]`).forEach((button) => button.addEventListener('click', () => usePlainAppearanceContextSearch(id)));
+}
+
+function openTabOverflow() {
+  const panel = $('#tab-overflow-panel');
+  const button = $('#tab-overflow-toggle');
+  if (!panel || !button) return;
+  panel.hidden = false;
+  button.setAttribute('aria-expanded', 'true');
+  renderTabOverflow();
+  panel.querySelector('button')?.focus();
+}
+
+function closeTabOverflow(restoreFocus = true) {
+  const panel = $('#tab-overflow-panel');
+  const button = $('#tab-overflow-toggle');
+  if (!panel || !button) return;
+  panel.hidden = true;
+  button.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) button.focus();
+}
+
+function toggleTabOverflow() {
+  if ($('#tab-overflow-panel')?.hidden) openTabOverflow();
+  else closeTabOverflow();
+}
+
+function handleServerTabKeydown(event) {
+  const strip = $('#server-tab-strip');
+  const vertical = strip?.getAttribute('aria-orientation') === 'vertical';
+  const tabs = $$('#server-editor .tab').filter((tab) => !tab.hidden);
+  if (!tabs.length) return;
+  const currentIndex = Math.max(0, tabs.indexOf(event.currentTarget));
+  let nextIndex = null;
+  if ((vertical && event.key === 'ArrowDown') || (!vertical && event.key === 'ArrowRight')) nextIndex = (currentIndex + 1) % tabs.length;
+  if ((vertical && event.key === 'ArrowUp') || (!vertical && event.key === 'ArrowLeft')) nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = tabs.length - 1;
+  if (nextIndex === null) return;
+  event.preventDefault();
+  setActiveTab(tabs[nextIndex].dataset.tab, { persist: true, focus: true });
+}
+
+function setActiveTab(tab, options = {}) {
+  if (!SERVER_TAB_IDS.includes(tab)) return;
+  const persist = options.persist === true;
+  const focus = options.focus === true;
   state.activeTab = tab;
+  let activeTabId = '';
   $$('#server-editor .tab').forEach((button) => {
     const active = button.dataset.tab === tab;
+    const tabId = button.id || `server-tab-${button.dataset.tab}`;
+    button.id = tabId;
+    if (active) activeTabId = tabId;
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
   });
-  $$('.settings-panel').forEach((panel) => {
+  $$('#server-editor .settings-panel').forEach((panel) => {
     const active = panel.dataset.panel === tab;
     panel.classList.toggle('active', active);
     panel.hidden = !active;
+    if (active && activeTabId) panel.setAttribute('aria-labelledby', activeTabId);
   });
+  renderTabOverflow();
+  if (persist) persistActiveTab(tab);
 }
 
 async function refreshServers() {
@@ -3205,13 +3719,14 @@ function unsavedWorkState() {
     || state.unsaved.authenticatorEntry
     || state.unsaved.toyLockDraft
     || state.unsaved.toyLockUnlock
+    || state.unsaved.appearance
     || createDialog?.open
     || experienceDialog?.open
     || confirmationDialog?.open
   );
   return {
     hasUnsavedWork,
-    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, authenticator or toy-lock draft, Status Hub bridge edit, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
+    detail: hasUnsavedWork ? 'A server setting, creation draft, plugin selection, console draft, authenticator or toy-lock draft, Status Hub bridge edit, appearance preview, or open decision surface has not been saved, discarded, or resolved.' : 'No pending application-owned draft is recorded.'
   };
 }
 
@@ -3857,6 +4372,8 @@ function bindOllamaSuiteEvents() {
 function bindEvents() {
   attachRegexSearch('preferences');
   attachRegexSearch('schedules');
+  bindAppearanceContextSearch('tab');
+  bindAppearanceContextSearch('appearance');
   $('#experience-settings-button').addEventListener('click', openExperienceSettings);
   $('#close-experience-settings-dialog').addEventListener('click', closeExperienceSettings);
   $('#close-experience-settings-button').addEventListener('click', closeExperienceSettings);
@@ -3884,6 +4401,29 @@ function bindEvents() {
   $('#save-school-mode-label-button').addEventListener('click', saveSchoolModeLabel);
   $('#save-school-mode-credential-button').addEventListener('click', saveSchoolModeCredential);
   $('#school-mode-enabled').addEventListener('change', changeSchoolMode);
+  $('#tab-overflow-toggle').addEventListener('click', toggleTabOverflow);
+  $('#tab-overflow-panel').addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeTabOverflow();
+    }
+  });
+  $('#save-appearance-navigation-button').addEventListener('click', saveAppearanceNavigation);
+  $('#reset-appearance-target-button').addEventListener('click', resetAppearanceTarget);
+  $('#appearance-target').addEventListener('change', () => {
+    if (state.unsaved.appearance) {
+      state.unsaved.appearance = false;
+      applyAppearanceNavigation();
+    }
+    renderAppearanceTargetEditor();
+  });
+  $('#appearance-target-surface').addEventListener('input', previewSelectedAppearanceTarget);
+  $('#appearance-target-on-surface').addEventListener('input', previewSelectedAppearanceTarget);
+  $('#appearance-target-radius').addEventListener('input', previewSelectedAppearanceTarget);
+  $('#appearance-font-scale').addEventListener('input', () => {
+    $('#appearance-font-scale-output').textContent = `${Math.round(Number($('#appearance-font-scale').value) * 100)}%`;
+  });
+  $('#tab-dock').addEventListener('change', changeTabDock);
   $('#authenticator-destination-button').addEventListener('click', openAuthenticatorDestination);
   $('#return-to-servers-button').addEventListener('click', returnToServers);
   $$('.authenticator-tab-strip .tab').forEach((button) => button.addEventListener('click', () => setAuthenticatorTab(button.dataset.authenticatorTab)));
@@ -4054,7 +4594,10 @@ function bindEvents() {
       renderDependencies();
     }
   });
-  $$('#server-editor .tab').forEach((button) => button.addEventListener('click', () => setActiveTab(button.dataset.tab)));
+  $$('#server-editor .tab').forEach((button) => {
+    button.addEventListener('click', () => setActiveTab(button.dataset.tab, { persist: true }));
+    button.addEventListener('keydown', handleServerTabKeydown);
+  });
   $('#settings-form').addEventListener('submit', saveSettings);
   $('#memory-gb').addEventListener('input', () => { $('#memory-output').value = $('#memory-gb').value; });
   $('#view-distance').addEventListener('input', () => { $('#view-distance-output').value = $('#view-distance').value; });
@@ -4064,7 +4607,7 @@ function bindEvents() {
   $('#refresh-runtimes-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const inventory = await safely(() => window.studio.runtimeInventory(server.id)); if (inventory) renderRuntimeInventory(inventory); });
   $('#prepare-paper-cli-button').addEventListener('click', preparePaperCliPreflight);
   $('#paper-cli-probe-button').addEventListener('click', collectPaperCliJarEvidence);
-  $('#paper-cli-open-plugins-button').addEventListener('click', () => setActiveTab('plugins'));
+  $('#paper-cli-open-plugins-button').addEventListener('click', () => setActiveTab('plugins', { persist: true }));
   $$('[data-paper-cli-browse]').forEach((button) => button.addEventListener('click', async () => {
     const selected = await safely(() => window.studio.pickPaperCliPath(button.dataset.paperCliBrowse));
     const target = document.getElementById(button.dataset.paperCliTarget || '');

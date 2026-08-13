@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { AppearanceNavigationSettings } = require('./appearance-navigation-settings.cjs');
 
 const SETTINGS_VERSION = 1;
 const LANGUAGE_MODES = Object.freeze(['english', 'cantonese', 'bilingual']);
@@ -132,6 +133,7 @@ class StudioSettingsService {
     this.sharedDataDir = normalizePath(options.sharedDataDir, 'Shared settings directory');
     this.localPath = path.join(this.dataDir, 'presentation-settings.json');
     this.sharedPath = path.join(this.sharedDataDir, 'school-mode.json');
+    this.appearanceNavigation = new AppearanceNavigationSettings({ dataDir: this.dataDir });
     this.onChange = typeof options.onChange === 'function' ? options.onChange : null;
     this.local = defaultLocalSettings();
     this.localState = 'not-loaded';
@@ -144,6 +146,7 @@ class StudioSettingsService {
 
   initialize() {
     this._loadLocal();
+    this.appearanceNavigation.initialize();
     this._loadShared();
     this.startWatching();
     return this.snapshot();
@@ -156,6 +159,7 @@ class StudioSettingsService {
       schemaVersion: SETTINGS_VERSION,
       local: Object.freeze(copy(this.local)),
       localState: this.localState,
+      appearanceNavigation: this.appearanceNavigation.snapshot(),
       shared: Object.freeze({
         state: this.sharedState,
         detail: this.sharedDetail,
@@ -180,6 +184,12 @@ class StudioSettingsService {
     this.local = normalizeLocalSettings({ ...next, version: SETTINGS_VERSION });
     this._writeJson(this.localPath, this.local, this.dataDir, 'App settings could not be saved.');
     this.localState = 'ready';
+    this._emit();
+    return this.snapshot();
+  }
+
+  updateAppearanceNavigation(patch) {
+    this.appearanceNavigation.update(patch);
     this._emit();
     return this.snapshot();
   }
