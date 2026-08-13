@@ -124,6 +124,18 @@ The observer is not a browser implementation of the full Ollama suite manager. M
 
 See the [browser-local Ollama observer article](../docs/features/browser-local-ollama-observer.md) for the complete scope, failure, privacy, and verification boundary.
 
+## Browser-local appearance and tab-navigation foundation
+
+The companion site has its own browser-local appearance and tab-navigation foundation. It affects only this public page in the current browser profile and is independent of the installed application. The page does not use these controls to operate a Minecraft server, change a local desktop setting, manage an installer transfer, or call a backend.
+
+The site persists validated local choices for system/light/dark theme, density, accent, and safe typography. Its appearance editor exposes bounded local accent, font-scale, and font-weight controls for the page, tab strip, and selected tab, plus a reset path that restores inherited local values. The setting is stored through the one contract record described in `CONTRACT.md`; a browser-storage failure leaves the page usable for the current visit but must be presented as a persistence failure rather than as a saved preference.
+
+Registered companion-site destinations use browser-style tabs. Visitors can dock the strip at the left, right, top, or bottom. Side docks expose vertical tab semantics and Up/Down navigation; top and bottom docks expose horizontal semantics and Left/Right navigation. The browser-local tab model persists the dock edge, derived orientation, active selection, visible order, pinning, groups, group order, and collapsed-group state. When tabs do not fit, a real overflow surface remains available instead of silently clipping labels.
+
+Three separate discovery routes are provided for the current strip, an individual group, and the companion site's master tab list. Each route starts with plain text and has its own adjacent anchored regular-expression builder. Query, pattern, flags, validation feedback, and candidate labels remain local to that search route. These builders never search an installed application, browser history, local files, or a remote service.
+
+This is a bounded foundation, not a claim of complete appearance editing or tab management. Every-element editors, complete typography and color tooling, all menu/dropdown builders, complete bulk-close behavior, cross-window discovery, full localization, accessibility verification, built-artifact interaction, and real captures remain incomplete until separately implemented and evidenced.
+
 ## Per-surface completeness inventory
 
 This is a public-source inventory, not a claim that the installed application has been verified. The page seeds the same hand-written surfaces into its browser-local contract inventory and renders the incomplete count in the Status preview. “Static hook present” means the corresponding browser-local preview and source hook are in the page. Localization, automated testing, real interaction, and real-capture evidence remain unverified until separately completed.
@@ -132,7 +144,8 @@ This is a public-source inventory, not a claim that the installed application ha
 | --- | --- | --- | --- | --- | --- |
 | Marketing landing shell | Browser-local source hook | This README | Missing | Missing | Missing |
 | Browser-local Status | Browser-local contract view | This README and `CONTRACT.md` | Missing | Missing | Missing |
-| Settings and appearance | Browser-local language, funny-level, notice-emoji, personal-vocabulary, and renamed presentation-mode controls wired to contract | This README and `CONTRACT.md` | Core only; page-wide localization remains incomplete | Not run in fast-delivery lane | Missing |
+| Settings and appearance | Browser-local language, funny-level, notice-emoji, personal-vocabulary, renamed presentation-mode, theme, density, accent, safe typography, and bounded appearance-editor controls wired to contract | This README and `CONTRACT.md` | Core only; page-wide localization remains incomplete | Not run in fast-delivery lane | Missing |
+| Tab navigation and appearance editor | Browser-local dock, active/order/pin/group state, overflow, current/group/master searches, anchored regex builders, and bounded target editor | This README, `CONTRACT.md`, and `docs/features/appearance-and-tabs.md` | Missing | Not run in fast-delivery lane | Missing |
 | Offline documentation | Static source hook | This README | Missing | Missing | Missing |
 | File converter | Browser-local bounded text/structured-data/encoding conversion; PDF/media/archive/native-workbook routes remain unavailable | This README, `CONTRACT.md`, and `../docs/features/browser-local-file-converter.md` | Missing | Missing | Missing |
 | Authenticator and locks | Static credential-free boundary | This README and `CONTRACT.md` | Missing | Missing | Missing |
