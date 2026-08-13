@@ -92,7 +92,7 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 
 ## Companion Sites source
 
-The `site/` directory contains a Pages-ready public marketing landing page with browser-local interaction equivalents and a separate local Status destination. Its browser state remains local to the visitor and it never claims to install, create, launch, operate, or contact a Minecraft server. It loads `contract.js` before `app.js` and keeps unavailable desktop-only operations visibly unavailable until an installed app or verified release provides them.
+The `site/` directory contains a Pages-ready public marketing landing page with browser-local interaction equivalents and a separate local Status destination. Its browser state remains local to the visitor and it never claims to install, create, launch, operate, or contact a Minecraft server. Its narrow Ollama observer is idle until a visitor explicitly refreshes it; it can read only `GET /api/version`, `GET /api/tags`, and `GET /api/ps` from the fixed `http://127.0.0.1:11434` origin, retains only a bounded non-secret browser-session snapshot, and leaves catalog, pull, chat, delete, copy, hardware-fit, and harness features visibly unavailable. It loads `contract.js` before `app.js` and keeps unavailable desktop-only operations visibly unavailable until an installed app or verified release provides them.
 
 ## Documentation
 
@@ -110,6 +110,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Support Tickets recovery desk](docs/features/support-tickets.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
 - [Local Ollama suite foundation](docs/features/local-ollama-suite.md)
+- [Browser-local Ollama observer](docs/features/browser-local-ollama-observer.md)
 - [Windows release packaging metadata](docs/features/release-packaging.md)
 - [Local file-converter foundation](docs/features/file-converter.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)

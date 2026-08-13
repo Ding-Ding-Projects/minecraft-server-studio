@@ -351,6 +351,63 @@ This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime int
 
 The management-protocol source now normalizes discovered method descriptors into an endpoint-bound, time-limited snapshot. A new client may restore only a matching, unexpired method allowlist before invocation. The generic WebSocket client deliberately does not transmit stored management credentials; the desktop reports an authentication-adapter-required state until a documented provider-specific adapter is implemented. This repair was delivered under the speed-delivery boundary; tests, runtime interaction, screenshots, and independent review remain unrun.
 
+## Browser-local Ollama observer
+
+The public marketing page now owns a deliberately narrow browser-only local
+Ollama observation route. It is idle until a visitor selects **Refresh local
+Ollama**. A refresh may issue only `GET /api/version`, `GET /api/tags`, and
+`GET /api/ps` at the literal `http://127.0.0.1:11434` origin. There is no
+editable endpoint, host, port, path, proxy, redirect, token, account, cloud
+fallback, request body, background polling, desktop IPC, or arbitrary local
+request path.
+
+The observer aborts bounded requests and accepts only bounded, normalized
+version, installed-model, and running-model summaries. It reports healthy,
+unavailable, browser-or-CORS-blocked, unsupported-browser, and
+rejected-response states without guessing across those outcomes. It may retain
+only a normalized
+non-secret browser-session last-success snapshot, which retains only service
+version/observation time and safe model name, size, VRAM size, modification
+or expiry timestamp, family, parameter-size, and quantization fields. It
+omits raw responses, digests, endpoints, credentials, prompts, and local
+paths, and remains visibly stale until a later accepted refresh. Installed
+and running summaries have local
+plain-text and regex search; filtering never makes another request.
+
+The public page remains intentionally unable to discover a Model Store
+catalog, pull, chat, delete, copy, assess hardware fit, or register/launch a
+harness. Each is visible as an unavailable browser-only boundary. None is
+simulated, forwarded to a desktop app, or redirected to a cloud service.
+
+### Directly related paths
+
+- `site/app.js`
+- `site/index.html`
+- `site/styles.css`
+- `site/README.md`
+- `site/CONTRACT.md`
+- `docs/features/browser-local-ollama-observer.md`
+- `docs/features/README.md`
+
+### Verification boundary
+
+This fast-delivery lane did not run tests, linting, independent review,
+build, package, live browser interaction, packaged-runtime interaction, or
+captures. It is not proof that a specific browser can access a local Ollama
+service, that CORS permits the response, that a listed model runs, or that
+the unavailable desktop workflows exist. The public-source completeness
+inventory retains its localization, test, interaction, and capture evidence
+as incomplete.
+
+### Remaining work
+
+- Keep the fixed browser request allowlist and no-request-before-refresh
+  rule covered by dedicated interaction evidence after the fast-delivery
+  boundary is lifted.
+- Implement full Ollama catalog, pull, chat, model mutation, hardware-fit,
+  and harness workflows only in a separately scoped desktop surface with its
+  required security, offline, accessibility, and runtime proof.
+
 ## Local Ollama suite foundation
 
 The Local Ollama destination is a narrow local-runtime observation surface. Its main-process-only manager permits only `http://127.0.0.1:11434` and only reads the documented version, installed-model, and running-model endpoints. It returns bounded normalized summaries through `studio:ollama-status` and `studio:refresh-ollama`; no renderer endpoint setting, token, cloud proxy, raw response body, or arbitrary shell command exists in this lane.

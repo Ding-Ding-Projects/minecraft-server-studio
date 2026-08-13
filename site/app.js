@@ -4,11 +4,14 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
   "use strict";
 
   /*
-   * Browser-local marketing interactions only.
-   * No fetch, server control, installer action, credential storage, runtime query,
-   * or conversion occurs in this file. A user-selected personal-vocabulary JSON
-   * file is read locally only so the contract can validate and store its bounded
-   * payload in this browser's local storage.
+   * Browser-local marketing interactions plus one explicit read-only Ollama
+   * observer. No request starts until a visitor chooses Refresh; that observer
+   * accepts only fixed-loopback version, installed-model, and running-model
+   * responses. No server control, installer action, credential storage, proxy,
+   * cloud fallback, model mutation, chat, or conversion occurs here. A
+   * user-selected personal-vocabulary JSON file is read locally only so the
+   * contract can validate and store its bounded payload in this browser's local
+   * storage.
    */
 
   var root = document.documentElement;
@@ -1170,36 +1173,367 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
     var surface = one('[data-contract-surface="ollama-manager"]');
     var host = one('[data-contract-hook="ollama-status"]', surface);
     if (!surface || !host || one("[data-mss-ollama-preview]", surface)) return;
+    var endpoint = "http://127.0.0.1:11434";
+    var sessionKey = "minecraft-server-studio.site.ollama-observer.v1";
+    var responseByteLimit = 96 * 1024;
+    var modelLimit = 80;
+    var requestTimeoutMs = 4500;
+    var activeController = null;
+    var abortReason = "";
+    var sessionSnapshot = loadSessionSnapshot();
     var area = made("div");
     area.setAttribute("data-mss-ollama-preview", "true");
-    var label = made("label");
-    label.textContent = "Browser-local preview state";
-    var select = made("select");
-    [["not-checked", "No runtime checked"], ["offline-info", "Offline information only"], ["desktop-boundary", "Desktop app boundary explained"]].forEach(function (pair) {
-      var option = document.createElement("option");
-      option.value = pair[0];
-      option.textContent = pair[1];
-      select.appendChild(option);
+    area.className = "ollama-observer-controls";
+    var indicator = made("span");
+    indicator.className = "state-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    var copy = made("div");
+    var title = made("strong");
+    var detail = made("small");
+    copy.append(title, detail);
+    var actions = made("div");
+    actions.className = "ollama-observer-actions";
+    var refresh = button("Refresh local runtime", refreshLocalRuntime);
+    refresh.setAttribute("data-mss-ollama-refresh", "true");
+    var cancel = button("Cancel refresh", function () {
+      if (!activeController) return;
+      abortReason = "cancelled";
+      activeController.abort();
     });
-    label.appendChild(select);
-    var output = made("output");
-    output.setAttribute("aria-live", "polite");
-    function render() {
-      var messages = {
-        "not-checked": "No local runtime is queried from this public page.",
-        "offline-info": "Offline information only: use the installed desktop app to inspect a local runtime.",
-        "desktop-boundary": "The installed desktop app owns local runtime health, models, pulls, chats, and harness controls."
-      };
-      output.textContent = messages[select.value];
-      root.dataset.mssOllamaPreview = select.value;
+    cancel.disabled = true;
+    actions.append(refresh, cancel);
+    area.append(indicator, copy, actions);
+    host.replaceChildren(area);
+
+    var statusBadge = one(".preview-status", surface);
+    var searchHook = one('[data-contract-hook="ollama-catalog-search-regex"]', surface);
+    var searchInput = searchHook && one('input[type="search"]', searchHook);
+    var inventory = one('[data-contract-hook="ollama-inventory"]', surface);
+
+    function plainRecord(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+      var prototype = Object.getPrototypeOf(value);
+      if (prototype !== Object.prototype && prototype !== null) return false;
+      return !Object.prototype.hasOwnProperty.call(value, "__proto__") && !Object.prototype.hasOwnProperty.call(value, "prototype") && !Object.prototype.hasOwnProperty.call(value, "constructor");
     }
-    select.addEventListener("change", render);
-    area.append(label, button("Refresh browser-local preview", function () {
-      render();
-      notify("info", "The Ollama preview was refreshed locally. This page did not call localhost or any model service.");
-    }), output);
-    host.appendChild(area);
-    render();
+
+    function safeText(value, maximum) {
+      if (typeof value !== "string") return "";
+      return value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, maximum);
+    }
+
+    function safeNumber(value) {
+      if (value === null || value === undefined || value === "") return null;
+      var numeric = Number(value);
+      return Number.isFinite(numeric) && numeric >= 0 && numeric <= Number.MAX_SAFE_INTEGER ? Math.round(numeric) : null;
+    }
+
+    function localError(code, message) {
+      var error = new Error(message);
+      error.code = code;
+      return error;
+    }
+
+    function normalizeModel(raw) {
+      if (!plainRecord(raw)) throw localError("rejected", "A local model record was not an object.");
+      var details = plainRecord(raw.details) ? raw.details : {};
+      var name = safeText(raw.name, 180) || safeText(raw.model, 180);
+      if (!name) throw localError("rejected", "A local model record did not include a safe model name.");
+      return {
+        name: name,
+        size: safeNumber(raw.size),
+        sizeVram: safeNumber(raw.size_vram !== undefined ? raw.size_vram : raw.sizeVram),
+        modifiedAt: safeText(raw.modified_at !== undefined ? raw.modified_at : raw.modifiedAt, 80),
+        expiresAt: safeText(raw.expires_at !== undefined ? raw.expires_at : raw.expiresAt, 80),
+        family: safeText(details.family !== undefined ? details.family : raw.family, 120),
+        parameterSize: safeText(details.parameter_size !== undefined ? details.parameter_size : raw.parameterSize, 80),
+        quantization: safeText(details.quantization_level !== undefined ? details.quantization_level : raw.quantization, 80)
+      };
+    }
+
+    function normalizeModels(payload, label) {
+      if (!plainRecord(payload) || !Array.isArray(payload.models)) {
+        throw localError("rejected", "The fixed local " + label + " response did not contain a model array.");
+      }
+      if (payload.models.length > modelLimit) {
+        throw localError("rejected", "The fixed local " + label + " response exceeded this page's " + modelLimit + "-model safety boundary.");
+      }
+      return payload.models.map(normalizeModel);
+    }
+
+    function normalizeSnapshot(raw) {
+      if (!plainRecord(raw)) return null;
+      var version = safeText(raw.version, 80);
+      var observedAt = safeText(raw.observedAt, 80);
+      if (!version || !observedAt || !Array.isArray(raw.installed) || !Array.isArray(raw.running) || raw.installed.length > modelLimit || raw.running.length > modelLimit) return null;
+      try {
+        return {
+          version: version,
+          observedAt: observedAt,
+          installed: raw.installed.map(normalizeModel),
+          running: raw.running.map(normalizeModel)
+        };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function loadSessionSnapshot() {
+      try {
+        if (!window.sessionStorage) return null;
+        return normalizeSnapshot(JSON.parse(window.sessionStorage.getItem(sessionKey) || "null"));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function persistSessionSnapshot(snapshot) {
+      try {
+        var serialized = JSON.stringify(snapshot);
+        if (serialized.length > responseByteLimit) return false;
+        window.sessionStorage.setItem(sessionKey, serialized);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function browserSupportsBoundedLocalRead() {
+      return typeof window.fetch === "function" && typeof window.AbortController === "function" && typeof window.TextDecoder === "function";
+    }
+
+    function setStatus(kind, heading, message) {
+      host.setAttribute("data-mss-ollama-state", kind);
+      root.dataset.mssOllamaPreview = kind;
+      title.textContent = heading;
+      detail.textContent = message;
+      if (statusBadge) statusBadge.textContent = {
+        idle: "Not checked",
+        stale: "Session snapshot",
+        checking: "Checking local runtime",
+        healthy: "Local runtime healthy",
+        unavailable: "Local runtime unavailable",
+        blocked: "Browser or CORS blocked",
+        unsupported: "Browser unsupported",
+        rejected: "Response rejected",
+        cancelled: "Refresh cancelled",
+        timeout: "Timed out"
+      }[kind] || "Local state";
+    }
+
+    function renderModel(model, kind) {
+      var row = made("li");
+      row.setAttribute("data-mss-ollama-model", "true");
+      var name = made("strong");
+      name.textContent = model.name;
+      var metadata = [];
+      if (model.size !== null) metadata.push("size " + humanSize(model.size));
+      if (kind === "running" && model.sizeVram !== null) metadata.push("VRAM " + humanSize(model.sizeVram));
+      if (model.family) metadata.push(model.family);
+      if (model.parameterSize) metadata.push(model.parameterSize);
+      if (model.quantization) metadata.push(model.quantization);
+      if (kind === "installed" && model.modifiedAt) metadata.push("modified " + model.modifiedAt);
+      if (kind === "running" && model.expiresAt) metadata.push("expires " + model.expiresAt);
+      var description = made("small");
+      description.textContent = metadata.length ? metadata.join(" · ") : "No additional safe model metadata was supplied by the local response.";
+      row.append(name, description);
+      return row;
+    }
+
+    function renderCollection(label, models, kind) {
+      var section = made("section");
+      section.className = "ollama-model-collection";
+      var heading = made("h3");
+      heading.textContent = label + " (" + models.length + ")";
+      section.appendChild(heading);
+      if (!models.length) {
+        var empty = made("p");
+        empty.className = "empty-state";
+        empty.textContent = kind === "installed" ? "The local tags response reported no installed models." : "The local running-model response reported no loaded models.";
+        section.appendChild(empty);
+        return section;
+      }
+      var list = made("ul");
+      list.className = "ollama-model-list";
+      models.forEach(function (model) { list.appendChild(renderModel(model, kind)); });
+      section.appendChild(list);
+      return section;
+    }
+
+    function refreshSearchResults() {
+      if (!searchInput || searchInput.getAttribute("data-mss-regex-ready") !== "true") return;
+      safely(function () { searchInput.dispatchEvent(new Event("input", { bubbles: true })); });
+    }
+
+    function renderInventory() {
+      if (!inventory) return;
+      inventory.replaceChildren();
+      if (!sessionSnapshot) {
+        var empty = made("p");
+        empty.className = "empty-state";
+        empty.textContent = "No browser-session model snapshot exists yet. Refresh is required before this page can show local model information.";
+        inventory.appendChild(empty);
+        refreshSearchResults();
+        return;
+      }
+      var observation = made("p");
+      observation.className = "annotation";
+      observation.textContent = "Last successful browser-session observation: Ollama " + sessionSnapshot.version + " at " + sessionSnapshot.observedAt + ". This is a stale observation until a new Refresh succeeds.";
+      inventory.append(observation, renderCollection("Installed models", sessionSnapshot.installed, "installed"), renderCollection("Running models", sessionSnapshot.running, "running"));
+      refreshSearchResults();
+    }
+
+    function readBoundedJson(response, path) {
+      if (!response || !response.ok) {
+        throw localError("unavailable", "The fixed local " + path + " endpoint did not return a successful response.");
+      }
+      if (response.redirected === true) {
+        throw localError("redirect", "The fixed local response followed a redirect and was not accepted.");
+      }
+      var responseUrl = safeText(response.url, 300);
+      if (!responseUrl) {
+        throw localError("rejected", "The browser did not disclose a fixed local response URL.");
+      }
+      try {
+        var parsed = new URL(responseUrl);
+        if (parsed.origin !== endpoint || parsed.pathname !== path || parsed.search || parsed.hash) {
+          throw localError("redirect", "The browser reported a response outside the fixed local endpoint; it was not accepted.");
+        }
+      } catch (error) {
+        if (error && error.code) throw error;
+        throw localError("rejected", "The browser returned an unusable local response URL.");
+      }
+      var declaredLength = Number(response.headers && response.headers.get("content-length"));
+      if (Number.isFinite(declaredLength) && declaredLength > responseByteLimit) {
+        throw localError("rejected", "The fixed local " + path + " response exceeded the " + responseByteLimit + "-byte safety boundary.");
+      }
+      if (!response.body || typeof response.body.getReader !== "function") {
+        throw localError("unsupported", "This browser cannot read a bounded local response safely.");
+      }
+      var reader = response.body.getReader();
+      var chunks = [];
+      var total = 0;
+      function consume() {
+        return reader.read().then(function (part) {
+          if (part.done) {
+            var joined = new Uint8Array(total);
+            var offset = 0;
+            chunks.forEach(function (chunk) { joined.set(chunk, offset); offset += chunk.byteLength; });
+            try {
+              return JSON.parse(new window.TextDecoder("utf-8", { fatal: true }).decode(joined));
+            } catch (_) {
+              throw localError("rejected", "The fixed local " + path + " response was not valid bounded JSON.");
+            }
+          }
+          var chunk = part.value;
+          if (!chunk || typeof chunk.byteLength !== "number") throw localError("rejected", "The fixed local " + path + " response included an invalid byte chunk.");
+          total += chunk.byteLength;
+          if (total > responseByteLimit) {
+            safely(function () { reader.cancel(); });
+            throw localError("rejected", "The fixed local " + path + " response exceeded the " + responseByteLimit + "-byte safety boundary.");
+          }
+          chunks.push(chunk);
+          return consume();
+        });
+      }
+      return consume();
+    }
+
+    function requestLocalJson(path) {
+      var url = endpoint + path;
+      try {
+        return window.fetch(url, {
+          method: "GET",
+          mode: "cors",
+          credentials: "omit",
+          cache: "no-store",
+          redirect: "error",
+          referrerPolicy: "no-referrer",
+          headers: { Accept: "application/json" },
+          signal: activeController.signal
+        }).then(function (response) { return readBoundedJson(response, path); });
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
+    function failureState(error) {
+      var code = error && error.code;
+      if (abortReason === "cancelled") return { kind: "cancelled", heading: "Local refresh cancelled", message: "The in-flight fixed local read was aborted. Any prior browser-session snapshot remains unchanged." };
+      if (abortReason === "timeout") return { kind: "timeout", heading: "Fixed local read timed out", message: "No complete local snapshot was accepted within " + requestTimeoutMs + " ms. Any prior browser-session snapshot remains stale." };
+      if (code === "unsupported") return { kind: "unsupported", heading: "Browser feature unavailable", message: "This browser cannot safely perform the bounded local read. No response was accepted and no fallback or bypass was used." };
+      if (code === "redirect") return { kind: "rejected", heading: "Redirect rejected", message: "This page accepts only the fixed local address and does not follow redirects, proxies, or alternate hosts." };
+      if (code === "unavailable") return { kind: "unavailable", heading: "Local runtime unavailable", message: "The fixed local API did not return a successful response. The page did not try another host, cloud service, or proxy." };
+      if (code === "rejected") return { kind: "rejected", heading: "Local response rejected", message: "The fixed local response was malformed or exceeded a browser safety boundary. No partial model data was used." };
+      return { kind: "blocked", heading: "CORS or browser-blocked local request", message: "The browser returned no readable local response. This can mean CORS, mixed-content or privacy blocking, or an unavailable local runtime; the page cannot distinguish or bypass those conditions." };
+    }
+
+    function finishRefresh(timeoutId) {
+      window.clearTimeout(timeoutId);
+      activeController = null;
+      abortReason = "";
+      refresh.disabled = false;
+      cancel.disabled = true;
+    }
+
+    function refreshLocalRuntime() {
+      if (activeController) return;
+      if (!browserSupportsBoundedLocalRead()) {
+        setStatus("unsupported", "Browser feature unavailable", "This browser lacks the bounded local-request primitives required by this page. No request was made.");
+        notify("warning", "The browser-local Ollama observer is unavailable in this browser. No local request was made.");
+        return;
+      }
+      activeController = new window.AbortController();
+      abortReason = "";
+      refresh.disabled = true;
+      cancel.disabled = false;
+      setStatus("checking", "Checking the fixed local runtime", "Reading only /api/version, /api/tags, and /api/ps from " + endpoint + " after your explicit Refresh action.");
+      var timeoutId = window.setTimeout(function () {
+        if (!activeController) return;
+        abortReason = "timeout";
+        activeController.abort();
+      }, requestTimeoutMs);
+      requestLocalJson("/api/version").then(function (versionPayload) {
+        if (!plainRecord(versionPayload) || !safeText(versionPayload.version, 80)) throw localError("rejected", "The fixed local version response did not include a safe version value.");
+        return requestLocalJson("/api/tags").then(function (tagsPayload) {
+          return requestLocalJson("/api/ps").then(function (runningPayload) {
+            return {
+              version: safeText(versionPayload.version, 80),
+              observedAt: new Date().toISOString(),
+              installed: normalizeModels(tagsPayload, "installed-model"),
+              running: normalizeModels(runningPayload, "running-model")
+            };
+          });
+        });
+      }).then(function (snapshot) {
+        sessionSnapshot = snapshot;
+        var stored = persistSessionSnapshot(snapshot);
+        renderInventory();
+        setStatus("healthy", "Local runtime healthy", "Ollama " + snapshot.version + " returned bounded local model summaries: " + snapshot.installed.length + " installed and " + snapshot.running.length + " running. " + (stored ? "The nonsecret snapshot is kept for this browser session only." : "The nonsecret snapshot remains only in this open page because browser session storage was unavailable."));
+        notify("success", "A read-only local Ollama snapshot was refreshed. No catalog, pull, chat, delete, copy, hardware-fit, or harness action was started.");
+        finishRefresh(timeoutId);
+      }, function (error) {
+        var failed = failureState(error);
+        setStatus(failed.kind, failed.heading, failed.message);
+        renderInventory();
+        notify("warning", "The browser-local Ollama refresh did not produce a new accepted snapshot. " + failed.message);
+        finishRefresh(timeoutId);
+      });
+    }
+
+    renderInventory();
+    if (sessionSnapshot) {
+      setStatus("stale", "Browser-session snapshot available", "A nonsecret local observation is available from " + sessionSnapshot.observedAt + ". Refresh to confirm the current runtime state; no request was made on page load.");
+    } else {
+      setStatus("idle", "No local runtime checked", "No request occurs until you choose Refresh. The only accepted target is " + endpoint + ".");
+    }
+    if (searchInput) {
+      makeRegexBuilder(searchInput, {
+        label: "installed and running local models",
+        scope: surface,
+        candidates: function () { return all("[data-mss-ollama-model]", inventory); }
+      });
+    }
   }
 
   function closeDialog(instance) {
@@ -1576,6 +1910,22 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
       capture: "missing",
       captureDetail: "No real built-artifact capture is recorded."
     };
+    var ollamaBrowserObserver = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html and site/app.js local Ollama observer",
+      implementationDetail: "Only an explicit Refresh can read fixed loopback version, installed-model, and running-model endpoints; the page accepts bounded normalized summaries only.",
+      documentation: "verified",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/browser-local-ollama-observer.md",
+      persistence: "in-progress",
+      persistenceReference: "browser sessionStorage key minecraft-server-studio.site.ollama-observer.v1",
+      persistenceDetail: "Only the last successful nonsecret normalized snapshot is retained for the current browser session; no endpoint, token, prompt, or raw response is stored.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No real local Ollama interaction is recorded in the evidence set.",
+      capture: "missing",
+      captureDetail: "No real built-artifact capture is recorded."
+    };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
         inventoryFeature("marketing-copy", "Marketing content and direct installer boundary", "in-progress", "The page exposes a static verified installer anchor and must not simulate a transfer.", staticHook),
@@ -1589,7 +1939,10 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
       { id: "documentation", label: "Offline documentation preview", route: "#docs-preview", features: [inventoryFeature("documentation-preview", "Static documentation and search preview", "in-progress", "The page links static content but does not prove a packaged offline documentation browser.", staticHook)] },
       { id: "converter", label: "File converter preview", route: "#converter-preview", features: [inventoryFeature("converter-boundary", "Unavailable browser conversion boundary", "in-progress", "The static page does not read bytes, select an adapter, or write output.", staticHook)] },
       { id: "authenticator", label: "Authenticator and toy-lock preview", route: "#authenticator-preview", features: [inventoryFeature("authenticator-boundary", "Credential-free public preview", "in-progress", "No secret, password, QR, or recovery data is accepted by the public page.", staticHook)] },
-      { id: "ollama", label: "Local Ollama suite preview", route: "#ollama-preview", features: [inventoryFeature("ollama-boundary", "No runtime-query public preview", "in-progress", "The page does not call localhost or a model service.", staticHook)] },
+      { id: "ollama", label: "Local Ollama suite preview", route: "#ollama-preview", features: [
+        inventoryFeature("ollama-local-observer", "User-triggered fixed-loopback Ollama observer", "in-progress", "The browser reads only the documented local version, installed-model, and running-model endpoints after explicit Refresh, with no proxy, redirect, token, cloud fallback, or background request.", ollamaBrowserObserver),
+        inventoryFeature("ollama-privileged-boundary", "Unavailable browser-only Ollama actions", "in-progress", "Model Store, pull, chat, delete, copy, hardware-fit, and harness actions remain visibly unavailable because this static browser surface cannot safely implement them.", ollamaBrowserObserver)
+      ] },
       { id: "history", label: "Local history preview", route: "#history-preview", features: [inventoryFeature("history-preview", "Browser-local audit preview", "in-progress", "The browser-local contract audit is not Git-backed desktop history.", localContract)] },
       { id: "notifications", label: "Notification center preview", route: "#notifications-preview", features: [inventoryFeature("notification-preview", "Browser-local notification preview", "in-progress", "Notifications are browser-local and do not represent a server or installer outcome.", localContract)] },
       { id: "downloads", label: "Download and release states", route: "#downloads-preview", features: [inventoryFeature("download-boundary", "Static verified installer anchor", "in-progress", "The browser owns transfer behavior; this page does not start, track, pause, resume, or confirm a transfer.", staticHook)] }
