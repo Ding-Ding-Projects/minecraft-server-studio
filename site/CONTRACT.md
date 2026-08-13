@@ -19,7 +19,7 @@ Load this file before the host interaction file:
 <script src="app.js"></script>
 ```
 
-The host reads the current snapshot through `getState()` or `getEffectiveSettings()`, subscribes with `subscribe(listener)`, and writes only through the public methods. The companion page uses `updateSettings`, `recordAudit`, `notify`, `createExport`, `registerCommand`, `searchCommandPalette`, `teleportTo`, `loadPersonalVocabulary`, `clearPersonalVocabulary`, `updateStatusModel`, and `setCompletenessInventory`; it does not rely on undocumented getters, setters, nested namespaces, or compatibility fallbacks. A subscriber receives a cloned snapshot and a small change descriptor; it never receives a mutable reference to internal state.
+The host reads the current snapshot through `getState()` or `getEffectiveSettings()`, subscribes with `subscribe(listener)`, and writes only through the public methods. The companion page uses `updateSettings`, `setLogoMetadata`, `recordAudit`, `notify`, `createExport`, `registerCommand`, `searchCommandPalette`, `teleportTo`, `loadPersonalVocabulary`, `clearPersonalVocabulary`, `updateStatusModel`, and `setCompletenessInventory`; it does not rely on undocumented getters, setters, nested namespaces, or compatibility fallbacks. A subscriber receives a cloned snapshot and a small change descriptor; it never receives a mutable reference to internal state.
 
 The command palette uses `registerCommand({ id, title, description, group, elementId, keywords, action })`. A host can provide an accessible tab or panel teleport implementation with `setTeleportHandler(handler)`. The fallback uses the registered `action`, then `elementId` or `data-contract-id`, scrolls the target into view, and focuses it. A host must continue to implement the visual focus indicator, tab-panel selection, and any richer navigation behavior on its own surface.
 
@@ -27,11 +27,11 @@ The engine does not create markup, inject styles, or attach controls automatical
 
 ## Persistence, schema, and migration
 
-The persisted root schema is version `4`.
+The persisted root schema is version `5`.
 
 ```text
 {
-  version: 4,
+  version: 5,
   settings: { ... },
   notifications: [ ... ],
   audit: [ ... ],
@@ -50,7 +50,7 @@ The persisted root schema is version `4`.
 }
 ```
 
-Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Version 3 adds the browser-local presentation-mode credential record; version 4 adds normalized version-1 schedule records while preserving a valid legacy local rule as version 1 and keeps bounded browser-local conversion metadata beside them. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
+Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Version 3 adds the browser-local presentation-mode credential record; pre-version-3 records migrate with no configured verifier. Version 4 adds normalized version-1 schedule records while preserving a valid legacy local rule as version 1 and keeps bounded browser-local conversion metadata beside them. Version 5 normalizes legacy logo metadata into the bounded companion-site logo record. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
 
 The entire normalized record is limited to 1 MiB measured as encoded text where the browser supports `TextEncoder`. If an attempted save reaches that boundary, the engine retains the newest half of notification and audit history before trying to save again. If the bounded record is still too large, or browser storage is unavailable or throws, the in-memory model remains usable for the current page lifetime and `isStorageAvailable()` reports `false`; the host must show that persistence did not succeed.
 
@@ -91,6 +91,14 @@ The page keeps independent current-strip, group-list, and master tab searches. E
 
 This section records a browser-local foundation only. It does not promise every-element appearance editing, complete editor export/import, every menu or dropdown builder, a full command palette, cross-window discovery, complete bulk-close behavior, or evidence that the feature has been exercised in a built or deployed artifact.
 
+### Browser-local companion-site logo
+
+`setLogoMetadata({ sourceType, presetId, custom })` persists only a normalized companion-site mark. A preset must be one of `studio-aqua`, `server-slate`, or `world-spruce`. A custom source is accepted only when it carries a bounded `data:image/png;base64,...` or `data:image/jpeg;base64,...` display representation, never a source path, filename, browser file handle, `file:` URL, remote URL, SVG, or WebP value. The contract bounds a derived display URL to 512 KiB of characters, each rendered side to 512 logical pixels, and its format to PNG or JPEG.
+
+The custom record also carries only its derived width, height, fit (`contain`, `cover`, or `fill`), background mode (`transparent` or `color`), six-digit background color, and 0–100 horizontal and vertical focal values. `setLogoMetadata` rejects an invalid requested custom source without replacing the existing valid mark. A successful result includes `persisted`; when browser storage is unavailable, a host must present the result as current-visit-only rather than as saved.
+
+`getState()` can expose the bounded data URL only to the same in-page host that renders it. `redactStateForExport()` removes that URL and records only safe display metadata plus an omission marker. Audit records must never include logo bytes, a source name, or a source path. While the renamed browser-local presentation mode is active, the host must omit custom-logo controls and render `studio-aqua`; the underlying browser-local choice can return only after that mode is turned off.
+
 ### Renamed browser-local presentation mode
 
 `setSchoolMode({ enabled, name, credentialAccepted })` stores a browser-local user-renamable presentation mode. The host first derives a local one-way SHA-256 verifier from a user-entered unlock code and fresh random salt, then calls `setSchoolModeCredential({ algorithm: "SHA-256", salt, verifier })`. The engine validates only the fixed-size encoding and stores the verifier record; it never receives, stores, exports, logs, or returns the unlock code.
@@ -105,7 +113,7 @@ This section records a browser-local foundation only. It does not promise every-
 
 `recordAudit(action, target, detail)` writes a bounded local audit record. It is not Git history, a server log, or a source-of-truth record for a server operation. It records only what the browser-local surface did.
 
-`createExport(format, records)` generates text for `json`, `jsonl`, `csv`, `tsv`, or `markdown`. Exports are UTF-8 text supplied to the host; the host decides whether to use a browser download, clipboard flow, or connected desktop handoff. `redactStateForExport()` never exports personal-vocabulary replacements, raw secrets, TOTP secrets, passwords, codes, or the presentation-mode verifier; it reports only that a local verifier is configured. The engine does not store raw credentials or codes.
+`createExport(format, records)` generates text for `json`, `jsonl`, `csv`, `tsv`, or `markdown`. Exports are UTF-8 text supplied to the host; the host decides whether to use a browser download, clipboard flow, or connected desktop handoff. `redactStateForExport()` never exports personal-vocabulary replacements, raw secrets, TOTP secrets, passwords, codes, the presentation-mode verifier, or a custom-logo data URL; it reports only safe omission metadata. The engine does not store raw credentials or codes.
 
 ## Regex evaluation and palette search
 

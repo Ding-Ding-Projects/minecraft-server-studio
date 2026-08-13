@@ -31,7 +31,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     schedules: [],
     baseSettings: defaultSettings(),
     settings: defaultSettings(),
-    narratorCapabilities: { supported: false, voices: [] }
+    narratorCapabilities: { supported: false, voices: [] },
+    logo: defaultLogo()
   };
   var narratorRuntime = {
     queue: [],
@@ -63,7 +64,26 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     "school-name-label": { english: "Mode name", cantonese: "模式名稱" },
     "school-name-help": { english: "This exact name replaces the shipped name after you save it.", cantonese: "儲存後，呢個名稱會取代原本嘅模式名稱。" },
     "school-credential-label": { english: "Browser-local unlock code", cantonese: "瀏覽器本機解鎖碼" },
-    "school-credential-help": { english: "A one-way local verifier is stored only in this browser. The code itself is never stored or exported.", cantonese: "只會喺呢個瀏覽器儲存單向本機驗證資料；解鎖碼本身永遠唔會儲存或匯出。" }
+    "school-credential-help": { english: "A one-way local verifier is stored only in this browser. The code itself is never stored or exported.", cantonese: "只會喺呢個瀏覽器儲存單向本機驗證資料；解鎖碼本身永遠唔會儲存或匯出。" },
+    "logo-eyebrow": { english: "Browser-local logo", cantonese: "瀏覽器本機標誌" },
+    "logo-title": { english: "Choose this public page's visual mark", cantonese: "揀呢個公開頁面嘅視覺標誌" },
+    "logo-description": { english: "This changes only the mark on this public page in this browser. It never changes the installed app, package, executable, installer, update feed, release, or Minecraft server.", cantonese: "呢個只會改變而家瀏覽器入面呢個公開頁面嘅標誌；唔會改已安裝程式、封裝、執行檔、安裝程式、更新來源、發佈版本或者 Minecraft 伺服器。" },
+    "logo-search-label": { english: "Find a shipped logo preset", cantonese: "搵內建標誌預設" },
+    "logo-custom-label": { english: "Custom PNG or JPEG", cantonese: "自訂 PNG 或 JPEG" },
+    "logo-custom-help": { english: "The browser validates actual PNG or JPEG bytes locally. Source files must be 512 KiB or smaller; paths and source names are not retained.", cantonese: "瀏覽器會喺本機驗證真正嘅 PNG 或 JPEG 位元組。來源檔案必須不大於 512 KiB；路徑同來源檔名唔會保留。" },
+    "logo-rendering-title": { english: "Custom-image rendering", cantonese: "自訂圖片顯示" },
+    "logo-rendering-help": { english: "Available after a bounded custom image is accepted. These controls apply locally to the derived display image, not to the original file.", cantonese: "接受咗受限自訂圖片後先可以用。呢啲控制只會喺本機套用到衍生顯示圖片，唔會改原始檔案。" },
+    "logo-fit-label": { english: "Fit", cantonese: "適應方式" },
+    "logo-fit-contain": { english: "Contain", cantonese: "完整顯示" },
+    "logo-fit-cover": { english: "Fill and crop", cantonese: "填滿並裁剪" },
+    "logo-fit-fill": { english: "Stretch to bounds", cantonese: "拉伸至邊界" },
+    "logo-background-label": { english: "Background", cantonese: "背景" },
+    "logo-background-transparent": { english: "Transparent", cantonese: "透明" },
+    "logo-background-color": { english: "Solid color", cantonese: "純色" },
+    "logo-background-color-label": { english: "Background color", cantonese: "背景顏色" },
+    "logo-focal-x-label": { english: "Focal point horizontally", cantonese: "水平焦點位置" },
+    "logo-focal-y-label": { english: "Focal point vertically", cantonese: "垂直焦點位置" },
+    "logo-reset": { english: "Reset logo", cantonese: "重設標誌" }
   });
 
   function funnyCopy(key, language, value) {
@@ -98,6 +118,10 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       var value = localizedCopy(element.getAttribute("data-mss-copy"));
       if (value) element.textContent = value;
     });
+    all("[data-mss-placeholder]").forEach(function (element) {
+      var value = localizedCopy(element.getAttribute("data-mss-placeholder"));
+      if (value) element.placeholder = value;
+    });
   }
 
   function defaultSettings() {
@@ -122,6 +146,15 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       personalVocabularyActive: false,
       dimSumEnabled: true,
       schoolMode: { enabled: false, active: false, name: "School mode" }
+    };
+  }
+
+  function defaultLogo() {
+    return {
+      sourceType: "preset",
+      presetId: "studio-aqua",
+      custom: null,
+      updatedAt: null
     };
   }
 
@@ -157,6 +190,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     state.notifications = Array.isArray(snapshot.notifications) ? snapshot.notifications.slice() : [];
     state.history = Array.isArray(snapshot.audit) ? snapshot.audit.slice() : [];
     state.schedules = Array.isArray(snapshot.schedules) ? snapshot.schedules.slice() : [];
+    state.logo = snapshot.logo && typeof snapshot.logo === "object" ? snapshot.logo : defaultLogo();
   }
 
   function emit(name, detail) {
@@ -334,6 +368,442 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     return Math.round((Number(value) || 1) * 100) + "%";
   }
 
+  var SITE_LOGO_PRESETS = Object.freeze([
+    { id: "studio-aqua", name: "Studio Aqua", description: "The shipped blue Minecraft Server Studio mark." },
+    { id: "server-slate", name: "Server Slate", description: "A quieter slate mark for the companion site." },
+    { id: "world-spruce", name: "World Spruce", description: "A green world-management mark for the companion site." }
+  ]);
+  var SITE_LOGO_INPUT_BYTES = 512 * 1024;
+  var SITE_LOGO_DERIVED_CHARACTERS = 512 * 1024;
+  var SITE_LOGO_MAX_DIMENSION = 512;
+  var SITE_LOGO_MAX_DECODED_DIMENSION = 4096;
+  var SITE_LOGO_MAX_DECODED_PIXELS = 4 * 1000 * 1000;
+  var SITE_LOGO_DATA_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+  function boundedLogoPercent(value, fallback) {
+    var numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric * 100) / 100)) : fallback;
+  }
+
+  function logoPreset(id) {
+    return SITE_LOGO_PRESETS.filter(function (preset) { return preset.id === id; })[0] || SITE_LOGO_PRESETS[0];
+  }
+
+  function logoCustom(value) {
+    if (!value || typeof value !== "object" || !SITE_LOGO_DATA_URL.test(value.dataUrl || "")) return null;
+    var match = /^data:image\/(png|jpeg);base64,/.exec(value.dataUrl);
+    if (!match || value.dataUrl.length > SITE_LOGO_DERIVED_CHARACTERS) return null;
+    return {
+      format: match[1],
+      dataUrl: value.dataUrl,
+      width: Math.max(1, Math.min(SITE_LOGO_MAX_DIMENSION, Math.round(Number(value.width) || 1))),
+      height: Math.max(1, Math.min(SITE_LOGO_MAX_DIMENSION, Math.round(Number(value.height) || 1))),
+      fit: ["contain", "cover", "fill"].indexOf(value.fit) >= 0 ? value.fit : "contain",
+      backgroundMode: value.backgroundMode === "color" ? "color" : "transparent",
+      background: safeHexColor(value.background, "#101827"),
+      focalX: boundedLogoPercent(value.focalX, 50),
+      focalY: boundedLogoPercent(value.focalY, 50)
+    };
+  }
+
+  function effectiveLogo() {
+    var selected = state.logo && typeof state.logo === "object" ? state.logo : defaultLogo();
+    var schoolActive = Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active);
+    if (schoolActive) return defaultLogo();
+    var custom = selected.sourceType === "custom" ? logoCustom(selected.custom) : null;
+    return custom ? {
+      sourceType: "custom",
+      presetId: logoPreset(selected.presetId).id,
+      custom: custom,
+      updatedAt: selected.updatedAt || null
+    } : {
+      sourceType: "preset",
+      presetId: logoPreset(selected.presetId).id,
+      custom: null,
+      updatedAt: selected.updatedAt || null
+    };
+  }
+
+  function applyLogoMark(element, logo, preview) {
+    if (!element) return;
+    var selected = logo || effectiveLogo();
+    var preset = logoPreset(selected.presetId);
+    var custom = selected.sourceType === "custom" ? logoCustom(selected.custom) : null;
+    element.replaceChildren();
+    element.classList.toggle("site-logo-custom", Boolean(custom));
+    element.dataset.mssLogoPreset = preset.id;
+    element.dataset.mssLogoSource = custom ? "custom" : "preset";
+    if (custom) {
+      element.style.setProperty("--mss-logo-fit", custom.fit);
+      element.style.setProperty("--mss-logo-position", custom.focalX + "% " + custom.focalY + "%");
+      element.style.setProperty("--mss-logo-background", custom.backgroundMode === "color" ? custom.background : "transparent");
+      var image = document.createElement("img");
+      image.alt = "";
+      image.decoding = "async";
+      image.src = custom.dataUrl;
+      element.appendChild(image);
+      if (preview) element.setAttribute("aria-label", "Current custom public-page logo preview");
+    } else {
+      element.style.removeProperty("--mss-logo-fit");
+      element.style.removeProperty("--mss-logo-position");
+      element.style.removeProperty("--mss-logo-background");
+      element.textContent = "MS";
+      if (preview) element.setAttribute("aria-label", preset.name + " public-page logo preview");
+    }
+  }
+
+  function logoCustomizerElements() {
+    var surface = one('[data-contract-hook="app-logo-customizer"]');
+    if (!surface) return {};
+    return {
+      surface: surface,
+      preview: one('[data-mss-logo-preview]', surface),
+      previewDetail: one('[data-mss-logo-preview-detail]', surface),
+      status: one('[data-mss-logo-status]', surface),
+      storage: one('[data-mss-logo-storage]', surface),
+      search: one('[data-mss-logo-preset-search]', surface),
+      presets: one('[data-mss-logo-preset-list]', surface),
+      file: one('[data-mss-logo-file]', surface),
+      fit: one('[data-mss-logo-fit]', surface),
+      backgroundMode: one('[data-mss-logo-background-mode]', surface),
+      background: one('[data-mss-logo-background]', surface),
+      focalX: one('[data-mss-logo-focal-x]', surface),
+      focalXOutput: one('[data-mss-logo-focal-x-output]', surface),
+      focalY: one('[data-mss-logo-focal-y]', surface),
+      focalYOutput: one('[data-mss-logo-focal-y-output]', surface),
+      reset: one('[data-mss-logo-reset]', surface)
+    };
+  }
+
+  function logoStorageAvailable() {
+    return !hasContractMethod("isStorageAvailable") || safely(function () { return contract.isStorageAvailable(); }, false);
+  }
+
+  function renderLogoCustomizer() {
+    var elements = logoCustomizerElements();
+    var selected = effectiveLogo();
+    var stored = state.logo && state.logo.sourceType === "custom" ? logoCustom(state.logo.custom) : null;
+    var schoolActive = Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active);
+    all('[data-mss-logo-mark]').forEach(function (mark) { applyLogoMark(mark, selected, false); });
+    if (!elements.surface) return;
+    applyLogoMark(elements.preview, selected, true);
+    var custom = selected.sourceType === "custom" ? selected.custom : null;
+    if (elements.previewDetail) {
+      elements.previewDetail.textContent = custom
+        ? "A bounded " + custom.format.toUpperCase() + " display image is active at " + custom.width + " × " + custom.height + " logical pixels."
+        : logoPreset(selected.presetId).name + " is a browser-rendered shipped preset.";
+    }
+    if (elements.status) {
+      elements.status.textContent = schoolActive
+        ? "Studio Aqua is shown while " + schoolModeName() + " is active."
+        : custom ? "A bounded custom logo is active in this browser." : logoPreset(selected.presetId).name + " is active in this browser.";
+    }
+    if (elements.storage) {
+      if (!logoStorageAvailable()) elements.storage.textContent = "Browser storage is unavailable. The visible logo can last only for this visit and was not claimed as saved.";
+      else if (stored) elements.storage.textContent = "A bounded derived custom image is stored only in this browser. Source path, source name, and original bytes are not retained.";
+      else elements.storage.textContent = "No custom derived image is stored in this browser.";
+    }
+    if (elements.file) elements.file.disabled = schoolActive;
+    [elements.fit, elements.backgroundMode, elements.background, elements.focalX, elements.focalY].forEach(function (control) {
+      if (control) control.disabled = !custom || schoolActive;
+    });
+    if (elements.fit && custom) elements.fit.value = custom.fit;
+    if (elements.backgroundMode && custom) elements.backgroundMode.value = custom.backgroundMode;
+    if (elements.background && custom) elements.background.value = custom.background;
+    if (elements.focalX && custom) elements.focalX.value = String(custom.focalX);
+    if (elements.focalY && custom) elements.focalY.value = String(custom.focalY);
+    if (elements.focalXOutput) elements.focalXOutput.textContent = (custom ? custom.focalX : 50) + "%";
+    if (elements.focalYOutput) elements.focalYOutput.textContent = (custom ? custom.focalY : 50) + "%";
+    if (elements.reset) elements.reset.disabled = schoolActive;
+    if (elements.presets) {
+      all('[data-mss-logo-preset-card]', elements.presets).forEach(function (card) {
+        var id = card.getAttribute('data-mss-logo-preset-card');
+        var active = !custom && selected.presetId === id;
+        card.toggleAttribute('data-mss-selected', active);
+        var buttonElement = one('button', card);
+        if (buttonElement) buttonElement.setAttribute('aria-pressed', String(active));
+      });
+    }
+  }
+
+  function persistLogo(next, message) {
+    if (!hasContractMethod("setLogoMetadata")) {
+      notify("warning", "Browser-local logo preferences are unavailable because the local contract did not load.");
+      return false;
+    }
+    var result = safely(function () { return contract.setLogoMetadata(next); }, null);
+    if (!result || result.ok !== true) {
+      notify("warning", (result && result.error) || "The browser-local logo preference was not saved. The current valid mark remains active.");
+      return false;
+    }
+    hydrateContractState();
+    renderLogoCustomizer();
+    renderHistory();
+    if (result.persisted === false || !logoStorageAvailable()) {
+      notify("warning", "The logo changed for this visit, but browser storage could not retain it. It was not claimed as saved.");
+    } else if (message) {
+      notify("info", message);
+    }
+    return true;
+  }
+
+  function pngDimensions(bytes) {
+    var signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (bytes.length < 33 || signature.some(function (value, index) { return bytes[index] !== value; })) return null;
+    if (String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]) !== "IHDR") return null;
+    var width = ((bytes[16] << 24) >>> 0) + (bytes[17] << 16) + (bytes[18] << 8) + bytes[19];
+    var height = ((bytes[20] << 24) >>> 0) + (bytes[21] << 16) + (bytes[22] << 8) + bytes[23];
+    var offset = 8;
+    var foundEnd = false;
+    while (offset + 12 <= bytes.length) {
+      var length = ((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3];
+      var end = offset + 12 + length;
+      if (!Number.isSafeInteger(end) || end > bytes.length) return null;
+      var kind = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+      if (kind === "acTL") return null;
+      if (kind === "IEND") { foundEnd = true; break; }
+      offset = end;
+    }
+    return foundEnd && width && height ? { format: "png", width: width, height: height } : null;
+  }
+
+  function jpegDimensions(bytes) {
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+    var offset = 2;
+    while (offset + 3 < bytes.length) {
+      while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+      if (offset >= bytes.length) break;
+      var marker = bytes[offset++];
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (marker >= 0xd0 && marker <= 0xd7) continue;
+      if (offset + 1 >= bytes.length) return null;
+      var size = (bytes[offset] << 8) + bytes[offset + 1];
+      if (size < 2 || offset + size > bytes.length) return null;
+      var isSof = (marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf);
+      if (isSof) {
+        if (size < 8) return null;
+        var height = (bytes[offset + 3] << 8) + bytes[offset + 4];
+        var width = (bytes[offset + 5] << 8) + bytes[offset + 6];
+        return width && height ? { format: "jpeg", width: width, height: height } : null;
+      }
+      offset += size;
+    }
+    return null;
+  }
+
+  function inspectLogoBytes(bytes) {
+    return pngDimensions(bytes) || jpegDimensions(bytes);
+  }
+
+  function readLogoBytes(file) {
+    if (file && typeof file.arrayBuffer === "function") return file.arrayBuffer().then(function (buffer) { return new Uint8Array(buffer); });
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("The selected image could not be read locally.")); };
+      reader.onload = function () { resolve(new Uint8Array(reader.result)); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function decodeLogoImage(bytes, format) {
+    return new Promise(function (resolve, reject) {
+      if (!window.URL || typeof window.URL.createObjectURL !== "function") {
+        reject(new Error("This browser cannot decode a selected local image safely."));
+        return;
+      }
+      var blob = new Blob([bytes], { type: "image/" + format });
+      var objectUrl = window.URL.createObjectURL(blob);
+      var image = new Image();
+      image.decoding = "async";
+      image.onload = function () {
+        window.URL.revokeObjectURL(objectUrl);
+        resolve(image);
+      };
+      image.onerror = function () {
+        window.URL.revokeObjectURL(objectUrl);
+        reject(new Error("The selected PNG or JPEG could not be decoded locally."));
+      };
+      image.src = objectUrl;
+    });
+  }
+
+  function derivedLogoCanvas(image, backgroundMode, background) {
+    var naturalWidth = Math.max(1, Number(image.naturalWidth) || Number(image.width) || 1);
+    var naturalHeight = Math.max(1, Number(image.naturalHeight) || Number(image.height) || 1);
+    var scale = Math.min(1, SITE_LOGO_MAX_DIMENSION / Math.max(naturalWidth, naturalHeight));
+    var width = Math.max(1, Math.round(naturalWidth * scale));
+    var height = Math.max(1, Math.round(naturalHeight * scale));
+    var canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    var context = canvas.getContext("2d", { alpha: true });
+    if (!context) throw new Error("This browser cannot prepare a bounded local logo canvas.");
+    if (backgroundMode === "color") {
+      context.fillStyle = safeHexColor(background, "#101827");
+      context.fillRect(0, 0, width, height);
+    }
+    context.drawImage(image, 0, 0, width, height);
+    return { canvas: canvas, context: context, width: width, height: height };
+  }
+
+  function canvasHasTransparency(canvas, context) {
+    var pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (var index = 3; index < pixels.length; index += 4) {
+      if (pixels[index] !== 255) return true;
+    }
+    return false;
+  }
+
+  function boundedDataUrl(canvas, format) {
+    if (format === "png") {
+      var png = canvas.toDataURL("image/png");
+      if (png.length <= SITE_LOGO_DERIVED_CHARACTERS) return { format: "png", dataUrl: png };
+      throw new Error("The transparent derived image exceeded this browser-local storage limit. Choose a smaller or simpler image, or select a solid background before trying again.");
+    }
+    var jpegResult = null;
+    [0.88, 0.78, 0.68, 0.58].some(function (quality) {
+      var candidate = canvas.toDataURL("image/jpeg", quality);
+      if (candidate.length <= SITE_LOGO_DERIVED_CHARACTERS) {
+        jpegResult = { format: "jpeg", dataUrl: candidate };
+        return true;
+      }
+      return false;
+    });
+    if (jpegResult) return jpegResult;
+    throw new Error("The compact derived JPEG exceeded this browser-local storage limit. Choose a smaller or simpler image.");
+  }
+
+  function deriveLogoDisplay(image, inspected, presentation) {
+    var canvasState = derivedLogoCanvas(image, presentation.backgroundMode, presentation.background);
+    var hasAlpha = inspected.format === "png" && canvasHasTransparency(canvasState.canvas, canvasState.context);
+    var encoded = boundedDataUrl(canvasState.canvas, hasAlpha && presentation.backgroundMode === "transparent" ? "png" : "jpeg");
+    return {
+      format: encoded.format,
+      dataUrl: encoded.dataUrl,
+      width: canvasState.width,
+      height: canvasState.height,
+      fit: presentation.fit,
+      backgroundMode: presentation.backgroundMode,
+      background: presentation.background,
+      focalX: presentation.focalX,
+      focalY: presentation.focalY
+    };
+  }
+
+  function currentLogoPresentation(elements) {
+    var custom = logoCustom(state.logo && state.logo.custom) || {};
+    return {
+      fit: elements.fit && ["contain", "cover", "fill"].indexOf(elements.fit.value) >= 0 ? elements.fit.value : (custom.fit || "contain"),
+      backgroundMode: elements.backgroundMode && elements.backgroundMode.value === "color" ? "color" : (custom.backgroundMode || "transparent"),
+      background: elements.background ? safeHexColor(elements.background.value, custom.background || "#101827") : (custom.background || "#101827"),
+      focalX: boundedLogoPercent(elements.focalX && elements.focalX.value, custom.focalX === undefined ? 50 : custom.focalX),
+      focalY: boundedLogoPercent(elements.focalY && elements.focalY.value, custom.focalY === undefined ? 50 : custom.focalY)
+    };
+  }
+
+  async function loadCustomLogo(file, elements) {
+    if (!file || !elements || Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active)) return;
+    if (!Number.isFinite(file.size) || file.size < 1 || file.size > SITE_LOGO_INPUT_BYTES) {
+      if (elements.file) elements.file.value = "";
+      notify("warning", "The selected image was not applied. Choose a PNG or JPEG no larger than 512 KiB.");
+      return;
+    }
+    if (elements.file) elements.file.disabled = true;
+    if (elements.status) elements.status.textContent = "Checking selected image bytes locally…";
+    try {
+      var bytes = await readLogoBytes(file);
+      if (bytes.byteLength !== file.size || bytes.byteLength > SITE_LOGO_INPUT_BYTES) throw new Error("The selected image exceeded the browser-local input limit.");
+      var inspected = inspectLogoBytes(bytes);
+      if (!inspected) throw new Error("The selected file is not a complete supported PNG or JPEG based on its actual bytes.");
+      if (inspected.width > SITE_LOGO_MAX_DECODED_DIMENSION || inspected.height > SITE_LOGO_MAX_DECODED_DIMENSION || inspected.width * inspected.height > SITE_LOGO_MAX_DECODED_PIXELS) {
+        throw new Error("The selected image exceeds the browser-local dimension or pixel boundary.");
+      }
+      var image = await decodeLogoImage(bytes, inspected.format);
+      if (image.naturalWidth !== inspected.width || image.naturalHeight !== inspected.height) throw new Error("The decoded image dimensions did not match the validated image header.");
+      var presentation = currentLogoPresentation(elements);
+      var custom = deriveLogoDisplay(image, inspected, presentation);
+      if (!persistLogo({ sourceType: "custom", presetId: logoPreset(state.logo && state.logo.presetId).id, custom: custom }, "A bounded local logo preview is active. The original file, its name, and its path were not retained.")) {
+        return;
+      }
+    } catch (error) {
+      if (elements.file) elements.file.value = "";
+      if (elements.status) elements.status.textContent = "The selected image was not applied.";
+      notify("warning", (error && error.message) || "The selected image could not be validated locally. The current valid logo remains active.");
+    } finally {
+      renderLogoCustomizer();
+    }
+  }
+
+  function installLogoCustomization() {
+    var elements = logoCustomizerElements();
+    if (!elements.surface || elements.surface.getAttribute("data-mss-logo-ready") === "true") return;
+    elements.surface.setAttribute("data-mss-logo-ready", "true");
+    if (elements.presets) {
+      SITE_LOGO_PRESETS.forEach(function (preset) {
+        var card = made("article");
+        card.className = "site-logo-preset";
+        card.setAttribute("data-mss-logo-preset-card", preset.id);
+        card.setAttribute("role", "listitem");
+        var mark = made("span");
+        mark.className = "site-logo-preset-mark";
+        mark.setAttribute("data-mss-logo-preset", preset.id);
+        mark.setAttribute("aria-hidden", "true");
+        mark.textContent = "MS";
+        var copy = made("span");
+        var title = made("strong");
+        title.textContent = preset.name;
+        var description = made("small");
+        description.textContent = preset.description;
+        copy.append(title, description);
+        var choose = button("Use " + preset.name, function () {
+          persistLogo({ sourceType: "preset", presetId: preset.id, custom: null }, preset.name + " is now the browser-local page mark. Any derived custom image was removed from this browser.");
+          if (elements.file) elements.file.value = "";
+        });
+        choose.setAttribute("aria-pressed", "false");
+        card.append(mark, copy, choose);
+        elements.presets.appendChild(card);
+      });
+    }
+    if (elements.search) {
+      makeRegexBuilder(elements.search, {
+        label: "shipped logo presets",
+        scope: elements.surface,
+        candidates: function () { return all('[data-mss-logo-preset-card]', elements.presets); }
+      });
+    }
+    if (elements.file) elements.file.addEventListener("change", function () { loadCustomLogo(elements.file.files && elements.file.files[0], elements); });
+    [elements.fit, elements.backgroundMode, elements.background, elements.focalX, elements.focalY].forEach(function (control) {
+      if (!control) return;
+      control.addEventListener("input", function () {
+        if (control === elements.focalX && elements.focalXOutput) elements.focalXOutput.textContent = boundedLogoPercent(control.value, 50) + "%";
+        if (control === elements.focalY && elements.focalYOutput) elements.focalYOutput.textContent = boundedLogoPercent(control.value, 50) + "%";
+      });
+      control.addEventListener("change", function () {
+        var current = logoCustom(state.logo && state.logo.custom);
+        if (!current) return;
+        var presentation = currentLogoPresentation(elements);
+        persistLogo({ sourceType: "custom", presetId: logoPreset(state.logo && state.logo.presetId).id, custom: Object.assign({}, current, presentation) }, "Custom-logo rendering was updated in this browser.");
+      });
+    });
+    if (elements.reset) elements.reset.addEventListener("click", function () {
+      persistLogo({ sourceType: "preset", presetId: "studio-aqua", custom: null }, "Studio Aqua is active again. The bounded custom display image was removed from this browser.");
+      if (elements.file) elements.file.value = "";
+    });
+    if (hasContractMethod("registerCommand")) {
+      safely(function () {
+        contract.registerCommand({
+          id: "destination-site-logo-customizer",
+          title: "Public-page logo",
+          description: "Choose a browser-local logo preset or bounded custom image.",
+          group: "Browser-local settings",
+          elementId: "site-logo-customizer",
+          keywords: ["logo", "preset", "image", "appearance", "browser-local"]
+        });
+      });
+    }
+    renderLogoCustomizer();
+  }
+
   function syncSettingsControls(surface) {
     var scope = surface || one('[data-contract-surface="settings"]');
     if (!scope) return;
@@ -386,6 +856,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     root.lang = settings.languageMode === "cantonese" ? "zh-Hant" : "en";
     renderLocalizedCopy();
     renderSchoolModeControls();
+    renderLogoCustomizer();
     var output = one("[data-mss-settings-status]");
     if (output) {
       var active = settings.scheduledOverrides && Object.keys(settings.scheduledOverrides).length;
@@ -525,14 +996,6 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     }
     emojiToggle.addEventListener("change", function () {
       updateSettings({ showDialogEmoji: emojiToggle.checked }, "dialog-emoji", "Emoji decoration updated. The factual status stays the same.");
-    });
-
-    var logo = one('[data-contract-hook="app-logo-upload"] input[type="file"]', surface);
-    if (logo) logo.addEventListener("change", function () {
-      if (logo.files && logo.files[0]) {
-        addHistory("Preview input selected", "A local logo input was selected without upload.");
-        notify("info", "A logo was selected for a browser-local preview only. It was not uploaded, stored, or used as application identity.");
-      }
     });
 
     var vocabularyInput = one('[data-contract-hook="personal-vocabulary-upload"] input[type="file"]', surface);
@@ -3823,8 +4286,13 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     return {
       kind: "Minecraft Server Studio browser-local marketing preview",
       generatedAt: new Date().toISOString(),
-      boundary: "No server, installer, credential, file content, or runtime data is included.",
+      boundary: "No server, installer, credential, file content, custom-logo image representation, or runtime data is included.",
       settings: Object.assign({}, state.settings),
+      logo: {
+        sourceType: state.logo && state.logo.sourceType === "custom" ? "custom" : "preset",
+        presetId: logoPreset(state.logo && state.logo.presetId).id,
+        customImageOmitted: true
+      },
       notificationCount: state.notifications.length,
       history: state.history.map(function (entry) {
         return { action: entry.action, detail: entry.detail, when: historyTime(entry) };
@@ -4031,7 +4499,6 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       capture: "missing",
       captureDetail: "No real built-site capture is recorded."
     };
-
     var narratorAndSchedules = {
       implementation: "in-progress",
       implementationReference: "site/index.html, site/app.js, and site/contract.js",
@@ -4041,7 +4508,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       localization: "in-progress",
       localizationDetail: "The controls expose English baseline copy; page-wide localization remains incomplete.",
       persistence: "in-progress",
-      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2, schema version 4, schedule rule version 1",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2, schema version 5, schedule rule version 1",
       persistenceDetail: "Voice identities and schedule rules persist only in this browser and only after bounded validation.",
       test: "missing",
       testDetail: "The fast-delivery lane intentionally did not run tests.",
@@ -4049,6 +4516,25 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       interactionDetail: "No built-artifact interaction is recorded.",
       capture: "missing",
       captureDetail: "No real built-artifact capture is recorded."
+    };
+    var browserLocalLogo = {
+    var browserLocalLogo = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, and site/contract.js",
+      implementationDetail: "Shipped CSS/markup presets and a bounded custom PNG/JPEG display path operate only in this browser-local page.",
+      documentation: "verified",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/site-logo-customization.md",
+      localization: "in-progress",
+      localizationDetail: "The foundation is English-first while the settings core supplies the page language modes.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2 logo record",
+      persistenceDetail: "Only a bounded derived data URL and presentation metadata can persist for this site origin; no source path, name, or original image is retained.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-site interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-site capture is recorded."
     };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
@@ -4060,6 +4546,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
         inventoryFeature("appearance-tab-foundation", "Browser-local appearance and feature-tab foundation", "in-progress", "Theme, density, accent, safe generic typography, docked feature tabs, groups, pins, order, searches, and bounded appearance targets are wired locally. The full per-element and proof contract remains incomplete.", universalControlsCore),
         inventoryFeature("event-narrator", "Optional browser-local event narrator", "in-progress", "Uses actual browser speechSynthesis voices only after opt-in; browser screen-reader activity cannot be reliably detected.", narratorAndSchedules),
         inventoryFeature("scheduled-settings", "Browser-local language and appearance schedules", "in-progress", "Local date, time, weekday, priority, and tie-break rules are wired; HTTPS and Home Assistant options remain explicitly unavailable.", narratorAndSchedules),
+        inventoryFeature("site-logo-customization", "Browser-local public-page logo customization", "in-progress", "Shipped CSS/markup presets and a byte-validated bounded custom PNG/JPEG display representation are local to this browser and never alter product identity.", browserLocalLogo),
         inventoryFeature("personal-vocabulary", "Personal vocabulary JSON loader", "in-progress", "Strict version-1 parser and revalidation protect the local cache; no file name, path, upload, or telemetry.", universalControlsCore),
         inventoryFeature("renamed-presentation-mode", "Renamed browser-local presentation mode", "in-progress", "The local one-way verifier controls English-only presentation and suppression; it is a user-experience lock, not security protection.", universalControlsCore)
       ] },
@@ -4224,6 +4711,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     installNarrator();
     installSchedules();
     installSchoolMode();
+    installLogoCustomization();
     installTabsAndArticles();
     installAppearanceEditor();
     installCollapsibleLists();
@@ -4245,6 +4733,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
           applySettingsPresentation();
           syncNarratorControls();
           renderScheduleList();
+          renderLogoCustomizer();
           renderVocabularyStatus();
           renderNotifications();
           renderHistory();

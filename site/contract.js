@@ -6,7 +6,7 @@
   }
 
   const STORAGE_KEY = "minecraft-server-studio.site.contract.v2";
-  const SCHEMA_VERSION = 4;
+  const SCHEMA_VERSION = 5;
   const SCHEDULE_RULE_VERSION = 1;
   const LIMITS = Object.freeze({
     stateBytes: 1024 * 1024,
@@ -42,7 +42,12 @@
     vocabularyValueCharacters: 512,
     schoolModeCodeMinimum: 4,
     schoolModeCodeMaximum: 64,
-    schoolModeCredentialSaltBytes: 16
+    schoolModeCredentialSaltBytes: 16,
+    logoInputBytes: 512 * 1024,
+    logoDerivedDataUrlCharacters: 512 * 1024,
+    logoDerivedPixels: 512,
+    logoDecodedDimension: 4096,
+    logoDecodedPixels: 4 * 1024 * 1024
   });
 
   const LANGUAGE_MODES = Object.freeze(["english", "cantonese", "bilingual"]);
@@ -64,10 +69,16 @@
   const STATUS_STATES = Object.freeze(["idle", "running", "waiting", "blocked", "verified", "failed"]);
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
   const CONVERSION_STATUSES = Object.freeze(["planned", "queued", "ready", "converting", "converted", "download-requested", "unsupported", "unavailable", "cancelled", "failed", "removed"]);
+  const LOGO_PRESET_IDS = Object.freeze(["studio-aqua", "server-slate", "world-spruce"]);
+  const LOGO_SOURCE_TYPES = Object.freeze(["preset", "custom"]);
+  const LOGO_FORMATS = Object.freeze(["png", "jpeg"]);
+  const LOGO_FITS = Object.freeze(["contain", "cover", "fill"]);
+  const LOGO_BACKGROUND_MODES = Object.freeze(["transparent", "color"]);
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const SAFE_COLOR = /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/;
   const BASE64_SALT = /^[A-Za-z0-9+/]{22}==$/;
   const BASE64_SHA256 = /^[A-Za-z0-9+/]{43}=$/;
+  const LOGO_DATA_URL = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/;
 
   const FILE_ADAPTERS = Object.freeze([
     { id: "documents-pdf", category: "Documents/PDF", label: "PDF inspect and conversion", sourceFormats: ["PDF bytes"], targetFormats: ["PDF operations"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a PDF parser, renderer, or writer." },
@@ -199,7 +210,7 @@
       locks: [],
       totp: [],
       schedules: [],
-      logo: { sourceType: "preset", presetId: "default", custom: null, updatedAt: null },
+      logo: { sourceType: "preset", presetId: "studio-aqua", custom: null, updatedAt: null },
       conversion: { jobs: [] },
       status: {
         currentState: "idle",
@@ -621,28 +632,52 @@
     };
   }
 
+  function boundedPercent(value, fallback) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric * 100) / 100)) : fallback;
+  }
+
+  function safeLogoDataUrl(value, expectedFormat) {
+    if (typeof value !== "string" || value.length < 32 || value.length > LIMITS.logoDerivedDataUrlCharacters) {
+      return "";
+    }
+    const match = LOGO_DATA_URL.exec(value);
+    if (!match || (expectedFormat && match[1] !== expectedFormat)) {
+      return "";
+    }
+    const payload = match[2];
+    if (payload.length % 4 !== 0 || (payload.includes("=") && !/=+$/.test(payload))) {
+      return "";
+    }
+    return value;
+  }
+
   function normalizeLogo(raw, defaults) {
     const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
     const custom = isPlainObject(value.custom) && !hasUnsafeKeys(value.custom) ? value.custom : null;
+    const presetId = enumValue(value.presetId, LOGO_PRESET_IDS, defaults.presetId);
     let normalizedCustom = null;
     if (custom) {
-      normalizedCustom = {
-        format: enumValue(custom.format, ["png", "jpeg", "webp", "svg"], "png"),
-        width: boundedInteger(custom.width, 1, 8192, 1),
-        height: boundedInteger(custom.height, 1, 8192, 1),
-        fit: enumValue(custom.fit, ["contain", "cover", "fill"], "contain"),
-        background: safeColor(custom.background, "#00000000"),
-        crop: {
-          x: Math.max(0, Math.min(1, Number(custom.crop && custom.crop.x) || 0)),
-          y: Math.max(0, Math.min(1, Number(custom.crop && custom.crop.y) || 0)),
-          width: Math.max(0.01, Math.min(1, Number(custom.crop && custom.crop.width) || 1)),
-          height: Math.max(0.01, Math.min(1, Number(custom.crop && custom.crop.height) || 1))
-        }
-      };
+      const format = enumValue(custom.format, LOGO_FORMATS, "png");
+      const dataUrl = safeLogoDataUrl(custom.dataUrl, format);
+      if (dataUrl) {
+        normalizedCustom = {
+          format,
+          dataUrl,
+          width: boundedInteger(custom.width, 1, LIMITS.logoDerivedPixels, 1),
+          height: boundedInteger(custom.height, 1, LIMITS.logoDerivedPixels, 1),
+          fit: enumValue(custom.fit, LOGO_FITS, "contain"),
+          backgroundMode: enumValue(custom.backgroundMode, LOGO_BACKGROUND_MODES, "transparent"),
+          background: safeColor(custom.background, "#101827").slice(0, 7),
+          focalX: boundedPercent(custom.focalX, 50),
+          focalY: boundedPercent(custom.focalY, 50)
+        };
+      }
     }
+    const requestedSource = enumValue(value.sourceType, LOGO_SOURCE_TYPES, defaults.sourceType);
     return {
-      sourceType: enumValue(value.sourceType, ["preset", "custom"], defaults.sourceType),
-      presetId: safeId(value.presetId, defaults.presetId),
+      sourceType: requestedSource === "custom" && normalizedCustom ? "custom" : "preset",
+      presetId: presetId || "studio-aqua",
       custom: normalizedCustom,
       updatedAt: trimString(value.updatedAt, 48, defaults.updatedAt)
     };
@@ -1896,10 +1931,14 @@
 
   function setLogoMetadata(input) {
     const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
-    state.logo = normalizeLogo(Object.assign({}, raw, { updatedAt: now() }), createDefaultState().logo);
-    writeAudit("Logo preference updated", "logo", "Only local logo metadata was saved; no image bytes were exported or uploaded.");
+    const next = normalizeLogo(Object.assign({}, raw, { updatedAt: now() }), createDefaultState().logo);
+    if (raw.sourceType === "custom" && next.sourceType !== "custom") {
+      return { ok: false, error: "A custom logo must contain a bounded PNG or JPEG data URL and valid rendering metadata." };
+    }
+    state.logo = next;
+    writeAudit("Logo preference updated", "logo", "Only a browser-local logo choice changed. Source paths, names, and image bytes were omitted from this audit record.");
     persist({ type: "logo" });
-    return { ok: true, logo: clone(state.logo) };
+    return { ok: true, persisted: storageAvailable, logo: clone(state.logo) };
   }
 
   function containsSecretFields(value) {
@@ -2128,6 +2167,22 @@
     const exported = getState();
     exported.personalVocabulary = { status: exported.personalVocabulary.status, omitted: true };
     exported.schoolModeCredential = { configured: isConfiguredSchoolModeCredential(state.schoolModeCredential), omitted: true };
+    exported.logo = {
+      sourceType: state.logo.sourceType,
+      presetId: state.logo.presetId,
+      custom: state.logo.custom ? {
+        format: state.logo.custom.format,
+        width: state.logo.custom.width,
+        height: state.logo.custom.height,
+        fit: state.logo.custom.fit,
+        backgroundMode: state.logo.custom.backgroundMode,
+        background: state.logo.custom.background,
+        focalX: state.logo.custom.focalX,
+        focalY: state.logo.custom.focalY,
+        omitted: true
+      } : null,
+      omitted: true
+    };
     exported.locks = exported.locks.map((lock) => ({ id: lock.id, target: lock.target, label: lock.label, method: lock.method, duration: lock.duration, minutes: lock.minutes, locked: lock.locked, createdAt: lock.createdAt, updatedAt: lock.updatedAt }));
     exported.totp = exported.totp.map((entry) => ({ id: entry.id, label: entry.label, issuer: entry.issuer, account: entry.account, algorithm: entry.algorithm, digits: entry.digits, period: entry.period, enrolled: entry.enrolled, updatedAt: entry.updatedAt }));
     return exported;
