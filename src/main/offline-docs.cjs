@@ -42,6 +42,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('file-converter', 'file-converter.md', 'Local file-converter foundation', 'Inspect a local file and browse the honest disabled adapter catalog.'),
   entry('authenticator-and-toy-locks', 'authenticator-and-toy-locks.md', 'Local authenticator and toy-lock foundation', 'Manage local RFC 6238 codes and independently credentialed toy-lock records.'),
   entry('local-status-and-completeness', 'local-status-and-completeness.md', 'Local status and desktop completeness', 'Read the local status surface and evidence inventory.'),
+  entry('local-history-and-safe-exports', 'local-history-and-safe-exports.md', 'Local history and safe exports', 'Browse bounded redacted event metadata and create safe structured exports.'),
   entry('shared-status-hub-bridge', 'shared-status-hub-bridge.md', 'Shared Status Hub bridge', 'Understand the optional external bridge and local fallback.'),
   entry('offline-documentation-browser', 'offline-documentation-browser.md', 'Offline documentation browser', 'Browse bundled feature documentation without a network request.')
 ]);

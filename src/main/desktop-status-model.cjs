@@ -93,6 +93,7 @@ const DESKTOP_SURFACES = deepFreeze([
   surface('ollama', 'Local Ollama suite', 'Local runtime, model store, chat, batch pull, hardware-fit, and harness controls.'),
   surface('authenticator-and-toy-locks', 'Authenticator and toy locks', 'Local authenticator, toy-lock flows, credential-vault boundaries, and recovery guidance.'),
   surface('docs-history-and-notifications', 'Documentation, history, and notifications', 'Offline documentation, local history, notification center, and changelog access.'),
+  surface('local-history-and-safe-exports', 'Local history and safe exports', 'Redacted append-only local history metadata, filtering, safe structured exports, and external-editor handoff.'),
   surface('export', 'Export', 'Structured local export, omission disclosure, archive options, and external-editor handoff.')
 ]);
 

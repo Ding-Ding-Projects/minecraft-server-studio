@@ -6,6 +6,9 @@ const state = {
   logs: [],
   localStatus: null,
   statusHubBridge: null,
+  localHistory: null,
+  localHistoryResult: null,
+  localHistoryFilterError: '',
   buildToolsMetadata: null,
   buildToolsPlan: null,
   paperCliPlan: null,
@@ -165,7 +168,7 @@ const regexSearches = {
 
 const SERVER_TAB_IDS = Object.freeze([
   'general', 'world', 'gameplay', 'network', 'runtime', 'paper-cli', 'buildtools', 'backups',
-  'live', 'commands', 'status', 'advanced', 'plugins', 'console'
+  'live', 'commands', 'status', 'history', 'advanced', 'plugins', 'console'
 ]);
 const DEFAULT_APPEARANCE_NAVIGATION = Object.freeze({
   state: 'unavailable',
@@ -1886,6 +1889,238 @@ function renderLocalStatus() {
   }, 'No completeness inventory rows are available.');
 }
 
+function historyFiltersFromForm() {
+  return {
+    fromDate: $('#history-from-date')?.value || '',
+    toDate: $('#history-to-date')?.value || '',
+    action: $('#history-action-filter')?.value || '',
+    query: $('#history-search')?.value || '',
+    regex: $('#history-regex-enabled')?.checked === true,
+    flags: $('#history-regex-flags')?.value ?? 'i',
+    limit: 250
+  };
+}
+
+function historyFilterProblem(filters = historyFiltersFromForm()) {
+  const fromControl = $('#history-from-date');
+  const toControl = $('#history-to-date');
+  if (fromControl && !fromControl.validity.valid) return 'Start date is invalid. Keep the value visible and use a complete YYYY-MM-DD date.';
+  if (toControl && !toControl.validity.valid) return 'End date is invalid. Keep the value visible and use a complete YYYY-MM-DD date.';
+  if (filters.fromDate && filters.toDate && filters.fromDate > filters.toDate) return 'Start date must not be after end date.';
+  if (!filters.regex) return '';
+  const query = String(filters.query || '');
+  const flags = String(filters.flags ?? 'i');
+  if (!query) return 'Enter a regular expression before enabling regex search.';
+  if (query.length > 128) return 'Regular expressions must be 128 characters or fewer.';
+  if (!/^[im]{0,2}$/.test(flags) || new Set(flags).size !== flags.length) return 'Use unique i and m flags only.';
+  if (/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(query) || /(?:\.\*|\.\+){2,}/.test(query) || /\{\d{4,}(?:,\d*)?\}/.test(query)) {
+    return 'This pattern contains a nested or oversized quantifier shape that the bounded local search rejects.';
+  }
+  try {
+    new RegExp(query, flags);
+  } catch {
+    return 'The pattern is invalid. Correct it before applying regex search.';
+  }
+  return '';
+}
+
+function setHistoryFilterError(message = '') {
+  state.localHistoryFilterError = message;
+  const target = $('#local-history-filter-error');
+  if (!target) return;
+  target.textContent = message;
+  target.hidden = !message;
+}
+
+function historyActionLabel(action) {
+  return ({
+    'record-created': 'Record created',
+    'record-updated': 'Record updated',
+    'settings-changed': 'Settings changed',
+    'record-deleted': 'Record deleted',
+    'configuration-changed': 'Configuration changed',
+    'export-created': 'Export created'
+  })[action] || 'Recorded event';
+}
+
+function historyStateLabel(value) {
+  return ({
+    ready: 'Ready',
+    'not-loaded': 'Not loaded',
+    unavailable: 'Unavailable',
+    invalid: 'Invalid',
+    'limit-reached': 'Limit reached'
+  })[value] || 'Unavailable';
+}
+
+function historyRegexPreview() {
+  const preview = $('#history-regex-preview');
+  if (!preview) return;
+  const enabled = $('#history-regex-enabled')?.checked === true;
+  const query = $('#history-search')?.value || '';
+  const flags = $('#history-regex-flags')?.value ?? 'i';
+  const sample = $('#history-regex-sample')?.value || '';
+  if (!enabled) {
+    preview.textContent = 'Regex mode is off. Search history uses plain text until you enable this builder.';
+    return;
+  }
+  if (!query) {
+    preview.textContent = 'Enter a raw pattern in Search history to preview the expression.';
+    return;
+  }
+  const problem = historyFilterProblem({ ...historyFiltersFromForm(), regex: true, query, flags });
+  if (problem) {
+    preview.textContent = problem;
+    return;
+  }
+  try {
+    const expression = new RegExp(query, flags);
+    if (!sample) {
+      preview.textContent = 'Pattern is valid. Enter optional local sample text to see a preview; the sample is not saved or exported.';
+      return;
+    }
+    preview.textContent = expression.test(sample)
+      ? 'Pattern is valid and matches the current local sample text.'
+      : 'Pattern is valid but does not match the current local sample text.';
+  } catch {
+    preview.textContent = 'The pattern is invalid. Correct it before applying regex search.';
+  }
+}
+
+function insertHistoryRegexToken(token) {
+  const input = $('#history-search');
+  if (!input) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  const value = input.value;
+  const before = value.slice(0, start);
+  const after = value.slice(end);
+  input.value = before + token + after;
+  const cursor = start + (token === '()' ? 1 : token.length);
+  input.focus();
+  input.setSelectionRange(cursor, cursor);
+  historyRegexPreview();
+}
+
+function renderLocalHistory() {
+  const status = state.localHistory;
+  const journal = status?.journal || {};
+  const exports = status?.exports || {};
+  const latest = exports.lastExport || null;
+  const vscode = exports.vscode || { state: 'unavailable', detail: 'VS Code status is unavailable.' };
+  $('#local-history-state').textContent = historyStateLabel(journal.state);
+  $('#local-history-count').textContent = Number.isFinite(journal.recordCount)
+    ? `${journal.recordCount}/${journal.maximumRecords || '?'} records`
+    : 'Not loaded';
+  $('#local-history-export-state').textContent = latest
+    ? `${String(latest.format || '').toUpperCase()} · ${latest.fileName || 'latest export'}`
+    : 'No export yet';
+  $('#local-history-boundary').textContent = status?.boundary || 'History boundary state is unavailable.';
+  $('#local-history-restore').textContent = status?.restoration?.detail || 'Restore state is unavailable.';
+  const exportDetail = $('#local-history-export-detail');
+  if (latest) {
+    exportDetail.textContent = `${latest.fileName} · ${formatBytes(latest.bytes)} · created ${new Date(latest.createdAt).toLocaleString()}. ${vscode.detail || ''}`;
+  } else {
+    exportDetail.textContent = `No local history export has been created in this app-private export area. ${vscode.detail || ''}`;
+  }
+  const openButton = $('#open-history-export-vscode-button');
+  openButton.disabled = !latest || vscode.state !== 'available';
+  openButton.title = openButton.disabled
+    ? (!latest ? 'Create a local history export before opening it in VS Code.' : (vscode.detail || 'VS Code is unavailable.'))
+    : 'Open the latest app-private export in VS Code.';
+  const result = state.localHistoryResult || { records: [], matchedRecords: 0, totalRecords: 0 };
+  $('#local-history-match-count').textContent = `${result.matchedRecords || 0} of ${result.totalRecords || 0} records`;
+  const container = $('#local-history-records');
+  if (!container) return;
+  container.replaceChildren();
+  const records = Array.isArray(result.records) ? result.records : [];
+  if (!records.length) {
+    container.append(statusRecord('No matching history records', 'Change the date, action, or search filter. This view shows only redacted local metadata.', 'idle'));
+    return;
+  }
+  records.forEach((record) => {
+    const detail = [
+      record.at ? new Date(record.at).toLocaleString() : 'No timestamp',
+      historyActionLabel(record.action),
+      record.detail || 'No detail recorded.'
+    ].join(' · ');
+    container.append(statusRecord(record.label || 'Recorded local event', detail, 'idle'));
+  });
+}
+
+async function refreshLocalHistory() {
+  const filters = historyFiltersFromForm();
+  const status = await safely(() => window.studio.localHistoryStatus());
+  if (status) state.localHistory = status;
+  const problem = historyFilterProblem(filters);
+  if (problem) {
+    setHistoryFilterError(problem);
+    state.localHistoryResult = {
+      records: [],
+      matchedRecords: 0,
+      totalRecords: state.localHistory?.journal?.recordCount || 0
+    };
+    renderLocalHistory();
+    return;
+  }
+  try {
+    const result = await window.studio.listLocalHistory(filters);
+    state.localHistoryResult = result;
+    setHistoryFilterError('');
+  } catch (error) {
+    const message = error?.message || String(error);
+    setHistoryFilterError(message);
+    state.localHistoryResult = {
+      records: [],
+      matchedRecords: 0,
+      totalRecords: state.localHistory?.journal?.recordCount || 0
+    };
+    toast(message, 'error');
+  }
+  renderLocalHistory();
+}
+
+async function exportLocalHistory() {
+  const filters = historyFiltersFromForm();
+  const problem = historyFilterProblem(filters);
+  if (problem) {
+    setHistoryFilterError(problem);
+    renderLocalHistory();
+    toast(problem, 'error');
+    return;
+  }
+  const format = $('#history-export-format')?.value || 'json';
+  const exported = await safely(
+    () => window.studio.exportLocalHistory({ format, filters }),
+    'Redacted local history export created.'
+  );
+  if (!exported) return;
+  await refreshLocalHistory();
+}
+
+async function openLatestHistoryExportInVsCode() {
+  const latest = state.localHistory?.exports?.lastExport;
+  if (!latest?.id) return;
+  const opened = await safely(
+    () => window.studio.openLocalHistoryExportInVsCode(latest.id),
+    'The selected app-private history export was handed to VS Code.'
+  );
+  if (opened) await refreshLocalHistory();
+}
+
+function clearHistoryFilters() {
+  $('#history-from-date').value = '';
+  $('#history-to-date').value = '';
+  $('#history-action-filter').value = '';
+  $('#history-search').value = '';
+  $('#history-regex-enabled').checked = false;
+  $('#history-regex-flags').value = 'i';
+  $('#history-regex-sample').value = '';
+  setHistoryFilterError('');
+  historyRegexPreview();
+  refreshLocalHistory();
+}
+
 function formatBytes(value) {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown size';
@@ -3043,6 +3278,7 @@ function renderAll() {
   renderToyLocks();
   renderConsole();
   renderLocalStatus();
+  renderLocalHistory();
   renderBackupLifecycle();
   renderApplicationUpdate();
   renderOllama();
@@ -4280,6 +4516,16 @@ function handleStudioEvent(event) {
     applyExperienceSnapshot(event.payload);
     return;
   }
+  if (event?.type === 'local-history' && event.history) {
+    state.localHistory = event.history;
+    refreshLocalHistory();
+    return;
+  }
+  if (event?.type === 'local-history-recording-failed') {
+    toast(event.detail || 'The requested change completed, but its local history event could not be recorded.', 'error');
+    refreshLocalHistory();
+    return;
+  }
   if (event?.type === 'ollama-suite') {
     state.ollama = event.ollama || null;
     renderOllama();
@@ -4479,7 +4725,7 @@ function bindEvents() {
       state.unsaved.statusHubBridge = true;
       return;
     }
-    if (['commands', 'console', 'plugins'].includes(panel)) return;
+    if (['commands', 'console', 'plugins', 'history'].includes(panel)) return;
     state.unsaved.settings = true;
   };
   $('#settings-form').addEventListener('input', markSettingsDraft);
@@ -4543,6 +4789,21 @@ function bindEvents() {
   $('#reset-documentation-regex-button').addEventListener('click', resetDocumentationRegex);
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
+  $('#refresh-local-history-button').addEventListener('click', refreshLocalHistory);
+  $('#apply-history-filter-button').addEventListener('click', refreshLocalHistory);
+  $('#clear-history-filter-button').addEventListener('click', clearHistoryFilters);
+  $('#export-local-history-button').addEventListener('click', exportLocalHistory);
+  $('#open-history-export-vscode-button').addEventListener('click', openLatestHistoryExportInVsCode);
+  $('#history-search').addEventListener('input', historyRegexPreview);
+  $('#history-search').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    refreshLocalHistory();
+  });
+  $('#history-regex-enabled').addEventListener('change', historyRegexPreview);
+  $('#history-regex-flags').addEventListener('input', historyRegexPreview);
+  $('#history-regex-sample').addEventListener('input', historyRegexPreview);
+  $$('.history-regex-token').forEach((button) => button.addEventListener('click', () => insertHistoryRegexToken(button.dataset.historyRegexToken || '')));
   bindOllamaSuiteEvents();
   $('#save-status-hub-bridge-button').addEventListener('click', saveStatusHubBridgeSettings);
   $('#sync-status-hub-bridge-button').addEventListener('click', synchronizeStatusHubBridge);
@@ -4720,7 +4981,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks()]);
   renderCommandCenter();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });

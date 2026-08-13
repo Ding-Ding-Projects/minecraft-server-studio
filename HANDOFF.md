@@ -97,6 +97,7 @@ implementation lane.
 - `src/main/update-controller.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: approved-feed validation, Electron Squirrel update-state wiring, visible update status, and user-controlled restart handling.
 - `src/main/ollama-suite-manager.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/main/server-manager.cjs`, and the Local Ollama renderer destination: fixed-loopback main-process reads for local API version, installed-model, and running-model summaries, with bounded response validation and no cloud, token, or arbitrary-shell path.
 - `src/main/offline-docs.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/markdown-renderer.js`, and the documentation destination: a fixed app-bundled feature-article inventory, package-time availability boundary, narrow reader IPC, escaped Markdown output, internal article-link routing, and local documentation search with a bounded regex-builder route.
+- `src/main/local-history-service.cjs`, `src/main/offline-docs.cjs`, `src/main/appearance-navigation-settings.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/main/desktop-status-model.cjs`, `src/main/server-manager.cjs`, `src/renderer/index.html`, `src/renderer/renderer.js`, `src/renderer/styles.css`, and `docs/features/local-history-and-safe-exports.md`: bounded append-only app-private JSONL event metadata, exact offline-documentation inventory registration, appearance-navigation tab registration, source-level IPC/preload and history-tab wiring, completeness inventory, redacted structured exports, local filtering/search, exact unavailable states, and validated VS Code handoff boundaries.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, backup/update/rollback previews, application-update controls, and Local status destination.
 - `src/renderer/experience-copy.js` and the preferences dialog: persisted English/Cantonese/bilingual presentation, independent message-playfulness controls, decorative message emoji preference, display-name label, and School-mode status/recovery controls.
 - `src/cli/mss.cjs` and `src/cli/rcon-gateway.cjs`: shared local CLI plus a one-shot protected Electron gateway for fixed-loopback RCON command and stop operations. The CLI rejects password configuration, removes legacy RCON password fields from JSON output, and never carries an RCON credential across its own arguments, environment, stdin, or registry path.
@@ -140,6 +141,33 @@ No tests, linting, build, package, runtime interaction, capture, BuildTools
 download, Java/Git installation, process execution, JAR creation, or release
 operation ran for this source-only candidate. The `spigot-buildtools` inventory
 row retains pending localization, test, capture, and evidence proof records.
+
+## Local history and safe-export foundation
+
+`src/main/local-history-service.cjs` owns an app-private, bounded append-only
+JSONL journal for redacted event metadata. The main process records selected
+presentation, narrator and schedule, shared-mode, server-record, authenticator,
+toy-lock, and optional Status Hub configuration mutations through the service,
+while the preload exposes only status, filtered listing, export, and
+existing-output-only VS Code handoff methods. The renderer adds the History +
+exports tab with date/action/plain-text filtering and its attached regex builder.
+
+The service accepts only a fixed metadata shape, refuses secret-like terms,
+URLs, and filesystem paths, preserves an invalid or full journal without
+truncating it, atomically writes bounded exports in JSON, JSONL, YAML, TOML,
+CSV, TSV, or Markdown, and records a successful export as a new event. It does
+not create a Git repository, store snapshots, or provide restoration. The exact
+visible unavailable state is:
+
+> Restoration is unavailable because this foundation stores redacted append-only event metadata only; it has not created a Git repository or state snapshots.
+
+`docs/features/local-history-and-safe-exports.md` documents the source-level
+seam, limits, omission policy, output formats, and unavailable states. The
+article is registered in the exact offline-documentation inventory, and the
+inventory row remains incomplete for localization, focused checks, built-artifact
+interaction, and captures. No runtime operation, export, editor launch, test,
+lint, review, build, package, release, or capture is claimed here.
+
 ## Local authenticator and toy-lock foundation
 
 The desktop source now includes a local RFC 6238 authenticator destination and
@@ -275,6 +303,7 @@ The backup/update candidate adds a bounded local snapshot lifecycle for world, c
 - Runtime command discovery is now sourced from explicitly selected local JAR probes and observed running local-console or loopback-RCON `help`/`plugins`/Paper `paper` responses. It has not been exercised against a real server in this fast-delivery pass, so source, timeout, truncation, and interleaving states remain intentionally visible instead of being claimed as verified runtime support.
 - Exercise desktop RCON against an intentionally redacted credential echo, unsafe control characters, malformed frames, and oversized replies once the speed-delivery verification boundary is lifted.
 - The optional Status Hub bridge still needs its complete independent proof set: localized copy, focused tests, built-artifact interaction, real capture, and actual accepted external registration/update/poll/reply evidence. Local status remains the required fallback if it is unconfigured or unavailable.
+- The local-history and safe-export foundation still needs complete mutation coverage, accessibility/localization work, focused checks, packaged-runtime interaction, and real captures. Its append-only redacted journal is not a Git history, backup, snapshot, or restoration implementation.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.
 - The settings foundation now includes bounded narrator/schedule, authenticator/toy-lock, converter, local-model, and appearance/tab source modules, but does not yet complete universal localization, personal-vocabulary upload, every-element appearance editing, complete tab management/regex/palette coverage, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.

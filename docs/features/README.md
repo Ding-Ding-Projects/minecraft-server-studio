@@ -19,5 +19,6 @@
 - [Local file-converter foundation](file-converter.md)
 - [Local authenticator and toy-lock foundation](authenticator-and-toy-locks.md)
 - [Local status and completeness](local-status-and-completeness.md)
+- [Local history and safe exports](local-history-and-safe-exports.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Offline documentation browser](offline-documentation-browser.md)

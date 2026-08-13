@@ -203,6 +203,17 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .status-record[data-state="failed"], .status-record[data-state="blocked"] { border-color: var(--error); }
 .status-record[data-state="complete"], .status-record[data-state="verified"] { border-color: #4f9d75; }
 
+.history-filter-card, .history-export-card { display: grid; gap: 16px; padding: 18px; border: 1px solid var(--outline-variant); border-radius: 20px; background: #151922; }
+.history-boundary-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.history-filter-card h4, .history-export-card h4 { margin-bottom: 5px; }
+.history-filter-actions, .history-export-actions, .regex-builder-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.history-export-actions { align-content: end; }
+.regex-builder { padding: 14px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container); }
+.regex-builder > summary { cursor: pointer; color: var(--primary); font-weight: 800; }
+.regex-builder-content { display: grid; gap: 14px; margin-top: 14px; }
+.regex-preview { margin: 0; padding: 11px 12px; border: 1px solid var(--outline-variant); border-radius: 12px; color: var(--on-surface-variant); background: var(--surface-container-high); }
+.history-filter-error { margin: 0; padding: 11px 12px; border: 1px solid var(--error); border-radius: 12px; color: var(--error); background: color-mix(in srgb, var(--error) 10%, var(--surface-container)); }
+
 body.documentation-open .topbar,
 body.documentation-open .dependency-card,
 body.documentation-open .application-update-card { display: none; }
@@ -253,7 +264,7 @@ body.documentation-open .application-update-card { display: none; }
 
 @media (max-width: 850px) {
   .live-resource-grid { grid-template-columns: 1fr; }
-  .status-summary-grid, .status-detail-card { grid-template-columns: 1fr; }
+  .status-summary-grid, .status-detail-card, .history-boundary-card { grid-template-columns: 1fr; }
   .paper-cli-disabled-flags { grid-template-columns: 1fr; }
   .runtime-requirement-card, .guarded-action-card, .capability-card { align-items: stretch; flex-direction: column; }
   .capability-list { justify-content: flex-start; }

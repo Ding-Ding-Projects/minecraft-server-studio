@@ -24,6 +24,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Inspect the fixed local Ollama service through main-process-only reads for version, installed models, and running models. The Local Ollama destination keeps Model Store catalog, pull, chat, and harness controls visibly disabled until their full local workflows exist; it never sends requests to a cloud endpoint or accepts an arbitrary shell command.
 - Optionally enable a local event narrator with independently selected English and Cantonese platform voices, rate and pitch controls, serialized speech, and a screen-reader yield boundary; add bounded local-time language schedules without a network schedule source.
 - Use the local authenticator destination for vault-backed RFC 6238 TOTP code snapshots and optional independently credentialed toy-lock records. QR pairing/import, every-element lock wiring, secret export, and synchronization remain explicitly unavailable in this foundation.
+- Browse bounded app-private local-history metadata by date, action, plain text, or a local regex builder; create a redacted JSON, JSON Lines, YAML, TOML, CSV, TSV, or Markdown export and open it in VS Code only after a real output exists. This foundation does not create a Git repository, save snapshots, or restore prior state.
 
 ## Desktop workflow
 
@@ -108,6 +109,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Local Ollama suite foundation](docs/features/local-ollama-suite.md)
 - [Local file-converter foundation](docs/features/file-converter.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
+- [Local history and safe exports](docs/features/local-history-and-safe-exports.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
 - [Offline documentation browser](docs/features/offline-documentation-browser.md)
 - [Feature documentation index](docs/features/README.md)

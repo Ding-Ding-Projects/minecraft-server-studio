@@ -5,6 +5,7 @@ const { ServerManager } = require('./server-manager.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
 const { StudioSettingsService } = require('./studio-settings.cjs');
 const { NarrationScheduleSettingsService } = require('./narration-schedule-settings.cjs');
+const { LocalHistoryService } = require('./local-history-service.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { FileConverter } = require('./file-converter.cjs');
@@ -44,6 +45,7 @@ let serverManager;
 let credentialVault;
 let studioSettings;
 let narrationScheduleSettings;
+let localHistory;
 let schoolModeVault;
 let schoolModeCredentialKey;
 
@@ -358,6 +360,11 @@ app.whenReady().then(async () => {
     onChange: publishExperienceSettings
   });
   studioSettings.initialize();
+  localHistory = new LocalHistoryService({
+    dataDir: path.join(app.getPath('userData'), 'local-history'),
+    onChange: (history) => sendToRenderer({ type: 'local-history', history })
+  });
+  localHistory.initialize();
   narrationScheduleSettings = new NarrationScheduleSettingsService({
     dataDir: path.join(app.getPath('userData'), 'settings'),
     onChange: publishExperienceSettings
@@ -486,6 +493,26 @@ function requireNarrationScheduleSettings() {
   return narrationScheduleSettings;
 }
 
+function requireLocalHistory() {
+  if (!localHistory) throw new Error('Local history is still starting.');
+  return localHistory;
+}
+
+function recordLocalHistory(record) {
+  try {
+    return Object.freeze({ recorded: true, record: requireLocalHistory().record(record) });
+  } catch {
+    // A journal write is auditable metadata, not permission to undo a primary
+    // change that already completed. Notify the renderer without serializing
+    // the triggering value or an error payload.
+    sendToRenderer({
+      type: 'local-history-recording-failed',
+      detail: 'The requested change completed, but its local history event could not be recorded. Open History + exports for the current journal state.'
+    });
+    return Object.freeze({ recorded: false });
+  }
+}
+
 function requireAuthenticator() {
   if (!authenticatorService) throw new Error('The local authenticator is unavailable in this app build.');
   return authenticatorService;
@@ -498,45 +525,101 @@ function requireToyLocks() {
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
 ipcMain.handle('studio:experience-settings', () => experienceSnapshot());
-ipcMain.handle('studio:update-experience-settings', (_event, patch) => {
+ipcMain.handle('studio:update-experience-settings', async (_event, patch) => {
   requireStudioSettings().updateLocal(patch);
+  await recordLocalHistory({
+    action: 'settings-changed',
+    subject: 'presentation',
+    subjectId: 'presentation-settings',
+    label: 'Presentation settings changed',
+    detail: 'A local presentation preference changed. Exact values and sensitive data were omitted from history.'
+  });
   return experienceSnapshot();
 });
-ipcMain.handle('studio:update-appearance-navigation', (_event, patch) => {
+ipcMain.handle('studio:update-appearance-navigation', async (_event, patch) => {
   requireStudioSettings().updateAppearanceNavigation(patch);
+  await recordLocalHistory({
+    action: 'settings-changed',
+    subject: 'presentation',
+    subjectId: 'appearance-navigation',
+    label: 'Appearance and navigation settings changed',
+    detail: 'A local appearance or navigation preference changed. Exact values and sensitive data were omitted from history.'
+  });
   return experienceSnapshot();
 });
 ipcMain.handle('studio:narration-schedule-settings', () => experienceSnapshot().narrationSchedule);
-ipcMain.handle('studio:update-narrator-settings', (_event, patch) => {
+ipcMain.handle('studio:update-narrator-settings', async (_event, patch) => {
   requireNarrationScheduleSettings().updateNarrator(patch);
+  await recordLocalHistory({
+    action: 'settings-changed',
+    subject: 'presentation',
+    subjectId: 'narrator-settings',
+    label: 'Narrator settings changed',
+    detail: 'A local narrator preference changed. Exact values and sensitive data were omitted from history.'
+  });
   return experienceSnapshot();
 });
-ipcMain.handle('studio:add-scheduled-setting', (_event, draft) => {
+ipcMain.handle('studio:add-scheduled-setting', async (_event, draft) => {
   requireNarrationScheduleSettings().addSchedule(draft);
+  await recordLocalHistory({
+    action: 'record-created',
+    subject: 'presentation',
+    subjectId: 'scheduled-setting',
+    label: 'Scheduled presentation setting created',
+    detail: 'A local scheduled presentation setting was created. Exact values and sensitive data were omitted from history.'
+  });
   return experienceSnapshot();
 });
-ipcMain.handle('studio:set-scheduled-setting-enabled', (_event, id, enabled) => {
+ipcMain.handle('studio:set-scheduled-setting-enabled', async (_event, id, enabled) => {
   requireNarrationScheduleSettings().setScheduleEnabled(id, enabled);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'presentation',
+    subjectId: 'scheduled-setting',
+    label: 'Scheduled presentation setting changed',
+    detail: 'A local scheduled presentation setting changed. Exact values and sensitive data were omitted from history.'
+  });
   return experienceSnapshot();
 });
-ipcMain.handle('studio:create-school-mode-record', () => {
+ipcMain.handle('studio:create-school-mode-record', async () => {
   requireStudioSettings().ensureSharedRecord();
+  await recordLocalHistory({
+    action: 'record-created',
+    subject: 'school-mode',
+    subjectId: 'shared-mode',
+    label: 'Shared mode record created',
+    detail: 'A shared local presentation-mode record was created. Exact unlock data was omitted.'
+  });
   return experienceSnapshot();
 });
-ipcMain.handle('studio:update-school-mode-label', (_event, label) => {
+ipcMain.handle('studio:update-school-mode-label', async (_event, label) => {
   requireStudioSettings().updateSchoolModeLabel(label);
+  await recordLocalHistory({
+    action: 'settings-changed',
+    subject: 'school-mode',
+    subjectId: 'shared-mode',
+    label: 'Shared mode label changed',
+    detail: 'A shared local presentation-mode label changed. The exact label was omitted from history.'
+  });
   return experienceSnapshot();
 });
-ipcMain.handle('studio:save-school-mode-credential', (_event, input) => {
+ipcMain.handle('studio:save-school-mode-credential', async (_event, input) => {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Unlock credential input is invalid.');
   requireStudioSettings().ensureSharedRecord();
   const status = requireSchoolModeVault();
   if (status.configured) verifySchoolModeCredential(input.currentCredential);
   const next = normalizeSchoolCredential(input.newCredential, 'New unlock password or PIN');
   schoolModeVault.save(schoolModeCredentialKey, next);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'school-mode',
+    subjectId: 'shared-mode',
+    label: 'Shared mode unlock configuration changed',
+    detail: 'A protected local unlock configuration changed. Sensitive values were omitted from history.'
+  });
   return publishExperienceSettings();
 });
-ipcMain.handle('studio:set-school-mode', (_event, input) => {
+ipcMain.handle('studio:set-school-mode', async (_event, input) => {
   if (!input || typeof input !== 'object' || Array.isArray(input) || typeof input.enabled !== 'boolean') throw new Error('Shared mode input is invalid.');
   const settings = requireStudioSettings();
   if (input.enabled) {
@@ -546,9 +629,26 @@ ipcMain.handle('studio:set-school-mode', (_event, input) => {
     verifySchoolModeCredential(input.credential);
   }
   settings.setSchoolModeEnabled(input.enabled);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'school-mode',
+    subjectId: 'shared-mode',
+    label: 'Shared mode state changed',
+    detail: 'The shared local presentation-mode state changed. Sensitive values were omitted from history.'
+  });
   return experienceSnapshot();
 });
-ipcMain.handle('studio:create-server', (_event, draft) => requireManager().createServer(draft));
+ipcMain.handle('studio:create-server', async (_event, draft) => {
+  const created = await requireManager().createServer(draft);
+  await recordLocalHistory({
+    action: 'record-created',
+    subject: 'server',
+    subjectId: String(created.id),
+    label: 'Server record created',
+    detail: 'A local managed server record was created. Identifying, location, setting, and sensitive values were omitted from history.'
+  });
+  return created;
+});
 ipcMain.handle('studio:update-server', async (_event, id, patch) => {
   const safePatch = patch && typeof patch === 'object' ? { ...patch } : patch;
   if (safePatch?.settings && Object.prototype.hasOwnProperty.call(safePatch.settings, 'rcon.password')) {
@@ -560,7 +660,15 @@ ipcMain.handle('studio:update-server', async (_event, id, patch) => {
       safePatch.rconSecretConfigured = true;
     }
   }
-  return requireManager().updateServer(id, safePatch);
+  const updated = await requireManager().updateServer(id, safePatch);
+  await recordLocalHistory({
+    action: 'record-updated',
+    subject: 'server',
+    subjectId: String(id),
+    label: 'Server record updated',
+    detail: 'A local managed server record changed. Identifying, location, setting, and sensitive values were omitted from history.'
+  });
+  return updated;
 });
 ipcMain.handle('studio:paper-versions', () => requireManager().paperVersions());
 ipcMain.handle('studio:inspect-dependencies', (_event, serverId) => requireManager().inspectDependencies(serverId || null));
@@ -628,6 +736,10 @@ ipcMain.handle('studio:open-folder', async (_event, folder) => {
   if (error) throw new Error(error);
 });
 ipcMain.handle('studio:data-directory', () => path.join(app.getPath('userData'), 'servers'));
+ipcMain.handle('studio:local-history-status', () => requireLocalHistory().status());
+ipcMain.handle('studio:list-local-history', (_event, filters) => requireLocalHistory().list(filters || {}));
+ipcMain.handle('studio:export-local-history', (_event, request) => requireLocalHistory().export(request || {}));
+ipcMain.handle('studio:open-local-history-export-in-vscode', (_event, exportId) => requireLocalHistory().openInVsCode(exportId));
 ipcMain.handle('studio:offline-docs', () => requireOfflineDocumentation().list());
 ipcMain.handle('studio:offline-doc', (_event, id) => requireOfflineDocumentation().read(id));
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
@@ -635,12 +747,52 @@ ipcMain.handle('studio:ollama-status', () => requireOllamaSuite().status());
 ipcMain.handle('studio:refresh-ollama', () => requireOllamaSuite().refresh());
 ipcMain.handle('studio:authenticator-status', () => requireAuthenticator().getStatus());
 ipcMain.handle('studio:authenticator-snapshot', () => requireAuthenticator().snapshot());
-ipcMain.handle('studio:create-authenticator-entry', (_event, input) => requireAuthenticator().createEntry(input));
+ipcMain.handle('studio:create-authenticator-entry', async (_event, input) => {
+  const created = await requireAuthenticator().createEntry(input);
+  await recordLocalHistory({
+    action: 'record-created',
+    subject: 'authenticator',
+    subjectId: String(created.id),
+    label: 'Authenticator record created',
+    detail: 'A local authenticator record was created. Sensitive values were omitted from history.'
+  });
+  return created;
+});
 ipcMain.handle('studio:toy-lock-status', () => requireToyLocks().getStatus());
 ipcMain.handle('studio:list-toy-locks', () => requireToyLocks().listLocks());
-ipcMain.handle('studio:create-toy-lock', (_event, input) => requireToyLocks().createLock(input));
-ipcMain.handle('studio:unlock-toy-lock', (_event, lockId, credential) => requireToyLocks().unlock(lockId, credential));
-ipcMain.handle('studio:relock-toy-lock', (_event, lockId) => requireToyLocks().relock(lockId));
+ipcMain.handle('studio:create-toy-lock', async (_event, input) => {
+  const created = await requireToyLocks().createLock(input);
+  await recordLocalHistory({
+    action: 'record-created',
+    subject: 'toy-lock',
+    subjectId: String(created.id),
+    label: 'Toy lock record created',
+    detail: 'A local toy lock record was created. Sensitive values were omitted from history.'
+  });
+  return created;
+});
+ipcMain.handle('studio:unlock-toy-lock', async (_event, lockId, credential) => {
+  const unlocked = await requireToyLocks().unlock(lockId, credential);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'toy-lock',
+    subjectId: String(lockId),
+    label: 'Toy lock state changed',
+    detail: 'A local toy lock state changed. Sensitive values were omitted from history.'
+  });
+  return unlocked;
+});
+ipcMain.handle('studio:relock-toy-lock', async (_event, lockId) => {
+  const relocked = await requireToyLocks().relock(lockId);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'toy-lock',
+    subjectId: String(lockId),
+    label: 'Toy lock state changed',
+    detail: 'A local toy lock state changed. Sensitive values were omitted from history.'
+  });
+  return relocked;
+});
 ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
   status: statusHubBridge.getStatus(),
   configuration: statusHubBridge.getConfigurationForRenderer()
@@ -648,7 +800,17 @@ ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
   status: unavailableBridgeStatus(),
   configuration: { endpoint: '', allowInsecureLoopback: false }
 });
-ipcMain.handle('studio:configure-status-hub-bridge', (_event, configuration) => requireStatusHubBridge().configure(configuration));
+ipcMain.handle('studio:configure-status-hub-bridge', async (_event, configuration) => {
+  const configured = await requireStatusHubBridge().configure(configuration);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'status-bridge',
+    subjectId: 'optional-status-bridge',
+    label: 'Status bridge configuration changed',
+    detail: 'Optional status bridge configuration changed. Exact connection and sensitive values were omitted from history.'
+  });
+  return configured;
+});
 ipcMain.handle('studio:sync-status-hub-bridge', async () => {
   const localStatus = await requireManager().localStatusSnapshot();
   await requireStatusHubBridge().synchronize(localStatus.snapshot);
@@ -714,13 +876,21 @@ ipcMain.handle('studio:configure-management', async (_event, id, configuration) 
     if (!credentialVault) throw new Error('The protected credential vault is unavailable in this app build.');
     credentialVault.delete(credentialVault.createKey('minecraft-server-studio', `management:${id}`));
   }
-  return requireManager().updateServer(id, {
+  const updated = await requireManager().updateServer(id, {
     management: {
       endpoint,
       allowInsecureLoopback,
       credentialConfigured: token ? true : (clearCredential ? false : existingCredential)
     }
   });
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'server',
+    subjectId: String(id),
+    label: 'Server management configuration changed',
+    detail: 'A local server management configuration changed. Exact connection and sensitive values were omitted from history.'
+  });
+  return updated;
 });
 ipcMain.handle('studio:discover-management', async (_event, id) => {
   const server = await requireManager().getServer(id);
