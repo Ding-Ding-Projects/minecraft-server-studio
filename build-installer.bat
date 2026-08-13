@@ -6,6 +6,11 @@ if /I "%~1"=="--silent" set "MSS_SILENT=1"
 if /I "%SILENT%"=="1" set "MSS_SILENT=1"
 
 pushd "%~dp0" >nul || exit /b 1
+set "CSC_IDENTITY_AUTO_DISCOVERY=false"
+set "CSC_LINK="
+set "CSC_KEY_PASSWORD="
+set "WIN_CSC_LINK="
+set "WIN_CSC_KEY_PASSWORD="
 echo [1/3] Building the runnable application first...
 call build.bat /s
 if errorlevel 1 (

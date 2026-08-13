@@ -28,6 +28,8 @@
     "signExecutable": false,
     "signAndEditExecutable": false,
     "win": {
+      "signExecutable": false,
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "squirrel",

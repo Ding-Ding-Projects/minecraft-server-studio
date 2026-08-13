@@ -6,6 +6,11 @@ if /I "%~1"=="--silent" set "MSS_SILENT=1"
 if /I "%SILENT%"=="1" set "MSS_SILENT=1"
 
 set "MSS_ROOT=%~dp0"
+set "CSC_IDENTITY_AUTO_DISCOVERY=false"
+set "CSC_LINK="
+set "CSC_KEY_PASSWORD="
+set "WIN_CSC_LINK="
+set "WIN_CSC_KEY_PASSWORD="
 pushd "%MSS_ROOT%" >nul || exit /b 1
 set "MSS_START=%TIME%"
 echo [1/4] Checking Node.js LTS...
