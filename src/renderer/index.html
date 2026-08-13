@@ -42,6 +42,7 @@
           <div class="topbar-actions">
             <span class="status-chip status-stopped" id="server-status">Stopped</span>
             <button class="outlined-action" id="open-folder-button" type="button" disabled>Open folder</button>
+            <button class="outlined-action" id="open-editor-button" type="button" disabled>Open in editor</button>
             <button class="outlined-action" id="setup-button" type="button" disabled>Set up server</button>
             <button class="danger-action" id="stop-button" type="button" disabled>Stop</button>
             <button class="primary-action" id="start-button" type="button" disabled>Start server</button>
@@ -428,6 +429,27 @@
                 <label class="switch-field"><input id="online-mode" type="checkbox"><span><strong>Require authenticated Minecraft accounts</strong><small>Keep this enabled for normal online-mode server authentication.</small></span></label>
                 <label class="switch-field"><input id="white-list" type="checkbox"><span><strong>Enable whitelist</strong><small>Use server commands to add permitted players after startup.</small></span></label>
               </div>
+              <section class="external-editor-card" aria-labelledby="external-editor-title">
+                <div>
+                  <p class="eyebrow">LOCAL EXTERNAL EDITOR</p>
+                  <h4 id="external-editor-title">External editor handoff</h4>
+                  <p class="muted">Open the selected server root with a detected local Visual Studio Code executable, or generate a path-redacted app-private handoff record. The app never sends a network request, installs an editor, or accepts command text.</p>
+                </div>
+                <p id="external-editor-status" class="experience-status" aria-live="polite">Checking local editor availability…</p>
+                <div class="settings-grid external-editor-controls">
+                  <label class="field wide"><span>Detected local editor</span><select id="external-editor-candidate" aria-describedby="external-editor-status" disabled><option value="">Checking local editors…</option></select><small>Only validated local Visual Studio Code executables are listed. Their filesystem paths are not exposed here.</small></label>
+                  <div class="external-editor-actions wide" role="group" aria-label="External editor selection actions">
+                    <button id="refresh-external-editors-button" class="outlined-action" type="button">Refresh detection</button>
+                    <button id="choose-external-editor-executable-button" class="outlined-action" type="button">Choose editor executable</button>
+                    <button id="choose-external-editor-folder-button" class="outlined-action" type="button">Choose editor folder</button>
+                    <button id="use-automatic-external-editor-button" class="outlined-action" type="button">Use automatic selection</button>
+                  </div>
+                  <div class="external-editor-actions wide" role="group" aria-label="External editor opening actions">
+                    <button id="open-server-root-in-editor-button" class="primary-action" type="button" disabled>Open server root in editor</button>
+                    <button id="open-editor-handoff-record-button" class="outlined-action" type="button" disabled>Open safe handoff record</button>
+                  </div>
+                </div>
+              </section>
             </section>
 
             <section id="panel-world" class="settings-panel" role="tabpanel" data-panel="world" hidden>

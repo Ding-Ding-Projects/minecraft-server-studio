@@ -7,6 +7,7 @@
 - Pages-ready public marketing surface with browser-local controls, a user-triggered fixed-loopback Ollama read observer, a bounded browser-local converter, and a truthful desktop-execution boundary.
 - Bounded browser-local companion-site conversion for UTF-8 text, validated JSON/CSV/TSV, a limited YAML-style text target, and Base64/hex encodings, with explicitly unavailable PDF/media/archive/native-workbook adapters.
 - Fictional local Support Tickets recovery desk that can disclose and open the current application-data folder for user-directed toy-lock recovery without sending a ticket or deleting data.
+- Local external-editor handoff foundation for validated server folders and existing application-created exports, with discovered or explicitly selected Visual Studio Code as the preferred generated-export destination.
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
 - Serialized next-release metadata that can record one unused public dim-sum catalog link without copying the source photo into the product release.
 
@@ -19,4 +20,5 @@
 - Verify the Support Tickets recovery routes, file-manager failure behavior, local-only privacy boundary, accessibility, and built-app interaction before treating the desk as evidence of a completed recovery flow.
 - Keep the browser-local Ollama observer narrow: a full catalog, pull, chat, delete, copy, hardware-fit, or harness workflow belongs to a separately implemented desktop surface, not to the public marketing page.
 - Extend the companion-site converter only through separately bounded local adapters with explicit format validation, loss disclosure, output validation, and evidence; do not represent unavailable PDF, media, archive, or workbook support as available.
+- Extend the external-editor handoff foundation with complete export coverage, localized recovery states, focused verification, packaged interaction, and capture evidence before treating it as a complete application-wide editor/export workflow.
 - Produce release packaging and runtime verification evidence after the speed-delivery boundary is lifted.

@@ -41,6 +41,7 @@
 - Source-level local-history and safe-export foundation: bounded redacted app-private JSONL metadata; date, action, plain-text, and regex filtering; JSON, JSONL, YAML, TOML, CSV, TSV, and Markdown output; VS Code handoff only for a generated export; and no Git repository, snapshot, or restore path.
 - Fictional local Support Tickets recovery desk foundation for toy locks: locally numbered records and canned local responses, routes from unlock/settings/Help, an exact application-data-folder handoff to the operating system file manager, and explicit no-network/no-deletion/no-secret-display boundaries. It is not a real support channel or credential-recovery service.
 - Browser-local Ollama observer for the public marketing page: no request before an explicit refresh, a fixed `http://127.0.0.1:11434` allowlist of `GET /api/version`, `GET /api/tags`, and `GET /api/ps`, bounded response handling, truthful healthy/unavailable/browser-or-CORS-blocked/unsupported/rejected states, a non-secret browser-session last-success snapshot, and local installed/running-model search. Model Store, pull, chat, delete, copy, hardware-fit, and harness actions remain visibly unavailable on the browser-only surface.
+- Local external-editor handoff foundation that shares the local Visual Studio Code selection with the safe-export route, opens only a validated selected server root or a new path-redacted app-private record, uses direct non-shell launch arguments, and exposes explicit unavailable or failed-launch states.
 
 ### Fixed
 

@@ -48,6 +48,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('appearance-and-tabs', 'appearance-and-tabs.md', 'Appearance and tab-navigation foundation', 'Minecraft Server Studio now has a bounded, local desktop appearance and tab-navigation foundation.'),
   entry('local-status-and-completeness', 'local-status-and-completeness.md', 'Local status and desktop completeness', 'Read the local status surface and evidence inventory.'),
   entry('local-history-and-safe-exports', 'local-history-and-safe-exports.md', 'Local history and safe exports', 'Browse bounded redacted event metadata and create safe structured exports.'),
+  entry('external-editor-integration', 'external-editor-integration.md', 'External editor integration', 'Choose a validated local editor and open a selected server root or safe app-private record.'),
   entry('shared-status-hub-bridge', 'shared-status-hub-bridge.md', 'Shared Status Hub bridge', 'Understand the optional external bridge and local fallback.'),
   entry('offline-documentation-browser', 'offline-documentation-browser.md', 'Offline documentation browser', 'Browse bundled feature documentation without a network request.')
 ]);

@@ -9,6 +9,7 @@ const { LocalHistoryService } = require('./local-history-service.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { FileConverter } = require('./file-converter.cjs');
+const { ExternalEditorService } = require('./external-editor-service.cjs');
 const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
 const { LogoManager } = require('./logo-manager.cjs');
 const { UpdateController } = require('./update-controller.cjs');
@@ -62,6 +63,7 @@ let statusHubBridge;
 let updateController;
 let ollamaSuite;
 let fileConverter;
+let externalEditor;
 let buildToolsController;
 let offlineDocumentation;
 let logoManager;
@@ -369,8 +371,13 @@ app.whenReady().then(async () => {
     onChange: publishExperienceSettings
   });
   studioSettings.initialize();
+  externalEditor = new ExternalEditorService({
+    dataDir: path.join(app.getPath('userData'), 'external-editor')
+  });
+  await externalEditor.initialize();
   localHistory = new LocalHistoryService({
     dataDir: path.join(app.getPath('userData'), 'local-history'),
+    externalEditor,
     onChange: (history) => sendToRenderer({ type: 'local-history', history })
   });
   localHistory.initialize();
@@ -501,6 +508,11 @@ function requireOllamaSuite() {
 function requireFileConverter() {
   if (!fileConverter) throw new Error('Minecraft Server Studio local converter controls are still starting.');
   return fileConverter;
+}
+
+function requireExternalEditor() {
+  if (!externalEditor) throw new Error('Minecraft Server Studio external-editor controls are still starting.');
+  return externalEditor;
 }
 
 function requireBuildToolsController() {
@@ -791,6 +803,30 @@ ipcMain.handle('studio:pick-plugin', async () => {
     filters: [{ name: 'Java archive', extensions: ['jar'] }]
   });
   return result.canceled ? null : result.filePaths[0];
+});
+ipcMain.handle('studio:external-editor-snapshot', () => requireExternalEditor().snapshot());
+ipcMain.handle('studio:refresh-external-editors', () => requireExternalEditor().refresh());
+ipcMain.handle('studio:choose-external-editor-executable', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [{ name: 'Editor executable', extensions: ['exe'] }]
+  });
+  return result.canceled ? requireExternalEditor().snapshot() : requireExternalEditor().chooseExecutable(result.filePaths[0]);
+});
+ipcMain.handle('studio:choose-external-editor-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  });
+  return result.canceled ? requireExternalEditor().snapshot() : requireExternalEditor().chooseFolder(result.filePaths[0]);
+});
+ipcMain.handle('studio:select-external-editor', (_event, candidateId) => requireExternalEditor().selectCandidate(candidateId));
+ipcMain.handle('studio:use-automatic-external-editor', () => requireExternalEditor().useAutomaticSelection());
+ipcMain.handle('studio:open-external-editor-target', async (_event, serverId, targetKind) => {
+  if (typeof serverId !== 'string' || serverId.length === 0 || serverId.length > 128) {
+    throw new Error('Choose a managed local server before opening an external-editor target.');
+  }
+  const server = await requireManager().getServer(serverId);
+  return requireExternalEditor().openServerTarget(server, targetKind);
 });
 ipcMain.handle('studio:converter-snapshot', () => requireFileConverter().snapshot());
 ipcMain.handle('studio:pick-converter-source', async () => {
