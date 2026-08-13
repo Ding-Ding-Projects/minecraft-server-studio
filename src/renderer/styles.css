@@ -324,6 +324,41 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 .scheduled-setting-empty { padding: 14px; border: 1px dashed var(--outline); border-radius: 14px; color: var(--on-surface-variant); background: var(--surface-container); }
 body.school-mode-active [data-school-hidden] { display: none !important; }
 
+.authenticator-destination { display: grid; gap: 18px; }
+.authenticator-heading { align-items: start; }
+.authenticator-heading > div { display: grid; gap: 7px; }
+.authenticator-heading .muted { max-width: 760px; }
+.authenticator-tab-strip { margin: 0; }
+.authenticator-panel { display: grid; gap: 18px; }
+.authenticator-card { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--outline-variant); border-radius: 22px; background: var(--surface-container); }
+.authenticator-card h4, .authenticator-card h5 { color: var(--on-surface); }
+.authenticator-card p { line-height: 1.45; }
+.authenticator-status { padding: 13px 15px; border: 1px solid var(--outline-variant); border-radius: 16px; color: var(--on-surface-variant); background: #151922; line-height: 1.45; }
+.authenticator-status[data-state="ready"] { border-color: #4f9d75; color: var(--success); }
+.authenticator-status[data-state="credential-unavailable"], .authenticator-status[data-state="metadata-unavailable"] { border-color: var(--warning); color: var(--warning); }
+.authenticator-action-stack { display: grid; gap: 10px; align-items: start; }
+.authenticator-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.regex-builder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; border: 1px solid var(--outline); border-radius: 16px; background: var(--surface-container-high); }
+.regex-builder > div, .regex-builder > .switch-field, .regex-builder > .regex-token-row, .regex-builder > p { grid-column: 1 / -1; }
+.regex-token-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.regex-token-row button { min-height: 38px; padding: 0 12px; border: 1px solid var(--outline-variant); border-radius: 999px; color: var(--primary); background: transparent; font-weight: 700; }
+.regex-builder [data-state="invalid"] { color: var(--error); }
+.regex-builder [data-state="active"] { color: var(--success); }
+.authenticator-entry-list, .toy-lock-list { display: grid; gap: 12px; }
+.authenticator-entry-card, .toy-lock-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
+.authenticator-entry-card > div:first-child { display: grid; gap: 4px; }
+.authenticator-entry-card strong, .toy-lock-card strong { color: var(--on-surface); }
+.authenticator-entry-card span, .toy-lock-card span { color: var(--on-surface-variant); font-size: .82rem; overflow-wrap: anywhere; }
+.authenticator-entry-card[data-state="ready"] { border-color: #4f9d75; }
+.authenticator-entry-card[data-state="credential-missing"], .authenticator-entry-card[data-state="credential-unavailable"] { border-color: var(--warning); }
+.authenticator-code-box { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--outline-variant); border-radius: 14px; background: var(--surface-container-high); }
+.authenticator-code-box output { color: var(--primary); font-family: "Cascadia Mono", Consolas, monospace; font-size: clamp(1.25rem, 3vw, 1.8rem); font-weight: 800; letter-spacing: .08em; }
+.authenticator-code-box span { color: var(--on-surface-variant); font-size: .8rem; line-height: 1.4; }
+.authenticator-entry-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.toy-lock-card[data-state="unlocked"] { border-color: #4f9d75; }
+.toy-lock-card[data-state="locked"] { border-color: var(--warning); }
+.toy-lock-unlock-form { width: min(600px, calc(100vw - 32px)); }
+
 @media (max-width: 1050px) {
   .app-shell { grid-template-columns: 240px minmax(0, 1fr); }
   .workspace { padding-inline: 24px; }
@@ -336,6 +371,7 @@ body.school-mode-active [data-school-hidden] { display: none !important; }
   .weekday-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .schedule-list-heading { align-items: stretch; flex-direction: column; }
   .schedule-search-field { width: 100%; }
+  .authenticator-search-row { grid-template-columns: 1fr; align-items: stretch; }
 }
 
 @media (max-width: 620px) {

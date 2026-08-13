@@ -16,6 +16,7 @@
 - [Local Ollama suite foundation](local-ollama-suite.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
 - [Local file-converter foundation](file-converter.md)
+- [Local authenticator and toy-lock foundation](authenticator-and-toy-locks.md)
 - [Local status and completeness](local-status-and-completeness.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Offline documentation browser](offline-documentation-browser.md)
