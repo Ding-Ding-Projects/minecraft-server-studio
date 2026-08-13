@@ -277,10 +277,34 @@ function commandMethodFor(action) {
   return candidates.find((candidate) => capabilities.includes(candidate)) || null;
 }
 
+function managementProtocolMessage(management) {
+  const authentication = management?.authentication || {};
+  if (authentication.state === 'provider-adapter-required') {
+    return authentication.message || 'A protected credential is stored, but no documented provider-specific authentication adapter is available. The generic WebSocket transport will not send it.';
+  }
+  const state = management?.state || 'not-configured';
+  if (state === 'ready') return 'The current endpoint-bound discovery allowlist is available.';
+  if (state === 'discovery-expired') return 'The saved discovery allowlist expired. Run live capability discovery again before invoking a method.';
+  if (state === 'discovery-endpoint-changed') return 'The saved discovery allowlist belongs to a different endpoint. Run live capability discovery again.';
+  if (state === 'discovery-invalid') return 'The saved discovery metadata is invalid. Run live capability discovery again.';
+  if (state === 'configured') return 'Run live capability discovery before selecting a protocol operation.';
+  return 'Configure a management endpoint and run live capability discovery before selecting a protocol operation.';
+}
+
 function actionTransportState(action) {
   const select = $('#command-transport');
   const requested = select?.value || 'local';
+  const management = selectedServer()?.management || {};
   const execution = action?.execution;
+  if (requested === 'protocol' && management.state !== 'ready') {
+    return {
+      executable: false,
+      message: managementProtocolMessage(management),
+      source: 'Protocol unavailable',
+      protocolMethod: null,
+      route: registryRouteForTransport(requested)
+    };
+  }
   if (execution) {
     const route = requested === 'protocol' ? execution.protocol
       : requested === 'local' ? execution.localConsole
@@ -302,7 +326,7 @@ function actionTransportState(action) {
   const supported = action?.transports || [];
   const protocolMethod = commandMethodFor(action);
   if (requested === 'protocol') {
-    if (!protocolMethod) return { executable: false, message: 'This action is not advertised by the discovered management protocol.', source: 'Protocol unavailable', protocolMethod: null };
+    if (!protocolMethod) return { executable: false, message: 'This action is not advertised by the current endpoint-bound management protocol allowlist.', source: 'Protocol unavailable', protocolMethod: null };
     return { executable: true, message: `Advertised as ${protocolMethod}.`, source: 'Management protocol', protocolMethod };
   }
   if (!supported.includes(requested)) return { executable: false, message: `This action is not represented by the ${requested} fallback.`, source: 'Registry constraint', protocolMethod: null };
@@ -399,17 +423,27 @@ function renderManagement() {
   const server = selectedServer();
   if (!server || !$('#management-state')) return;
   const management = server.management || {};
+  const discovery = management.discovery || null;
   $('#management-state').textContent = String(management.state || 'not-configured').replace(/-/g, ' ');
   $('#management-endpoint').value = management.endpoint || '';
   $('#management-insecure-loopback').checked = Boolean(management.allowInsecureLoopback);
-  $('#management-capability-copy').textContent = management.discoveredAt
-    ? `Discovered ${management.capabilities?.length || 0} method(s) at ${new Date(management.discoveredAt).toLocaleString()}.`
-    : 'No capability discovery result is stored yet. Connection setup never enables a guessed method.';
+  const authenticationCopy = $('#management-authentication-copy');
+  if (authenticationCopy) authenticationCopy.textContent = management.authentication?.message || 'Endpoints that require authentication remain unavailable until a documented provider adapter exists.';
+  if (discovery?.discoveredAt) {
+    const count = discovery.methods?.length || 0;
+    const expires = discovery.expiresAt ? new Date(discovery.expiresAt).toLocaleString() : 'an unknown time';
+    $('#management-capability-copy').textContent = discovery.state === 'ready' && management.state === 'ready'
+      ? `Discovered ${count} method(s) at ${new Date(discovery.discoveredAt).toLocaleString()}. This endpoint-bound allowlist expires at ${expires}.`
+      : `A previous discovery named ${count} method(s) at ${new Date(discovery.discoveredAt).toLocaleString()}, but it is not callable: ${managementProtocolMessage(management)}`;
+  } else {
+    $('#management-capability-copy').textContent = managementProtocolMessage(management);
+  }
   const list = $('#management-capability-list');
   list.replaceChildren();
-  for (const method of management.capabilities || []) {
+  const methods = Array.isArray(discovery?.methods) ? discovery.methods : (management.capabilities || []).map((name) => ({ name }));
+  for (const method of methods) {
     const item = document.createElement('span');
-    item.textContent = method;
+    item.textContent = method.description ? `${method.name} — ${method.description}` : method.name;
     list.append(item);
   }
   renderCommandCenter();
@@ -879,7 +913,28 @@ async function saveManagementConnection() {
   const endpoint = $('#management-endpoint').value.trim();
   const allowInsecureLoopback = $('#management-insecure-loopback').checked;
   const token = $('#management-token').value;
-  const result = await safely(() => window.studio.configureManagement(server.id, { endpoint, allowInsecureLoopback, token }), 'Protected management connection details saved.');
+  const result = await safely(
+    () => window.studio.configureManagement(server.id, { endpoint, allowInsecureLoopback, token }),
+    token
+      ? 'Protected credential saved locally. It is not sent until a documented provider-specific authentication adapter exists.'
+      : 'Management connection details saved.'
+  );
+  if (result) {
+    $('#management-token').value = '';
+    await refreshServers();
+  }
+  return result;
+}
+
+async function clearManagementCredential() {
+  const server = selectedServer();
+  if (!server) return null;
+  const endpoint = $('#management-endpoint').value.trim();
+  const allowInsecureLoopback = $('#management-insecure-loopback').checked;
+  const result = await safely(
+    () => window.studio.configureManagement(server.id, { endpoint, allowInsecureLoopback, clearCredential: true }),
+    'Protected management credential cleared.'
+  );
   if (result) {
     $('#management-token').value = '';
     await refreshServers();
@@ -1020,13 +1075,15 @@ function bindEvents() {
   $('#plan-buildtools-button').addEventListener('click', prepareBuildToolsPlan);
   $('#execute-buildtools-button').addEventListener('click', executeBuildToolsPlan);
   $('#save-management-token-button').addEventListener('click', saveManagementConnection);
+  $('#clear-management-token-button').addEventListener('click', clearManagementCredential);
   $('#discover-management-button').addEventListener('click', discoverManagement);
   $$('.live-operation').forEach((button) => button.addEventListener('click', () => {
     const server = selectedServer();
     if (!server) return;
+    if (server.management?.state !== 'ready') return toast(managementProtocolMessage(server.management), 'error');
     const method = button.dataset.liveOperation;
     const available = server.management?.capabilities?.includes(method);
-    if (!available) return toast(`'${method}' is not advertised by this server's live management protocol.`, 'error');
+    if (!available) return toast(`'${method}' is not advertised by this server's current endpoint-bound management protocol allowlist.`, 'error');
     safely(() => window.studio.invokeManagement(server.id, method, {}), 'Live management operation requested.');
   }));
   $('#command-family').addEventListener('change', renderCommandCenter);

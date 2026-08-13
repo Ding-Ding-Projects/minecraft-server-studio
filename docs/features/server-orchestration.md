@@ -31,6 +31,12 @@ The desktop lifecycle controls start Java with the configured fixed memory alloc
 
 The CLI shares the registry. `start` remains foreground so the operator can observe the process. The desktop app defaults to a local child-process console; RCON is an explicit fallback that requires the Network settings and a protected credential.
 
+## Minecraft Server Management Protocol
+
+The optional Minecraft Server Management Protocol connection begins with `rpc.discover`. The client normalizes that response into validated method names and bounded descriptors before presenting any remote capability. The resulting capability snapshot is bound to its exact endpoint and has a short time-to-live. A reconnect invocation can reuse only a matching, unexpired allowlist; the app requires discovery again after that snapshot expires or the endpoint changes.
+
+The generic client is TLS-first. It permits an insecure connection only for an explicitly local loopback endpoint. It does not send a generic bearer token, custom authentication header, or WebSocket subprotocol handshake. An endpoint that requires authentication is therefore unavailable to this generic client until an explicit, documented provider adapter exists. A protected credential record is never transmitted by the generic management-protocol client.
+
 ## Plugin installation
 
 The Plugins tab accepts a user-selected local `.jar` file and copies it into the selected server's `plugins` directory. Command discovery can inspect bounded `plugin.yml` metadata without extracting arbitrary plugin files. The app does not claim that a third-party plugin is compatible or safe. Restart the server after installing a plugin; ordinary plugin reload is not the update path.
@@ -49,4 +55,4 @@ The app runs server Java with `shell: false`, does not interpolate settings into
 
 ## Verification boundary
 
-This initial implementation records the intended lifecycle and configuration behavior in source. The speed-delivery pass intentionally did not run tests, visual captures, or runtime interaction verification.
+This initial implementation records the intended lifecycle and configuration behavior in source. The speed-delivery pass intentionally did not run tests, visual captures, or runtime interaction verification, including for management-protocol discovery and reconnect handling.

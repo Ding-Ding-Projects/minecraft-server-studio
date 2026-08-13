@@ -18,4 +18,9 @@
 - Windows-only GitHub Actions release workflow source for every push and manual dispatch: unsigned Squirrel.Windows packaging, artifact-set and `NotSigned` verification, safe package-evidence upload, line-count release notes, and a rerun-unique non-draft GitHub Release when the workflow reaches publication. The workflow intentionally has no test or lint jobs.
 - Original vector application mark, multi-resolution Windows ICO, local executable icon wiring, and immutable Squirrel icon metadata source.
 
+### Fixed
+
+- Normalize `rpc.discover` descriptors before persistence, bind the stored allowlist to its endpoint, expire it after a bounded lifetime, and restore it only when a reconnect targets the same current endpoint.
+- Keep a protected management credential out of the generic WebSocket transport, show the provider-adapter-required state, and disable authenticated protocol routes until a documented provider-specific adapter exists.
+
 Commit link: pending the consolidated implementation commit.
