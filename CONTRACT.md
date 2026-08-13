@@ -8,7 +8,7 @@ window.MinecraftServerStudioContract
 
 The file is deliberately framework-free. It has no fetch calls, WebSocket calls, analytics, remote fonts, remote assets, workers, hidden browser automation, shell access, installer access, or server-process controls. It uses the browser's `localStorage` only, under the key `minecraft-server-studio.site.contract.v2`.
 
-The companion site is a planning and host-integration surface. It must not claim that browser-local state created a Minecraft server, installed Java, downloaded Paper or Spigot, executed a command, started a process, transferred a plugin, or reached an Ollama endpoint. Those are host-owned operations that need a connected desktop application or another explicitly implemented local bridge.
+The companion site is a planning and host-integration surface. The contract layer must not claim that browser-local state created a Minecraft server, installed Java, downloaded Paper or Spigot, executed a command, started a process, or transferred a plugin. The public page has one separately documented exception: a visitor-triggered, read-only Ollama observer may issue only three fixed `GET` requests to `http://127.0.0.1:11434`. That observer is not a desktop bridge, server-control channel, configurable endpoint, or general local-network capability.
 
 ## Host connection
 
@@ -27,11 +27,11 @@ The engine does not create markup, inject styles, or attach controls automatical
 
 ## Persistence, schema, and migration
 
-The persisted root schema is version `3`.
+The persisted root schema is version `4`.
 
 ```text
 {
-  version: 3,
+  version: 4,
   settings: { ... },
   notifications: [ ... ],
   audit: [ ... ],
@@ -50,11 +50,11 @@ The persisted root schema is version `3`.
 }
 ```
 
-Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Version 3 adds the browser-local presentation-mode credential record; pre-version-3 records migrate with no configured verifier. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
+Every load is normalized before use. Values with an unexpected type, unsafe object key, duplicate identifier, invalid enum value, oversized text, unsupported endpoint, or malformed nested record are removed or returned to an ordinary default. Version 1 funny-level data with one number is migrated to separate English and Cantonese values. Version 3 adds the browser-local presentation-mode credential record; version 4 adds normalized version-1 schedule records while preserving a valid legacy local rule as version 1 and keeps bounded browser-local conversion metadata beside them. Later hosts can add migrations beside `migrate(source)` without changing the storage key.
 
 The entire normalized record is limited to 1 MiB measured as encoded text where the browser supports `TextEncoder`. If an attempted save reaches that boundary, the engine retains the newest half of notification and audit history before trying to save again. If the bounded record is still too large, or browser storage is unavailable or throws, the in-memory model remains usable for the current page lifetime and `isStorageAvailable()` reports `false`; the host must show that persistence did not succeed.
 
-The companion page does not keep a parallel `sessionStorage` settings model. Its visible language, funny-level, theme, density, emoji, status, inventory, notification, audit, and validated vocabulary state hydrate from and write through this one browser-local contract record. That record belongs only to this origin in this browser. It is not shared with another browser profile, device, user account, server, chat, status hub, or the installed desktop application.
+The companion page does not keep a parallel `sessionStorage` settings model. Its visible language, funny-level, theme, density, emoji, narrator preferences, schedules, status, inventory, notification, audit, and validated vocabulary state hydrate from and write through this one browser-local contract record. That record belongs only to this origin in this browser. It is not shared with another browser profile, device, user account, server, chat, status hub, or the installed desktop application.
 
 `resetLocalState({ confirm: true })` removes only this site's contract key and restores an empty local state. It does not affect the desktop application, Minecraft server folders, installed tools, browser downloads, or another site's data.
 
@@ -79,7 +79,17 @@ The companion page does not keep a parallel `sessionStorage` settings model. Its
 | English and Cantonese voices | `narrator.englishVoice`, `narrator.cantoneseVoice` | browser voice identifier or `auto` |
 | Narrator rate and pitch | `narrator.rate`, `narrator.pitch` | rate 0.5–2; pitch 0–2 |
 
-`getNarratorCapabilities()` returns browser speech-synthesis availability and the actual currently available voices. `observeNarratorVoices(listener)` reports immediately and again on `voiceschanged`; its return value unsubscribes. The host must select voices by stable `voiceURI` where present, expose an automatic choice, and explain a missing selected voice. This contract does not speak text by itself, so a host can manage queues, cooldowns, assistive-technology behavior, and user initiation correctly.
+`getNarratorCapabilities()` returns browser speech-synthesis availability and actual currently available voices with a non-empty stable `voiceURI`; a display name is never substituted as an identity. `observeNarratorVoices(listener)` reports immediately and again on `voiceschanged`; its return value unsubscribes. The host exposes an automatic choice and explains a missing selected voice without silently erasing it. The contract does not speak text itself; `app.js` owns an opt-in serialized `SpeechSynthesisUtterance` queue that uses actual browser voice objects, queues English before Cantonese in bilingual mode, debounces ordinary rapid events for 250 milliseconds, applies a per-category cooldown, replaces pending superseded events, and never begins speech until a visitor has enabled narration and a page event occurs. Browser APIs do not reliably report an active screen reader, so the host states that limitation rather than claiming it can duck or yield to one.
+
+### Browser-local appearance and navigation foundation
+
+The companion site uses this same record for its bounded appearance and navigation preferences. It stores system/light/dark theme, density, accent, and safe typography choices as validated settings, then applies those choices only to this browser-local page. The host retains bounded accent, font-scale, and font-weight overrides or resets for the page, tab strip, and selected tab; these controls do not affect the installed application, an operating-system setting, a server, an installer, or another website.
+
+The browser-local tab state records `tabs.dock` (`left`, `right`, `top`, or `bottom`) in addition to a derived accessible vertical/horizontal orientation, active selection, ordered items, pinned state, group membership, group ordering, and collapsed state. A host maps left/right to `aria-orientation="vertical"` with Up/Down traversal, and top/bottom to `aria-orientation="horizontal"` with Left/Right traversal. It must retain an overflow route when labels do not fit and must not rotate labels to simulate a side dock. `setTabDock` changes the persisted dock, while `setTabAppearance` writes only the bounded tab-strip appearance values; a selected-tab override uses the existing bounded `updateTab` path. These methods leave unrelated companion-site and installed-application state untouched.
+
+The page keeps independent current-strip, group-list, and master tab searches. Each has its own plain-text default, adjacent anchored regular-expression builder, pattern, flags, validation feedback, and locally bounded candidate set. A search route must not silently reuse the state of another route or query local files, browser history, an installed application, or a remote service.
+
+This section records a browser-local foundation only. It does not promise every-element appearance editing, complete editor export/import, every menu or dropdown builder, a full command palette, cross-window discovery, complete bulk-close behavior, or evidence that the feature has been exercised in a built or deployed artifact.
 
 ### Renamed browser-local presentation mode
 
@@ -87,7 +97,7 @@ The companion page does not keep a parallel `sessionStorage` settings model. Its
 
 `getSchoolModeCredentialState()` reports only whether the verifier exists, its algorithm, and its configuration time. `getSchoolModeCredentialSalt()` makes the non-secret local salt available to the host. The host derives the candidate verifier and passes it to `verifySchoolModeCredential(verifier)`, whose bounded comparison returns only `{ ok }`. `clearSchoolModeCredential({ credentialAccepted: true })` removes the verifier and turns the mode off after a host has obtained a successful local match.
 
-`getEffectiveSettings()` forces English while the renamed mode is active and reports that personal-vocabulary replacement and dim sum are inactive. The host must omit the suppressed controls and content rather than merely disabling them, and it must use the exact chosen name wherever it introduces the mode. `getSchoolModeResetBoundary()` returns the exact local-storage boundary that the host should present to users: clearing this site's local storage resets the browser-local preferences, vocabulary cache, local lock metadata, and verifier only. This is a user-experience lock, not a security boundary, and it does not change desktop-app or server data.
+`getEffectiveSettings()` applies matching local schedules to supported language and appearance values without overwriting the saved base settings. It then forces English while the renamed mode is active, reports that personal-vocabulary replacement and dim sum are inactive, and suppresses all scheduled overrides until that mode is unlocked. The host omits the suppressed language, tone, vocabulary, narrator, and schedule controls rather than merely disabling them, cancels queued speech, and uses the exact chosen name wherever it introduces the mode. `getSchoolModeResetBoundary()` returns the exact local-storage boundary that the host should present to users: clearing this site's local storage resets the browser-local preferences, vocabulary cache, local lock metadata, schedule records, and verifier only. This is a user-experience lock, not a security boundary, and it does not change desktop-app or server data.
 
 ## Notifications, audit history, and exports
 
@@ -105,7 +115,7 @@ This is a bounded helper, not a replacement for a page's adjacent regex builder.
 
 ## Tabs, groups, and collections
 
-`registerTab`, `createTabGroup`, `updateTab`, `moveTab`, `setActiveTab`, and `closeTab` persist browser-local tab state. The tab model includes orientation, active tab, group association, pinned state, locked state, closability, display order, and panel association. `getAccessibleTabs()` returns tab roles, selected state, `aria-controls`, item position, set size, and correct orientation so the host can render a real tab strip. It supports up to 120 tabs and 40 groups.
+`registerTab`, `createTabGroup`, `updateTab`, `moveTab`, `setActiveTab`, `setTabDock`, `setTabAppearance`, and `closeTab` persist browser-local tab state. The tab model includes dock/orientation, active tab, group association, pinned state, locked state, closability, display order, collapsed-group state, bounded per-tab appearance, and panel association. `getAccessibleTabs()` returns tab roles, selected state, `aria-controls`, item position, set size, and correct orientation so the host can render a real tab strip. It supports up to 120 tabs and 40 groups.
 
 Closing a pinned, locked, or non-closable tab is refused unless the caller explicitly supplies `includeProtected: true`. The host still needs to display the affected-tab preview, collect any required destructive confirmation, return focus, and apply real keyboard behavior.
 
@@ -140,7 +150,11 @@ The payload must be at most 64 KiB measured as UTF-8 bytes; contain no duplicate
 
 ## Conversion, logo, toy-lock, and TOTP metadata
 
-`getFileAdapters()` returns the catalog categories Documents/PDF, Images, Audio, Video, Archives, Structured Data/Spreadsheets, Code/Text, and Binary Encodings. Every current adapter is intentionally `enabled: false` and `bundled: false` because the static site does not ship an isolated offline converter. `getFileAdapterAvailability()` provides the exact visible reason. `planConversion()` can record an unavailable local plan but must not present it as a conversion result.
+`getFileAdapters()` returns the catalog categories Documents/PDF, Images, Audio, Video, Archives, Structured Data/Spreadsheets, Code/Text, and Binary Encodings. `getFileAdapterAvailability()` exposes an exact enabled/disabled reason for each card. The browser-local converter is intentionally limited to UTF-8 text, validated JSON/CSV/TSV, a deliberately limited YAML-style output, and Base64/hex encodings. It does not turn an extension or MIME label into an eligibility decision: JSON/CSV/TSV must pass bounded byte/content validation first.
+
+The host accepts at most 12 user-selected sources per action, each no larger than 1 MiB, and inspects at most the first 512 bytes before creating a queue record. It keeps at most 24 selected files in the current-page queue. The supported host methods are `recordBrowserConversionJob()`, `updateBrowserConversionJob()`, `getBrowserConversionJobs()`, and `removeBrowserConversionJob()`; `planConversion()` remains only as a compatibility path. A persistent record is metadata only, with bounded `id`, sanitized `sourceName`, `sourceType`, `sourceBytes`, `detectedKind`, `category`, `targetType`, `targetFormat`, `targetName`, `status`, `adapterId`, `createdAt`, `updatedAt`, `downloadRequestedAt`, and `reason` fields. `downloadRequestedAt` records only that this page asked the browser to download an in-memory output; it never implies that the page knows a destination or completion result. The contract limits this history to 100 records and rejects raw source/output bytes, preview text, browser file handles, source paths, and download locations.
+
+PDF, image, audio, video, and archive entries remain disabled because no safe browser-local parser/encoder is bundled. Native spreadsheet/workbook entries remain disabled because no local workbook parser is bundled. Base64 and hex are representations of bounded bytes, never an assertion that another binary format was parsed or converted. `planConversion()` or a browser conversion record must never be shown as a desktop-app conversion, upload, or server action.
 
 `setLogoMetadata()` persists bounded rendering metadata only: preset or custom source selection, format, dimensions, fit, background color, and normalized crop. It does not decode, save, upload, convert, or export image bytes. A host that implements image selection and conversion must validate actual bytes and keep raw local assets out of exports, history, and telemetry.
 
@@ -148,17 +162,54 @@ The payload must be at most 64 KiB measured as UTF-8 bytes; contain no duplicate
 
 `createTotpShell()` and `markTotpEnrollment()` are metadata-only helpers. The shell rejects secrets, codes, tokens, URIs, passwords, and credentials. It stores a label, issuer, account label, algorithm, digits, period, enrollment result, and timestamp—never a TOTP secret or current code. A real authenticator must be implemented behind an operating-system credential vault or another dedicated safe storage boundary; this static engine does not substitute for one.
 
+## Separate browser-local authenticator and toy-lock module
+
+`site/authenticator-locks.js` is deliberately separate from this general
+contract record. It owns the actual companion-site authenticator, QR pairing
+reveal, per-target toy locks, and local Support Tickets surface. The module uses
+the origin-scoped `minecraft-server-studio.site.authenticator-locks.v1` record
+because a static site has no operating-system credential vault. Its bounded
+state is never included in `getState()`, `redactStateForExport()`,
+`createExport()`, audit history, the status model, or personal-vocabulary
+state.
+
+The module validates manual Base32 and standard `otpauth://totp/` registration,
+uses browser Web Crypto for RFC 4226/HOTP and RFC 6238/TOTP (SHA-1, SHA-256, or
+SHA-512; 6–8 digits; offered 15/30/45/60/90-second periods), and calculates
+only current/next code snapshots in the rendered list. Its pure local QR
+renderer emits a standard TOTP URI after an explicit reveal and clears the QR
+canvas and manual secret from the DOM after 60 seconds. The user must type a
+current code from the paired authenticator before the entry is marked pairing
+confirmed. It has no fetch, CDN,
+camera, QR decoder, QR image import, clipboard import, backend, telemetry, or
+sync path.
+
+Toy locks in that module are local user-experience locks, not security
+protection. Password locks retain an independently salted PBKDF2 verifier;
+TOTP locks retain their separate local Base32 secret. Both are excluded from
+ordinary export and the general contract record. Registered lock targets are
+the authenticator tab, entry list, and pairing reveal. Unlock duration remains
+in memory and reload returns the target to locked. The local Support Tickets
+surface persists only non-sensitive ticket number/category/status; it discards
+free-text notes and directs recovery to clearing this site's storage.
+
 ## Local schedules
 
-`createSchedule()` accepts local-only schedule rules. Each rule has a stable id, label, setting id, scalar string/number/boolean value, enabled state, optional date and time bounds, selected weekdays, and a priority. It supports `source: "local"` only. API and home-automation sources are not registered here and must remain visibly unavailable until a host implements their validation and secure credential handling.
+`createSchedule()` accepts at most 100 normalized version-1 local-only schedule rules. Each rule has a stable id, bounded label, one supported setting id, validated scalar value, enabled state, optional inclusive date bounds, optional local time bounds, every-day or selected-weekday state, and priority `0`–`999`. The available setting ids are `languageMode`, `appearance.theme`, `appearance.density`, `appearance.accent`, `appearance.font.family`, `appearance.font.scale`, and `appearance.font.weight`. Font-family rules accept only the shipped browser-safe fallback stacks. The contract rejects unsupported versions, unknown setting ids, invalid colors, out-of-range font values, invalid dates or times, reversed date bounds, unsafe keys, and any source other than `local`. `getSchedules()` returns a clone of the saved rules, and `removeSchedule(id)` removes one local rule and records a bounded local audit event.
 
-`getActiveScheduleValues(date)` resolves matching local rules deterministically: highest numeric priority first, then stable id. For one setting, the first result wins. Same start and end time means no active time window. Cross-midnight windows are supported. The host must label the local timezone and daylight-saving behavior in its schedule UI.
+`getActiveScheduleValues(date)` resolves matching local rules deterministically: highest numeric priority first, then stable id in ascending lexical order. For one setting, the first result wins. A normal time window includes its start and excludes its end. Equal start/end times deliberately create no active window. A cross-midnight rule applies after midnight against the previous local start date and weekday, so its date bounds and weekday selection remain anchored to the rule's start. A start-only time means from that time onward; an end-only time means until that time; neither means all day. The host shows the browser's local timezone and states that daylight-saving behavior follows the local clock: skipped wall-clock values do not match and repeated wall-clock values can match twice when in range.
 
-## Local Ollama operation handoff
+The static companion page keeps HTTPS API and Home Assistant options visibly unavailable. It has no privileged network adapter, URL-validation route, redirect handling, token vault, or request path for either source, and neither this contract nor the host makes a request for them.
 
-The stored Ollama endpoint defaults to `http://127.0.0.1:11434`. `prepareOllamaOperation({ confirmed: true, action, endpoint })` permits only loopback HTTP or HTTPS endpoints and a known local API action: health, version, models, tags, pull, delete, copy, generate, or chat. Preparation records an in-progress local intent but makes no network request.
+The host's saved-rule removal surface identifies the selected local rule, requires two separate acknowledgements plus a 100-percent slider before calling `removeSchedule(id)`, offers an Emergency exit action and Escape cancellation, and returns focus to the originating removal control. The contract itself never opens a dialog or performs a desktop or network action.
 
-`handOffOllamaOperation(hostExecutor)` calls a host-provided executor only after a previously confirmed operation exists. The host executor receives the bounded operation descriptor and returns a bounded `ready`, `offline`, or `unhealthy` status. The contract layer never invents models, fetches a catalog, calls a cloud service, or executes a local request on its own.
+## Browser-local Ollama observation boundary
+
+The companion page's browser-local observer is deliberately smaller than the generic host-handoff model. It remains idle until the visitor selects **Refresh local Ollama**, then uses only `GET /api/version`, `GET /api/tags`, and `GET /api/ps` at the literal `http://127.0.0.1:11434` origin. It has no configurable endpoint, host, port, path, proxy, redirect, token, account, cloud fallback, request body, automatic refresh, or background polling.
+
+The observer applies bounded abort-timeout and response validation before it derives a displayable version, installed-model, and running-model snapshot. It reports `healthy`, `unavailable`, `blocked` (browser or CORS), `unsupported`, or `rejected` states without treating one as another. A blocked state can include CORS, mixed-content, privacy, or other browser refusal and is not misreported as a diagnosed local-service failure. It retains only a bounded normalized non-secret last-success snapshot in `sessionStorage` for the current browser session and labels that snapshot stale until a later accepted refresh. The snapshot contains the service version and observation time plus only safe model name, size, VRAM size, modification or expiry timestamp, family, parameter-size label, and quantization label; it excludes raw payloads, digests, endpoint configuration, credentials, prompts, and local paths.
+
+The existing handoff helpers do not themselves make the browser-local request and do not authorize the page to expand this allowlist. In particular, they do not enable a Model Store catalog, pull, chat, delete, copy, hardware-fit, or harness action. Those remain visible unavailable browser-only boundaries until a complete independently implemented surface exists.
 
 ## Browser-local status model
 
@@ -204,14 +255,14 @@ Use `setCompletenessInventory(input)` for a complete authoritative replacement o
 
 ## Limits and unavailable capability boundary
 
-In addition to the limits documented above, the engine caps command-palette entries at 600, tab groups at 40, lock metadata at 250, TOTP metadata records at 250, schedules at 100, conversion jobs at 100, and notification actions at four per notification. The browser-local presentation-mode code must be 4–64 Unicode code points; its code value is never persisted, only its SHA-256 verifier and fresh 16-byte salt. Text fields are normalized to the documented per-field bounds before persistence.
+In addition to the limits documented above, the engine caps command-palette entries at 600, tab groups at 40, lock metadata at 250, TOTP metadata records at 250, schedules at 100, browser conversion history at 100, and notification actions at four per notification. The browser-local presentation-mode code must be 4–64 Unicode code points; its code value is never persisted, only its SHA-256 verifier and fresh 16-byte salt. Text fields are normalized to the documented per-field bounds before persistence.
 
 The following capabilities are intentionally unavailable from this file:
 
 - Server creation, configuration writes, EULA acceptance, dependency installation, Paper downloads, Spigot BuildTools execution, process control, RCON, plugin installation, filesystem browsing, and terminal commands.
 - Network requests, remote configuration, remote fonts, analytics, telemetry, cloud model services, non-loopback Ollama access, and a chat/status delivery bridge.
-- Real document, image, audio, video, archive, spreadsheet, code, or binary conversion.
-- Raw password, token, TOTP secret, current TOTP code, or credential storage and display.
+- PDF, image, audio, video, archive, and native-workbook conversion. The bounded browser-local text/structured-data/encoding routes above are the only exception; they do not create a general document, media, archive, or spreadsheet converter.
+- Raw password, token, TOTP secret, current TOTP code, or credential storage and display **through this general contract record**. The separately documented browser-local authenticator module owns its own bounded storage boundary.
 - Browser-local data synchronization across browsers, accounts, devices, or desktop applications.
 
 A host can add a separate, reviewed local bridge for a capability, but it must retain explicit user initiation, provide truthful availability and failure states, validate inputs at the privileged boundary, and update this model only after real evidence exists.

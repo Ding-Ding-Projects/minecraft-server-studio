@@ -100,23 +100,24 @@
         </section>
 
         <section class="preview-intro" id="feature-destinations" data-contract-surface="browser-local-feature-shell">
-          <div><p class="eyebrow">Browser-local feature previews</p><h2>Explore the product architecture without connecting to a server.</h2><p>Every destination below is a static, browser-local preview and a source hook for the product contract engine. The public page does not submit forms, keep credentials, call a backend, or perform desktop actions.</p></div>
-          <aside class="local-boundary-card"><strong>Static local-only page</strong><span>No account, analytics, page-initiated network operation, installer service, server process, or file upload happens here. The verified installer link hands off to the browser.</span></aside>
+          <div><p class="eyebrow">Browser-local feature previews</p><h2>Explore the product architecture without connecting to a server.</h2><p>Every destination below is browser-local and a source hook for the product contract engine. The authenticator destination can persist user-created entries and toy locks only in this browser origin; it does not call a backend, create an account, or perform desktop actions.</p></div>
+          <aside class="local-boundary-card"><strong>Static local-only page</strong><span>No account, analytics, page-initiated network operation, installer service, server process, or file upload happens here. The optional browser-local authenticator never sends a credential; the verified installer link hands off to the browser.</span></aside>
         </section>
 
-        <nav class="feature-tabs" aria-label="Feature preview destinations">
-          <a class="feature-tab" href="#status-preview">Status</a>
-          <a class="feature-tab" href="#settings-preview">Settings</a>
-          <a class="feature-tab" href="#docs-preview">Docs</a>
-          <a class="feature-tab" href="#converter-preview">Converter</a>
-          <a class="feature-tab" href="#authenticator-preview">Authenticator</a>
-          <a class="feature-tab" href="#ollama-preview">Ollama</a>
-          <a class="feature-tab" href="#history-preview">History</a>
-          <a class="feature-tab" href="#notifications-preview">Notifications</a>
-          <a class="feature-tab" href="#downloads-preview">Downloads</a>
-        </nav>
+        <section class="tabbed-preview-workspace" data-mss-tab-workspace="true">
+          <nav class="feature-tabs" aria-label="Feature preview destinations">
+            <a class="feature-tab" data-mss-tab-id="feature-status" href="#status-preview">Status</a>
+            <a class="feature-tab" data-mss-tab-id="feature-settings" href="#settings-preview">Settings</a>
+            <a class="feature-tab" data-mss-tab-id="feature-docs" href="#docs-preview">Docs</a>
+            <a class="feature-tab" data-mss-tab-id="feature-converter" href="#converter-preview">Converter</a>
+            <a class="feature-tab" data-mss-tab-id="feature-authenticator" href="#authenticator-preview">Authenticator</a>
+            <a class="feature-tab" data-mss-tab-id="feature-ollama" href="#ollama-preview">Ollama</a>
+            <a class="feature-tab" data-mss-tab-id="feature-history" href="#history-preview">History</a>
+            <a class="feature-tab" data-mss-tab-id="feature-notifications" href="#notifications-preview">Notifications</a>
+            <a class="feature-tab" data-mss-tab-id="feature-downloads" href="#downloads-preview">Downloads</a>
+          </nav>
 
-        <section class="preview-grid" aria-label="Browser-local feature previews">
+          <section class="preview-grid" aria-label="Browser-local feature previews">
           <article class="preview-panel" id="status-preview" data-contract-id="status-preview" data-contract-surface="status" tabindex="-1" aria-labelledby="status-preview-heading">
             <div class="panel-heading"><div><p class="eyebrow">Browser-local status</p><h2 id="status-preview-heading">Current public-page state</h2></div><span class="preview-status">No host connection</span></div>
             <p data-contract-hook="status-summary">This status panel reports browser-local page state and the static verified release metadata embedded in this page. It does not inspect a server, desktop app, release workflow, installer download, local runtime, or user account.</p>
@@ -127,7 +128,7 @@
             </div>
             <div class="auth-layout">
               <div class="auth-card" data-contract-hook="status-local-evidence"><strong>Local evidence</strong><span>Marketing copy, static feature previews, and a verified direct installer link are visible in this page source.</span></div>
-              <div class="auth-card" data-contract-hook="status-active-interactions"><strong>Active local interactions</strong><span>No browser-local interaction is currently active. The public page does not run desktop actions.</span></div>
+              <div class="auth-card" data-contract-hook="status-active-interactions"><strong>Active local interactions</strong><span>Browser-local preferences and, when a visitor chooses it, a separate local authenticator and toy-lock record can be active. The public page does not run desktop actions.</span></div>
             </div>
             <div class="local-boundary-card" data-contract-hook="status-next-steps"><strong>Next step</strong><span>Download the verified Windows x64 installer using the direct link below. Installation and server management remain desktop-app tasks.</span></div>
           </article>
@@ -140,10 +141,26 @@
               <label data-contract-hook="english-funny-level" data-mss-suppressed-by-school="true"><span data-mss-copy="english-funny-label">English tone</span><input type="range" min="1" max="5" value="2" aria-describedby="english-funny-help" /><output aria-live="polite">2 of 5</output><small id="english-funny-help" data-mss-copy="english-funny-help">1 is fully serious; 5 is maximum playfulness. Warnings stay factual at every level.</small></label>
               <label data-contract-hook="cantonese-funny-level" data-mss-suppressed-by-school="true"><span data-mss-copy="cantonese-funny-label">Cantonese tone</span><input type="range" min="1" max="5" value="2" aria-describedby="cantonese-funny-help" /><output aria-live="polite">2 of 5</output><small id="cantonese-funny-help" data-mss-copy="cantonese-funny-help">This independent setting changes Cantonese presentation only.</small></label>
               <label data-contract-hook="emoji-toggle"><span data-mss-copy="emoji-label">Show emojis in browser-local notices</span><input type="checkbox" checked /><small data-mss-copy="emoji-help">Emojis decorate notices only; labels, actions, and factual messages stay unchanged.</small></label>
-              <label data-contract-hook="appearance-theme"><span>Theme</span><select><option>System default</option><option>Light</option><option>Dark</option></select></label>
+              <label data-contract-hook="appearance-theme"><span>Theme</span><select><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select><small>Use the browser preference, a light surface, or a dark surface for this public page.</small></label>
+              <label data-contract-hook="density"><span>Density</span><select><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select><small>Changes spacing on this public page only.</small></label>
+              <label data-contract-hook="appearance-accent"><span>Accent color</span><input type="color" value="#3f7cff" data-mss-page-accent="true" /><output data-mss-page-accent-value="true">#3f7cff</output><small>Choose a local page accent. It is not an application identity or installer setting.</small></label>
+              <label data-contract-hook="appearance-font-family"><span>Typography family</span><select data-mss-page-font-family="true"><option value="system-ui">System interface</option><option value="ui-sans-serif">Generic sans serif</option><option value="ui-serif">Generic serif</option><option value="ui-monospace">Generic monospace</option></select><small>Only browser-provided generic families are offered; this page does not download fonts.</small></label>
+              <label data-contract-hook="appearance-font-scale"><span>Typography scale</span><input type="range" min="0.75" max="2" step="0.05" value="1" data-mss-page-font-scale="true" /><output data-mss-page-font-scale-value="true">100%</output><small>Changes readable browser-local page text without changing desktop-app text.</small></label>
+              <label data-contract-hook="appearance-font-weight"><span>Typography weight</span><select data-mss-page-font-weight="true"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select><small>Uses a safe browser font-weight value for this public page.</small></label>
               <label data-contract-hook="app-logo-upload"><span>Custom app logo</span><input type="file" accept="image/*" /><small>Preview input only; no image leaves this page.</small></label>
               <label data-contract-hook="personal-vocabulary-upload" data-mss-suppressed-by-school="true"><span data-mss-copy="vocabulary-label">Personal vocabulary JSON</span><input type="file" accept="application/json,.json" aria-describedby="personal-vocabulary-help" /><small id="personal-vocabulary-help" data-mss-copy="vocabulary-help">Version 1 JSON is checked locally before a bounded cache can be applied. The source file name and path are not retained.</small><button type="button" data-mss-vocabulary-clear="true">Clear local vocabulary</button><output data-mss-vocabulary-status="true" aria-live="polite">No validated vocabulary JSON is loaded in this browser.</output></label>
             </div>
+            <section class="appearance-editor" data-contract-hook="appearance-editor" aria-labelledby="appearance-editor-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Browser-local appearance editor</p><h3 id="appearance-editor-heading">Edit the page or a feature tab</h3></div><span class="preview-status">Foundation controls</span></div>
+              <p>Choose a target, then apply an accent, text scale, and text weight. The selected three values persist locally. This foundation does not yet edit every visual property or every rendered element.</p>
+              <fieldset class="appearance-target-picker"><legend>Appearance target</legend><div class="segmented-controls" role="group" aria-label="Appearance editor target"><button type="button" data-mss-appearance-target="page" aria-pressed="true">Entire public page</button><button type="button" data-mss-appearance-target="tab-strip" aria-pressed="false">Feature tab strip</button><button type="button" data-mss-appearance-target="selected-tab" aria-pressed="false">Selected feature tab</button></div></fieldset>
+              <div class="appearance-editor-grid">
+                <label><span>Accent color</span><input type="color" value="#3f7cff" data-mss-editor-accent="true" /><output data-mss-editor-accent-value="true">#3f7cff</output></label>
+                <label><span>Text scale</span><input type="range" min="0.75" max="2" step="0.05" value="1" data-mss-editor-font-scale="true" /><output data-mss-editor-font-scale-value="true">100%</output></label>
+                <label><span>Text weight</span><select data-mss-editor-font-weight="true"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></label>
+              </div>
+              <div class="inline-controls"><button type="button" data-mss-editor-apply="true">Apply local appearance</button><button type="button" data-mss-editor-reset="true">Reset selected target</button><output data-mss-editor-status="true" role="status" aria-live="polite">The entire public page is selected.</output></div>
+            </section>
             <section class="school-mode-card" data-contract-hook="school-mode" aria-labelledby="school-mode-heading">
               <div><p class="eyebrow" data-mss-copy="school-eyebrow">Browser-local presentation lock</p><h3 id="school-mode-heading"><span data-mss-school-name="true">School mode</span></h3></div>
               <p data-mss-school-summary="true">This browser-local mode temporarily forces English and hides the language, funny-level, and personal-vocabulary controls. It is a user-experience lock, not security protection.</p>
@@ -155,7 +172,45 @@
               <output data-mss-school-status="true" role="status" aria-live="polite">Set a browser-local unlock code before enabling this mode.</output>
               <p class="school-mode-boundary" data-mss-school-boundary="true">If the code is forgotten, clear this site's storage in your browser. That resets this page's local preferences, vocabulary cache, local lock metadata, and this mode; it does not change desktop-app or server data.</p>
             </section>
-            <div class="inline-controls" data-contract-hook="scheduled-settings"><button type="button" disabled>Schedule a setting in the desktop app</button><button type="button" disabled>Open appearance editor in the desktop app</button><span>All actions are unavailable on this static page.</span></div>
+            <section class="narrator-schedule-card" data-contract-hook="narrator-settings" data-mss-suppressed-by-school="true" aria-labelledby="narrator-settings-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Browser-local narrator</p><h3 id="narrator-settings-heading">Optional event narration</h3></div><span class="preview-status">Off by default</span></div>
+              <p>This page uses your browser's speech-synthesis capability only after you turn narration on. It sends no text to a server and does not select a cloud provider.</p>
+              <div class="narrator-grid">
+                <label data-contract-hook="narrator-enabled"><span>Enable event narrator</span><input type="checkbox" aria-describedby="narrator-status" /><small>Disabled by default. Visible notices remain available whether narration is on or off.</small></label>
+                <label data-contract-hook="narrator-language"><span>Narrated language</span><select aria-describedby="narrator-status"><option value="english">English</option><option value="cantonese">Playful Hong Kong-style Cantonese</option><option value="bilingual">Both — English then Cantonese</option></select><small>Both queues the two tracks in order; they do not overlap.</small></label>
+                <label data-contract-hook="narrator-english-voice"><span>English voice</span><select aria-describedby="narrator-status"><option value="auto">Choose automatically</option></select><small>Actual browser voices appear when available. The saved voice identity is a browser voiceURI, not a display name.</small></label>
+                <label data-contract-hook="narrator-cantonese-voice"><span>Cantonese voice</span><select aria-describedby="narrator-status"><option value="auto">Choose automatically</option></select><small>The list prioritizes Cantonese and Hong Kong Chinese voices reported by this browser.</small></label>
+                <label data-contract-hook="narrator-rate"><span>Rate</span><input type="range" min="0.5" max="2" step="0.1" value="1" aria-describedby="narrator-rate-output narrator-status" /><output id="narrator-rate-output" aria-live="polite">1.0×</output></label>
+                <label data-contract-hook="narrator-pitch"><span>Pitch</span><input type="range" min="0" max="2" step="0.1" value="1" aria-describedby="narrator-pitch-output narrator-status" /><output id="narrator-pitch-output" aria-live="polite">1.0</output></label>
+              </div>
+              <div class="narrator-actions"><button type="button" data-mss-narrator-preview="true">Preview narrator</button><span>Browser-local speech only. A possibly network-backed browser voice may be silent while offline.</span></div>
+              <output id="narrator-status" data-mss-narrator-status="true" role="status" aria-live="polite">Checking this browser's speech-synthesis capability.</output>
+            </section>
+            <section class="narrator-schedule-card" data-contract-hook="scheduled-settings" data-mss-suppressed-by-school="true" aria-labelledby="scheduled-settings-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Browser-local schedule</p><h3 id="scheduled-settings-heading">Schedule language and appearance</h3></div><span class="preview-status">No network sources</span></div>
+              <p>Saved rules affect this public page in this browser only. They never start a desktop action, change an installed app, query an API, or contact Home Assistant.</p>
+              <p class="schedule-timezone" data-mss-schedule-timezone="true">Timezone: resolving this browser's local timezone.</p>
+              <form class="schedule-editor" data-mss-schedule-form="true" novalidate>
+                <div class="schedule-editor-grid">
+                  <label><span>Rule label</span><input type="text" maxlength="160" data-mss-schedule-label="true" value="Browser-local schedule" required /><small>Name what this rule changes.</small></label>
+                  <label><span>Source</span><select data-mss-schedule-source="true" aria-describedby="schedule-source-boundary"><option value="local">Browser-local schedule</option><option value="https" disabled>Validated HTTPS API — unavailable here</option><option value="home-assistant" disabled>Home Assistant boolean entity — unavailable here</option></select><small>Only browser-local rules are saved on this static page.</small></label>
+                  <label><span>Setting</span><select data-mss-schedule-setting="true"><option value="languageMode">Language mode</option><option value="appearance.theme">Theme</option><option value="appearance.density">Density</option><option value="appearance.accent">Accent color</option><option value="appearance.font.family">Font family</option><option value="appearance.font.scale">Font scale</option><option value="appearance.font.weight">Font weight</option></select></label>
+                  <div class="schedule-value-field" data-mss-schedule-value-field="true"></div>
+                  <label><span>Start date (optional)</span><input type="date" data-mss-schedule-start-date="true" /></label>
+                  <label><span>End date (optional)</span><input type="date" data-mss-schedule-end-date="true" /></label>
+                  <label><span>Start time (optional)</span><input type="time" data-mss-schedule-start-time="true" /><small>With an end time, the start is included.</small></label>
+                  <label><span>End time (optional)</span><input type="time" data-mss-schedule-end-time="true" /><small>The end is excluded. Equal start and end times leave the rule inactive.</small></label>
+                  <label><span>Priority</span><input type="number" min="0" max="999" step="1" value="0" data-mss-schedule-priority="true" /><small>Higher numbers win. Equal priorities use the stable rule identifier.</small></label>
+                  <label class="schedule-enabled"><span>Rule status</span><input type="checkbox" checked data-mss-schedule-enabled="true" /> Enabled</label>
+                </div>
+                <fieldset class="schedule-weekdays"><legend>Days</legend><label><input type="radio" name="schedule-days" value="every" checked data-mss-schedule-day-mode="true" /> Every day</label><label><input type="radio" name="schedule-days" value="selected" data-mss-schedule-day-mode="true" /> Selected weekdays</label><div data-mss-schedule-weekdays="true" hidden><label><input type="checkbox" value="0" /> Sun</label><label><input type="checkbox" value="1" /> Mon</label><label><input type="checkbox" value="2" /> Tue</label><label><input type="checkbox" value="3" /> Wed</label><label><input type="checkbox" value="4" /> Thu</label><label><input type="checkbox" value="5" /> Fri</label><label><input type="checkbox" value="6" /> Sat</label></div></fieldset>
+                <div class="schedule-editor-actions"><button type="submit" data-mss-schedule-save="true">Save browser-local rule</button><button type="button" data-mss-schedule-reset="true" hidden>Cancel editing</button><output data-mss-schedule-form-status="true" role="status" aria-live="polite">Choose a setting and save a local rule.</output></div>
+              </form>
+              <p id="schedule-source-boundary" class="schedule-source-boundary">Validated HTTPS and Home Assistant choices stay visible but unavailable: this static page has no privileged network adapter, endpoint validation path, or protected credential store. No request is made.</p>
+              <div class="preview-search" data-contract-hook="scheduled-settings-search-regex"><label><span>Find saved local rules</span><input type="search" placeholder="Search saved schedule rules" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+              <ol class="schedule-list" data-mss-schedule-list="true" aria-live="polite"></ol>
+              <output data-mss-schedule-status="true" role="status" aria-live="polite">No browser-local schedule rules are saved.</output>
+            </section>
             <div class="preview-search" data-contract-hook="settings-search-regex"><label><span>Find a setting</span><input type="search" placeholder="Search settings" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
           </article>
 
@@ -169,31 +224,34 @@
             <div class="preview-search" data-contract-hook="documentation-search-regex"><label><span>Search documentation</span><input type="search" placeholder="Search article titles and text" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
           </article>
 
-          <article class="preview-panel" id="converter-preview" data-contract-surface="file-converter" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Local file converter</p><h2>Conversion remains on the computer</h2></div><span class="preview-status">No file processing</span></div>
-            <p>The installed app presents compatible local adapters after it inspects a selected file. This public preview does not read, upload, convert, or retain selected files.</p>
+          <article class="preview-panel" id="converter-preview" data-contract-surface="file-converter" tabindex="-1" aria-labelledby="converter-preview-heading">
+            <div class="panel-heading"><div><p class="eyebrow">Browser-local file converter</p><h2 id="converter-preview-heading">Convert bounded local files without an upload</h2></div><output class="preview-status" data-mss-converter-status="true" aria-live="polite">Ready for local files</output></div>
+            <p>This page reads only files you choose in this browser. It inspects at most 512 bytes before creating a local queue record, keeps source and output bytes in memory only while a conversion is active, and never sends a file, file path, or download destination to a server.</p>
             <div class="converter-layout">
-              <label class="file-picker" data-contract-hook="converter-file-picker"><input type="file" /><strong>Choose a local source file</strong><small>Preview only — no file leaves your browser.</small></label>
-              <div class="format-catalog" data-contract-hook="converter-adapter-catalog"><strong>Adapter categories</strong><div><span>Documents / PDF</span><span>Images</span><span>Audio</span><span>Video</span><span>Archives</span><span>Structured data</span><span>Code / text</span><span>Binary encodings</span></div></div>
+              <label class="file-picker" data-contract-hook="converter-file-picker"><span>Source files</span><input type="file" multiple aria-describedby="converter-file-help" /><strong>Choose up to 12 local files</strong><small id="converter-file-help">Each selected file must be 1 MiB or smaller. The browser decides any download destination after you explicitly request a download.</small></label>
+              <aside class="converter-boundary" aria-labelledby="converter-boundary-heading"><strong id="converter-boundary-heading">Available here</strong><span>UTF-8 text, validated JSON/CSV/TSV, limited YAML-style text export, and Base64 or hex encodings.</span><span>PDF, image, audio, video, archive, and native workbook adapters remain visible but unavailable because this static page bundles none of their parsers or encoders.</span></aside>
             </div>
-            <div class="inline-controls" data-contract-hook="converter-bulk-controls"><button type="button" disabled>Choose output in the desktop app</button><button type="button" disabled>Open conversion history in the desktop app</button></div>
+            <div class="converter-workspace">
+              <section class="converter-queue" aria-labelledby="converter-queue-heading"><div class="converter-section-heading"><div><h3 id="converter-queue-heading">Current browser queue</h3><p>Files disappear from active memory on refresh or removal; only bounded metadata records can persist locally.</p></div><span data-mss-converter-queue-count="true">0 active files</span></div><div data-mss-converter-queue="true" aria-live="polite"></div></section>
+              <section class="format-catalog" data-contract-hook="converter-adapter-catalog" aria-labelledby="converter-catalog-heading"><div class="converter-section-heading"><div><h3 id="converter-catalog-heading">Adapter catalog</h3><p>Every category states whether a bundled browser-local adapter is actually available.</p></div><span>Local registry</span></div><div data-mss-converter-catalog="true"></div></section>
+            </div>
+            <section class="converter-history" aria-labelledby="converter-history-heading"><div class="converter-section-heading"><div><h3 id="converter-history-heading">Browser-local conversion history</h3><p>History contains metadata only: a sanitized name, size, detected kind, target, status, timestamps, and reason. It never contains source bytes, output bytes, preview text, paths, file handles, or download locations.</p></div><button type="button" data-mss-converter-clear-history="true">Clear metadata history</button></div><div data-mss-converter-history="true" aria-live="polite"></div></section>
           </article>
 
           <article class="preview-panel" id="authenticator-preview" data-contract-surface="authenticator" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Authenticator and toy locks</p><h2>Keep secret handling in the installed app</h2></div><span class="preview-status">No credential storage</span></div>
-            <p>Authenticator entries, TOTP setup, element locks, and recovery are implemented locally in the desktop app. This site never asks for, stores, or exposes a secret.</p>
-            <div class="auth-layout">
-              <div class="auth-card" data-contract-hook="authenticator-import"><strong>Add an authenticator entry</strong><span>URI, QR, camera, and manual entry routes belong to the installed app.</span><button type="button" disabled>Open authenticator in desktop app</button></div>
-              <div class="auth-card" data-contract-hook="toy-locks"><strong>Element and tab locks</strong><span>Per-element password or TOTP controls remain local to the desktop app.</span><button type="button" disabled>Open lock manager in desktop app</button></div>
-            </div>
-            <p class="annotation">There is no user account or browser-based recovery route on this static page.</p>
+            <div class="panel-heading"><div><p class="eyebrow">Authenticator and toy locks</p><h2>Browser-local codes and recovery controls</h2></div><span class="preview-status">Local browser state</span></div>
+            <p>This public page can calculate RFC 6238 codes and hold user-created TOTP entries and toy-lock credentials in a bounded browser-local record for this origin. It makes no network request, no account, no telemetry event, and no ordinary export or history record containing a secret.</p>
+            <div data-authenticator-local-app aria-live="polite"><p>Loading the browser-local authenticator and toy-lock controls…</p></div>
+            <noscript><p class="annotation">JavaScript is required for local TOTP calculation and toy-lock controls. This page does not send any entry to a server.</p></noscript>
           </article>
 
           <article class="preview-panel" id="ollama-preview" data-contract-surface="ollama-manager" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Local Ollama suite manager</p><h2>Discover the local runtime in the installed app</h2></div><span class="preview-status">No runtime queried</span></div>
-            <p>The desktop app can inspect a locally running Ollama service and its models through an allowed local boundary. This static page makes no request to localhost or any model service.</p>
-            <div class="ollama-state" data-contract-hook="ollama-status"><span class="state-indicator" aria-hidden="true"></span><div><strong>No runtime checked from this page</strong><small>Open the installed app to inspect local availability, model storage, hardware fit, pulls, chats, and harness profiles.</small></div><button type="button" disabled>Inspect local runtime in desktop app</button></div>
-            <div class="preview-search" data-contract-hook="ollama-catalog-search-regex"><label><span>Search model catalog</span><input type="search" placeholder="Local app catalog search" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+            <div class="panel-heading"><div><p class="eyebrow">Local Ollama suite manager</p><h2>Inspect a local Ollama runtime from this browser</h2></div><span class="preview-status">Not checked</span></div>
+            <p>Only after you choose Refresh, this page can make read-only requests to the fixed local address <code>http://127.0.0.1:11434</code> for version, installed-model, and running-model information. It has no configurable endpoint, token, proxy, cloud fallback, or browser bypass.</p>
+            <div class="ollama-state" data-contract-hook="ollama-status"><span class="state-indicator" aria-hidden="true"></span><div><strong>No local runtime checked</strong><small>No request occurs until you choose Refresh. This page never follows a redirect or sends credentials.</small></div><button type="button" disabled>Browser-local observer loading</button></div>
+            <div class="preview-search" data-contract-hook="ollama-catalog-search-regex"><label><span>Search installed and running models</span><input type="search" placeholder="Search the last browser-session model snapshot" autocomplete="off" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+            <section class="ollama-inventory" data-contract-hook="ollama-inventory" aria-live="polite"><p class="empty-state">No browser-session model snapshot exists yet. Refresh is required before this page can show local model information.</p></section>
+            <section class="ollama-capability-boundary" data-contract-hook="ollama-browser-boundary"><h3>Browser-only boundary</h3><p>Model Store catalog, pull, chat, delete, copy, hardware-fit, and harness actions are intentionally unavailable here. A static browser page cannot safely offer those privileged or long-running local workflows.</p><div class="inline-controls"><button type="button" disabled>Browse Model Store</button><button type="button" disabled>Pull or manage models</button><button type="button" disabled>Open local chat or harness</button></div></section>
           </article>
 
           <article class="preview-panel" id="history-preview" data-contract-surface="local-history" tabindex="-1">
@@ -216,6 +274,7 @@
             <div class="download-state-grid" data-contract-hook="download-states"><article><strong>Start</strong><span><a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.72.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe" rel="noopener">Direct installer link available</a> for Windows x64 version 0.1.0.</span></article><article><strong>Progress</strong><span>No transfer is in progress or monitored on this static page.</span></article><article><strong>Completion</strong><span>This page cannot confirm whether a download or installation completed.</span></article></div>
             <a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/v0.1.0-build.72.1" rel="noopener">View release v0.1.0-build.72.1</a>
           </article>
+          </section>
         </section>
 
         <section class="install-section" id="install">

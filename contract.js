@@ -6,7 +6,8 @@
   }
 
   const STORAGE_KEY = "minecraft-server-studio.site.contract.v2";
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
+  const SCHEDULE_RULE_VERSION = 1;
   const LIMITS = Object.freeze({
     stateBytes: 1024 * 1024,
     notifications: 200,
@@ -20,6 +21,11 @@
     locks: 250,
     totpEntries: 250,
     conversionJobs: 100,
+    conversionInputBytes: 1024 * 1024,
+    conversionSniffBytes: 512,
+    conversionSelectionFiles: 12,
+    conversionSessionQueue: 24,
+    conversionOutputBytes: 2 * 1024 * 1024,
     commandPaletteEntries: 600,
     statusEvidence: 160,
     statusInteractions: 100,
@@ -43,23 +49,37 @@
   const THEMES = Object.freeze(["system", "light", "dark"]);
   const DENSITIES = Object.freeze(["compact", "comfortable", "spacious"]);
   const ORIENTATIONS = Object.freeze(["vertical", "horizontal"]);
+  const TAB_DOCKS = Object.freeze(["left", "right", "top", "bottom"]);
   const SCHEDULE_SOURCES = Object.freeze(["local"]);
+  const SCHEDULED_SETTING_IDS = Object.freeze([
+    "languageMode",
+    "appearance.theme",
+    "appearance.density",
+    "appearance.accent",
+    "appearance.font.family",
+    "appearance.font.scale",
+    "appearance.font.weight"
+  ]);
+  const SCHEDULE_FONT_FAMILIES = Object.freeze(["system-ui", "Inter, system-ui, sans-serif", "Arial, sans-serif", "Segoe UI, sans-serif", "Georgia, serif", "Cascadia Code, Consolas, monospace"]);
   const STATUS_STATES = Object.freeze(["idle", "running", "waiting", "blocked", "verified", "failed"]);
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
+  const CONVERSION_STATUSES = Object.freeze(["planned", "queued", "ready", "converting", "converted", "download-requested", "unsupported", "unavailable", "cancelled", "failed", "removed"]);
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const SAFE_COLOR = /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/;
   const BASE64_SALT = /^[A-Za-z0-9+/]{22}==$/;
   const BASE64_SHA256 = /^[A-Za-z0-9+/]{43}=$/;
 
   const FILE_ADAPTERS = Object.freeze([
-    { id: "documents-pdf", category: "Documents/PDF", label: "PDF tools", sourceFormats: ["application/pdf"], targetFormats: ["application/pdf"], bundled: false, enabled: false, reason: "No bundled offline PDF adapter is available in the static site." },
-    { id: "images", category: "Images", label: "Image conversion", sourceFormats: ["image/*"], targetFormats: ["image/png", "image/jpeg", "image/webp"], bundled: false, enabled: false, reason: "No bundled offline image adapter is available in the static site." },
-    { id: "audio", category: "Audio", label: "Audio conversion", sourceFormats: ["audio/*"], targetFormats: ["audio/wav", "audio/mpeg"], bundled: false, enabled: false, reason: "No bundled offline audio adapter is available in the static site." },
-    { id: "video", category: "Video", label: "Video conversion", sourceFormats: ["video/*"], targetFormats: ["video/mp4", "video/webm"], bundled: false, enabled: false, reason: "No bundled offline video adapter is available in the static site." },
-    { id: "archives", category: "Archives", label: "Archive conversion", sourceFormats: ["application/zip", "application/x-7z-compressed"], targetFormats: ["application/zip", "application/x-7z-compressed"], bundled: false, enabled: false, reason: "No bundled offline archive adapter is available in the static site." },
-    { id: "structured-data", category: "Structured Data/Spreadsheets", label: "Structured data conversion", sourceFormats: ["application/json", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"], targetFormats: ["application/json", "text/csv", "text/tab-separated-values"], bundled: false, enabled: false, reason: "No bundled offline structured-data adapter is available in the static site." },
-    { id: "code-text", category: "Code/Text", label: "Text conversion", sourceFormats: ["text/*"], targetFormats: ["text/plain", "text/markdown", "application/json"], bundled: false, enabled: false, reason: "No bundled offline code or text adapter is available in the static site." },
-    { id: "binary-encodings", category: "Binary Encodings", label: "Binary encoding conversion", sourceFormats: ["application/octet-stream"], targetFormats: ["application/octet-stream", "text/plain"], bundled: false, enabled: false, reason: "No bundled offline binary-encoding adapter is available in the static site." }
+    { id: "documents-pdf", category: "Documents/PDF", label: "PDF inspect and conversion", sourceFormats: ["PDF bytes"], targetFormats: ["PDF operations"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a PDF parser, renderer, or writer." },
+    { id: "images", category: "Images", label: "Image conversion", sourceFormats: ["Image bytes"], targetFormats: ["PNG, JPEG, WebP"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle an image decoder or encoder." },
+    { id: "audio", category: "Audio", label: "Audio conversion", sourceFormats: ["Audio bytes"], targetFormats: ["WAV, MP3"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle an audio decoder or encoder." },
+    { id: "video", category: "Video", label: "Video conversion", sourceFormats: ["Video bytes"], targetFormats: ["MP4, WebM"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a video decoder or encoder." },
+    { id: "archives", category: "Archives", label: "Archive conversion", sourceFormats: ["ZIP, 7z, RAR bytes"], targetFormats: ["Archive operations"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle an archive reader or writer." },
+    { id: "structured-spreadsheet", category: "Structured Data/Spreadsheets", label: "Workbook conversion", sourceFormats: ["Workbook container bytes"], targetFormats: ["Spreadsheet formats"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a workbook parser or writer." },
+    { id: "structured-utf8", category: "Structured Data/Spreadsheets", label: "UTF-8 JSON, CSV, and TSV", sourceFormats: ["UTF-8 JSON, CSV, TSV"], targetFormats: ["JSON, CSV, TSV, YAML-style text"], bundled: true, enabled: true, reason: "Available locally after byte inspection and bounded parsing." },
+    { id: "code-text-utf8", category: "Code/Text", label: "UTF-8 text", sourceFormats: ["UTF-8 text"], targetFormats: ["UTF-8 text"], bundled: true, enabled: true, reason: "Available locally after UTF-8 validation." },
+    { id: "binary-base64", category: "Binary Encodings", label: "Base64 encoding", sourceFormats: ["Bounded source bytes"], targetFormats: ["Base64 text"], bundled: true, enabled: true, reason: "Available locally; this is an encoding, not a media, archive, or PDF conversion." },
+    { id: "binary-hex", category: "Binary Encodings", label: "Hex encoding", sourceFormats: ["Bounded source bytes"], targetFormats: ["Hex text"], bundled: true, enabled: true, reason: "Available locally; this is an encoding, not a media, archive, or PDF conversion." }
   ]);
 
   const listeners = new Set();
@@ -124,6 +144,15 @@
     return SAFE_COLOR.test(candidate) ? candidate.toLowerCase() : fallback;
   }
 
+  function safeFileName(value, fallback) {
+    if (typeof value !== "string") {
+      return fallback;
+    }
+    const withoutControls = value.replace(/[\u0000-\u001f\u007f]/g, "");
+    const basename = withoutControls.split(/[\\/]/).pop().trim();
+    return basename.slice(0, 160) || fallback;
+  }
+
   function hasUnsafeKeys(value) {
     if (!isPlainObject(value)) {
       return false;
@@ -156,7 +185,14 @@
       },
       notifications: [],
       audit: [],
-      tabs: { orientation: "vertical", activeId: null, groups: [], items: [] },
+      tabs: {
+        dock: "left",
+        orientation: "vertical",
+        activeId: null,
+        appearance: { accent: "#3f7cff", fontScale: 1, fontWeight: 600 },
+        groups: [],
+        items: []
+      },
       collections: [],
       personalVocabulary: { status: "empty", payload: null },
       schoolModeCredential: { algorithm: "", salt: "", verifier: "", configuredAt: null },
@@ -196,6 +232,12 @@
     }
     if (version < 3) {
       migrated.schoolModeCredential = { algorithm: "", salt: "", verifier: "", configuredAt: null };
+    }
+    if (version < 4 && Array.isArray(migrated.schedules)) {
+      migrated.schedules = migrated.schedules.map((rule) => {
+        if (!isPlainObject(rule) || hasUnsafeKeys(rule) || hasOwn(rule, "version")) return rule;
+        return Object.assign({}, rule, { version: SCHEDULE_RULE_VERSION });
+      });
     }
     migrated.version = SCHEMA_VERSION;
     return migrated;
@@ -304,6 +346,24 @@
     };
   }
 
+  function normalizeTabItemAppearance(raw) {
+    const appearance = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
+    return {
+      accent: safeColor(appearance.accent, ""),
+      fontScale: Math.max(0.75, Math.min(2, Number(appearance.fontScale) || 1)),
+      fontWeight: boundedInteger(appearance.fontWeight, 100, 900, 600)
+    };
+  }
+
+  function normalizeTabStripAppearance(raw, defaults) {
+    const appearance = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
+    return {
+      accent: safeColor(appearance.accent, defaults.accent),
+      fontScale: Math.max(0.75, Math.min(2, Number(appearance.fontScale) || defaults.fontScale)),
+      fontWeight: boundedInteger(appearance.fontWeight, 100, 900, defaults.fontWeight)
+    };
+  }
+
   function normalizeTabItem(raw, groupIds) {
     if (!isPlainObject(raw) || hasUnsafeKeys(raw)) {
       return null;
@@ -321,7 +381,8 @@
       groupId: groupIds.has(groupId) ? groupId : null,
       pinned: Boolean(raw.pinned),
       locked: Boolean(raw.locked),
-      closable: raw.closable !== false
+      closable: raw.closable !== false,
+      appearance: normalizeTabItemAppearance(raw.appearance)
     };
   }
 
@@ -348,9 +409,13 @@
       return items.length >= LIMITS.tabs;
     });
     const activeId = safeId(tabs.activeId, "");
+    const dock = enumValue(tabs.dock, TAB_DOCKS, defaults.dock);
+    const inferredOrientation = dock === "left" || dock === "right" ? "vertical" : "horizontal";
     return {
-      orientation: enumValue(tabs.orientation, ORIENTATIONS, defaults.orientation),
+      dock,
+      orientation: inferredOrientation,
       activeId: ids.has(activeId) ? activeId : (items[0] ? items[0].id : null),
+      appearance: normalizeTabStripAppearance(tabs.appearance, defaults.appearance),
       groups,
       items
     };
@@ -485,31 +550,72 @@
     };
   }
 
+  function isCanonicalLocalDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }
+
+  function isCanonicalLocalTime(value) {
+    if (!/^\d{2}:\d{2}$/.test(value || "")) return false;
+    const [hours, minutes] = value.split(":").map(Number);
+    return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+  }
+
+  function normalizeScheduledValue(setting, value) {
+    if (setting === "languageMode") return LANGUAGE_MODES.includes(value) ? value : null;
+    if (setting === "appearance.theme") return THEMES.includes(value) ? value : null;
+    if (setting === "appearance.density") return DENSITIES.includes(value) ? value : null;
+    if (setting === "appearance.accent") {
+      return typeof value === "string" && SAFE_COLOR.test(value.trim()) ? value.trim().toLowerCase() : null;
+    }
+    if (setting === "appearance.font.family") return SCHEDULE_FONT_FAMILIES.includes(value) ? value : null;
+    if (setting === "appearance.font.scale") {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) && numeric >= 0.75 && numeric <= 2 ? Math.round(numeric * 100) / 100 : null;
+    }
+    if (setting === "appearance.font.weight") {
+      const numeric = Number(value);
+      return Number.isInteger(numeric) && numeric >= 100 && numeric <= 900 && numeric % 100 === 0 ? numeric : null;
+    }
+    return null;
+  }
+
   function normalizeSchedule(raw) {
     if (!isPlainObject(raw) || hasUnsafeKeys(raw)) {
       return null;
     }
     const id = safeId(raw.id, "");
-    const setting = safeId(raw.setting, "");
-    if (!id || !setting) {
+    const setting = trimString(raw.setting, 80, "");
+    const version = hasOwn(raw, "version") ? Number(raw.version) : SCHEDULE_RULE_VERSION;
+    const source = hasOwn(raw, "source") ? raw.source : "local";
+    if (!id || !SCHEDULED_SETTING_IDS.includes(setting) || version !== SCHEDULE_RULE_VERSION || source !== "local") {
       return null;
     }
     const weekdays = Array.isArray(raw.weekdays) ? raw.weekdays.map((day) => boundedInteger(day, 0, 6, -1)).filter((day, index, list) => day >= 0 && list.indexOf(day) === index).slice(0, 7) : [];
-    const value = ["string", "number", "boolean"].includes(typeof raw.value) ? raw.value : null;
+    const value = normalizeScheduledValue(setting, raw.value);
     if (value === null) {
       return null;
     }
+    const startDate = trimString(raw.startDate, 10, "");
+    const endDate = trimString(raw.endDate, 10, "");
+    const startTime = trimString(raw.startTime, 5, "");
+    const endTime = trimString(raw.endTime, 5, "");
+    if ((startDate && !isCanonicalLocalDate(startDate)) || (endDate && !isCanonicalLocalDate(endDate)) || (startDate && endDate && startDate > endDate)) return null;
+    if ((startTime && !isCanonicalLocalTime(startTime)) || (endTime && !isCanonicalLocalTime(endTime))) return null;
     return {
+      version: SCHEDULE_RULE_VERSION,
       id,
       label: trimString(raw.label, 160, setting) || setting,
       setting,
       value,
       enabled: raw.enabled !== false,
-      source: enumValue(raw.source, SCHEDULE_SOURCES, "local"),
-      startDate: trimString(raw.startDate, 10, ""),
-      endDate: trimString(raw.endDate, 10, ""),
-      startTime: trimString(raw.startTime, 5, ""),
-      endTime: trimString(raw.endTime, 5, ""),
+      source,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
       weekdays,
       priority: boundedInteger(raw.priority, 0, 999, 0)
     };
@@ -542,28 +648,47 @@
     };
   }
 
+  function normalizeConversionJob(raw) {
+    if (!isPlainObject(raw) || hasUnsafeKeys(raw)) {
+      return null;
+    }
+    const id = safeId(raw.id, "");
+    if (!id) {
+      return null;
+    }
+    const sourceName = safeFileName(raw.sourceName || raw.sourceLabel, "");
+    const sourceType = trimString(raw.sourceType || raw.detectedKind, 120, "unknown") || "unknown";
+    const targetType = trimString(raw.targetType || raw.targetFormat, 120, "unknown") || "unknown";
+    return {
+      id,
+      sourceName,
+      sourceType,
+      sourceBytes: boundedInteger(raw.sourceBytes, 0, 2 * 1024 * 1024 * 1024, 0),
+      detectedKind: trimString(raw.detectedKind, 120, sourceType) || sourceType,
+      category: trimString(raw.category, 120, "Unknown") || "Unknown",
+      targetType,
+      targetFormat: trimString(raw.targetFormat, 120, targetType) || targetType,
+      targetName: safeFileName(raw.targetName, ""),
+      status: raw.status === "downloaded" ? "download-requested" : enumValue(raw.status, CONVERSION_STATUSES, "queued"),
+      adapterId: safeId(raw.adapterId, ""),
+      createdAt: trimString(raw.createdAt, 48, now()),
+      updatedAt: trimString(raw.updatedAt, 48, trimString(raw.createdAt, 48, now())),
+      downloadRequestedAt: trimString(raw.downloadRequestedAt || raw.downloadedAt, 48, ""),
+      reason: boundedText(raw.reason, 600, "")
+    };
+  }
+
   function normalizeConversion(raw) {
     const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
     const jobs = [];
     const seen = new Set();
     (Array.isArray(value.jobs) ? value.jobs : []).some((job) => {
-      if (!isPlainObject(job) || hasUnsafeKeys(job)) {
+      const normalized = normalizeConversionJob(job);
+      if (!normalized || seen.has(normalized.id)) {
         return false;
       }
-      const id = safeId(job.id, "");
-      if (!id || seen.has(id)) {
-        return false;
-      }
-      seen.add(id);
-      jobs.push({
-        id,
-        sourceType: trimString(job.sourceType, 120, "unknown"),
-        targetType: trimString(job.targetType, 120, "unknown"),
-        status: enumValue(job.status, ["planned", "unavailable", "cancelled", "completed", "failed"], "planned"),
-        adapterId: safeId(job.adapterId, ""),
-        createdAt: trimString(job.createdAt, 48, now()),
-        reason: boundedText(job.reason, 600, "")
-      });
+      seen.add(normalized.id);
+      jobs.push(normalized);
       return jobs.length >= LIMITS.conversionJobs;
     });
     return { jobs };
@@ -923,6 +1048,24 @@
 
   function getEffectiveSettings() {
     const settings = clone(state.settings);
+    const activeSchedules = getActiveScheduleValues();
+    const scheduledOverrides = {};
+    if (!settings.schoolMode.enabled) {
+      Object.keys(activeSchedules).forEach((setting) => {
+        const entry = activeSchedules[setting];
+        if (!entry) return;
+        if (setting === "languageMode") settings.languageMode = entry.value;
+        if (setting === "appearance.theme") settings.appearance.theme = entry.value;
+        if (setting === "appearance.density") settings.appearance.density = entry.value;
+        if (setting === "appearance.accent") settings.appearance.accent = entry.value;
+        if (setting === "appearance.font.family") settings.appearance.font.family = entry.value;
+        if (setting === "appearance.font.scale") settings.appearance.font.scale = entry.value;
+        if (setting === "appearance.font.weight") settings.appearance.font.weight = entry.value;
+        scheduledOverrides[setting] = { ruleId: entry.ruleId, label: entry.label, value: entry.value };
+      });
+    }
+    settings.scheduledOverrides = scheduledOverrides;
+    settings.schedulePresentationSuppressed = Boolean(settings.schoolMode.enabled && Object.keys(activeSchedules).length);
     settings.schoolMode.credentialConfigured = isConfiguredSchoolModeCredential(state.schoolModeCredential);
     if (settings.schoolMode.enabled) {
       settings.languageMode = "english";
@@ -1362,6 +1505,24 @@
     return { ok: true, tabs: getAccessibleTabs() };
   }
 
+  function setTabDock(dock) {
+    const nextDock = enumValue(dock, TAB_DOCKS, "");
+    if (!nextDock) return { ok: false, error: "Choose a valid tab dock." };
+    state.tabs.dock = nextDock;
+    state.tabs.orientation = nextDock === "left" || nextDock === "right" ? "vertical" : "horizontal";
+    writeAudit("Tab dock updated", "feature-tabs", nextDock);
+    persist({ type: "tabs" });
+    return { ok: true, tabs: getAccessibleTabs() };
+  }
+
+  function setTabAppearance(patch) {
+    if (!isPlainObject(patch) || hasUnsafeKeys(patch)) return { ok: false, error: "The tab-strip appearance patch is invalid." };
+    state.tabs.appearance = normalizeTabStripAppearance(Object.assign({}, state.tabs.appearance, patch), state.tabs.appearance);
+    writeAudit("Tab-strip appearance updated", "feature-tabs", "Browser-local tab-strip appearance changed.");
+    persist({ type: "tabs" });
+    return { ok: true, appearance: clone(state.tabs.appearance) };
+  }
+
   function closeTab(id, options) {
     const request = isPlainObject(options) ? options : {};
     const index = state.tabs.items.findIndex((item) => item.id === safeId(id, ""));
@@ -1380,9 +1541,11 @@
   function getAccessibleTabs() {
     const total = state.tabs.items.length;
     return {
+      dock: state.tabs.dock,
       orientation: state.tabs.orientation,
       ariaOrientation: state.tabs.orientation,
       activeId: state.tabs.activeId,
+      appearance: clone(state.tabs.appearance),
       groups: clone(state.tabs.groups),
       tabs: state.tabs.items.map((tab, index) => ({
         id: tab.id,
@@ -1391,6 +1554,7 @@
         pinned: tab.pinned,
         locked: tab.locked,
         closable: tab.closable,
+        appearance: clone(tab.appearance),
         role: "tab",
         tabId: `${tab.id}-tab`,
         panelId: tab.panelId,
@@ -1621,23 +1785,113 @@
     return FILE_ADAPTERS.map((adapter) => ({ id: adapter.id, category: adapter.category, label: adapter.label, enabled: adapter.enabled, bundled: adapter.bundled, reason: adapter.reason }));
   }
 
-  function planConversion(input) {
+  function conversionJobId(raw) {
+    return safeId(raw && raw.id, `conversion-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  }
+
+  function getBrowserConversionJobs() {
+    return clone(state.conversion.jobs);
+  }
+
+  function recordBrowserConversionJob(input) {
     const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
     const adapter = FILE_ADAPTERS.find((item) => item.id === safeId(raw.adapterId, ""));
-    const job = {
-      id: safeId(raw.id, `conversion-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-      sourceType: trimString(raw.sourceType, 120, "unknown") || "unknown",
-      targetType: trimString(raw.targetType, 120, "unknown") || "unknown",
-      adapterId: adapter ? adapter.id : "",
-      status: adapter && adapter.enabled && adapter.bundled ? "planned" : "unavailable",
+    const sourceName = safeFileName(raw.sourceName || raw.sourceLabel, "");
+    if (!sourceName) {
+      return { ok: false, error: "A browser-local conversion record needs a source file name." };
+    }
+    const requestedStatus = enumValue(raw.status, CONVERSION_STATUSES, "queued");
+    const job = normalizeConversionJob({
+      id: conversionJobId(raw),
+      sourceName,
+      sourceType: trimString(raw.sourceType || raw.detectedKind, 120, "unknown") || "unknown",
+      sourceBytes: raw.sourceBytes,
+      detectedKind: trimString(raw.detectedKind, 120, raw.sourceType || "unknown") || "unknown",
+      category: trimString(raw.category, 120, adapter ? adapter.category : "Unknown") || "Unknown",
+      targetType: trimString(raw.targetType || raw.targetFormat, 120, "unknown") || "unknown",
+      targetFormat: trimString(raw.targetFormat, 120, raw.targetType || "unknown") || "unknown",
+      targetName: trimString(raw.targetName, 180, ""),
+      adapterId: adapter ? adapter.id : safeId(raw.adapterId, ""),
+      status: adapter && adapter.enabled && adapter.bundled ? requestedStatus : (raw.status ? requestedStatus : "unavailable"),
       createdAt: now(),
-      reason: adapter && adapter.enabled && adapter.bundled ? "Awaiting a host-owned local conversion." : (adapter ? adapter.reason : "No matching adapter is registered.")
-    };
+      updatedAt: now(),
+      reason: boundedText(raw.reason, 600, adapter && adapter.enabled && adapter.bundled ? "Queued in this browser; source bytes are not persisted." : (adapter ? adapter.reason : "No matching adapter is registered."))
+    });
+    if (!job) {
+      return { ok: false, error: "The browser-local conversion record could not be validated." };
+    }
+    const duplicate = state.conversion.jobs.some((item) => item.id === job.id);
+    if (duplicate) {
+      return { ok: false, error: "A browser-local conversion record already uses that identifier." };
+    }
     state.conversion.jobs.unshift(job);
     state.conversion.jobs = state.conversion.jobs.slice(0, LIMITS.conversionJobs);
-    writeAudit("Conversion planned", job.id, job.reason);
-    persist({ type: "conversion" });
-    return clone(job);
+    writeAudit("Browser-local conversion queued", job.id, job.reason);
+    persist({ type: "browser-conversion-recorded", jobId: job.id });
+    return { ok: true, job: clone(job) };
+  }
+
+  function updateBrowserConversionJob(id, patch) {
+    const jobId = safeId(id, "");
+    const index = state.conversion.jobs.findIndex((job) => job.id === jobId);
+    if (index < 0) {
+      return { ok: false, error: "The browser-local conversion record was not found." };
+    }
+    const raw = isPlainObject(patch) && !hasUnsafeKeys(patch) ? patch : {};
+    const previous = state.conversion.jobs[index];
+    const next = normalizeConversionJob(Object.assign({}, previous, {
+      sourceType: hasOwn(raw, "sourceType") ? raw.sourceType : previous.sourceType,
+      sourceBytes: hasOwn(raw, "sourceBytes") ? raw.sourceBytes : previous.sourceBytes,
+      detectedKind: hasOwn(raw, "detectedKind") ? raw.detectedKind : previous.detectedKind,
+      category: hasOwn(raw, "category") ? raw.category : previous.category,
+      targetType: hasOwn(raw, "targetType") ? raw.targetType : previous.targetType,
+      targetFormat: hasOwn(raw, "targetFormat") ? raw.targetFormat : previous.targetFormat,
+      targetName: hasOwn(raw, "targetName") ? raw.targetName : previous.targetName,
+      status: hasOwn(raw, "status") ? raw.status : previous.status,
+      adapterId: hasOwn(raw, "adapterId") ? raw.adapterId : previous.adapterId,
+      downloadRequestedAt: hasOwn(raw, "downloadRequestedAt") ? raw.downloadRequestedAt : previous.downloadRequestedAt,
+      reason: hasOwn(raw, "reason") ? raw.reason : previous.reason,
+      updatedAt: now()
+    }));
+    if (!next) {
+      return { ok: false, error: "The browser-local conversion update could not be validated." };
+    }
+    state.conversion.jobs[index] = next;
+    writeAudit("Browser-local conversion updated", next.id, next.reason || next.status);
+    persist({ type: "browser-conversion-updated", jobId: next.id });
+    return { ok: true, job: clone(next) };
+  }
+
+  function removeBrowserConversionJob(id) {
+    const jobId = safeId(id, "");
+    const index = state.conversion.jobs.findIndex((job) => job.id === jobId);
+    if (index < 0) {
+      return { ok: false, error: "The browser-local conversion record was not found." };
+    }
+    const removed = state.conversion.jobs.splice(index, 1)[0];
+    writeAudit("Browser-local conversion record removed", removed.id, "Only metadata was removed. No source or output file was changed.");
+    persist({ type: "browser-conversion-removed", jobId: removed.id });
+    return { ok: true, job: clone(removed) };
+  }
+
+  function planConversion(input) {
+    const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
+    const result = recordBrowserConversionJob(Object.assign({}, raw, {
+      sourceName: raw.sourceName || raw.sourceType || "planned-source",
+      status: raw.status || "planned"
+    }));
+    if (!result.ok) {
+      return {
+        id: "",
+        sourceType: trimString(raw.sourceType, 120, "unknown") || "unknown",
+        targetType: trimString(raw.targetType, 120, "unknown") || "unknown",
+        status: "failed",
+        adapterId: safeId(raw.adapterId, ""),
+        createdAt: now(),
+        reason: result.error
+      };
+    }
+    return result.job;
   }
 
   function setLogoMetadata(input) {
@@ -1725,7 +1979,13 @@
 
   function createSchedule(input) {
     const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
-    const schedule = normalizeSchedule(Object.assign({}, raw, { id: raw.id || `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, source: "local" }));
+    if (hasOwn(raw, "source") && raw.source !== "local") return { ok: false, error: "Only browser-local schedules are available on this page." };
+    if (hasOwn(raw, "version") && Number(raw.version) !== SCHEDULE_RULE_VERSION) return { ok: false, error: "This browser-local schedule version is unsupported." };
+    const schedule = normalizeSchedule(Object.assign({}, raw, {
+      id: raw.id || `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      version: SCHEDULE_RULE_VERSION,
+      source: "local"
+    }));
     if (!schedule) return { ok: false, error: "A local schedule needs an id, a supported setting, and a scalar value." };
     const existing = state.schedules.findIndex((item) => item.id === schedule.id);
     if (existing < 0 && state.schedules.length >= LIMITS.schedules) return { ok: false, error: "The local schedule limit has been reached." };
@@ -1736,6 +1996,20 @@
     return { ok: true, schedule: clone(schedule) };
   }
 
+  function getSchedules() {
+    return state.schedules.map((schedule) => clone(schedule));
+  }
+
+  function removeSchedule(id) {
+    const safe = safeId(id, "");
+    const index = state.schedules.findIndex((schedule) => schedule.id === safe);
+    if (index < 0) return { ok: false, error: "The browser-local schedule was not found." };
+    const removed = state.schedules.splice(index, 1)[0];
+    writeAudit("Local schedule removed", removed.id, `${removed.label} was removed from this browser only.`);
+    persist({ type: "schedule" });
+    return { ok: true, schedule: clone(removed) };
+  }
+
   function minutesSinceMidnight(value) {
     if (!/^\d{2}:\d{2}$/.test(value || "")) return null;
     const [hours, minutes] = value.split(":").map(Number);
@@ -1743,18 +2017,32 @@
     return (hours * 60) + minutes;
   }
 
+  function localDateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  function scheduleAnchorDate(date, start, end) {
+    const anchor = new Date(date.getTime());
+    const current = (date.getHours() * 60) + date.getMinutes();
+    if (start !== null && end !== null && start > end && current < end) anchor.setDate(anchor.getDate() - 1);
+    return anchor;
+  }
+
   function scheduleMatches(rule, date) {
     if (!rule.enabled || rule.source !== "local") return false;
     const localDate = date || new Date();
-    const isoDate = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
-    if (rule.startDate && isoDate < rule.startDate) return false;
-    if (rule.endDate && isoDate > rule.endDate) return false;
-    if (rule.weekdays.length && !rule.weekdays.includes(localDate.getDay())) return false;
     const start = minutesSinceMidnight(rule.startTime);
     const end = minutesSinceMidnight(rule.endTime);
-    if (start === null || end === null) return true;
     const current = (localDate.getHours() * 60) + localDate.getMinutes();
-    if (start === end) return false;
+    if (start !== null && end !== null && start === end) return false;
+    const anchor = scheduleAnchorDate(localDate, start, end);
+    const isoDate = localDateKey(anchor);
+    if (rule.startDate && isoDate < rule.startDate) return false;
+    if (rule.endDate && isoDate > rule.endDate) return false;
+    if (rule.weekdays.length && !rule.weekdays.includes(anchor.getDay())) return false;
+    if (start === null && end === null) return true;
+    if (start !== null && end === null) return current >= start;
+    if (start === null && end !== null) return current < end;
     return start < end ? current >= start && current < end : current >= start || current < end;
   }
 
@@ -1818,7 +2106,13 @@
   function getNarratorCapabilities() {
     const synthesis = global.speechSynthesis;
     const supported = Boolean(synthesis && typeof synthesis.getVoices === "function");
-    const voices = supported ? synthesis.getVoices().map((voice) => ({ id: voice.voiceURI || voice.name, name: voice.name, lang: voice.lang, localService: Boolean(voice.localService), default: Boolean(voice.default) })) : [];
+    let rawVoices = [];
+    try {
+      rawVoices = supported ? synthesis.getVoices() : [];
+    } catch (_) {
+      rawVoices = [];
+    }
+    const voices = Array.isArray(rawVoices) ? rawVoices.filter((voice) => voice && typeof voice.voiceURI === "string" && voice.voiceURI.trim()).map((voice) => ({ id: voice.voiceURI, name: voice.name, lang: voice.lang, localService: Boolean(voice.localService), default: Boolean(voice.default) })) : [];
     return { supported, voices };
   }
 
@@ -1916,6 +2210,8 @@
     updateTab,
     moveTab,
     setActiveTab,
+    setTabDock,
+    setTabAppearance,
     closeTab,
     getAccessibleTabs,
     saveCollection,
@@ -1929,6 +2225,10 @@
     applyPersonalVocabulary,
     getFileAdapters,
     getFileAdapterAvailability,
+    getBrowserConversionJobs,
+    recordBrowserConversionJob,
+    updateBrowserConversionJob,
+    removeBrowserConversionJob,
     planConversion,
     setLogoMetadata,
     createToyLock,
@@ -1936,6 +2236,8 @@
     createTotpShell,
     markTotpEnrollment,
     createSchedule,
+    getSchedules,
+    removeSchedule,
     getActiveScheduleValues,
     prepareOllamaOperation,
     handOffOllamaOperation,
