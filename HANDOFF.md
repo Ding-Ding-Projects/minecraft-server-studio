@@ -12,18 +12,17 @@ The application source provides a Windows Electron control center, shared CLI, s
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
 - `src/cli/mss.cjs`: shared local CLI.
 - `site/`: public marketing and browser-local interaction source, including a local Status destination.
-- `.github/workflows/windows-package.yml`: unsigned Windows Squirrel packaging source with artifact collection only.
+- `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. It does not assert a dim sum code name or photo unless a separately verified catalog asset is available.
 - `assets/minecraft-server-studio.svg`, `assets/minecraft-server-studio.ico`, and `scripts/generate-app-icon.ps1`: original vector master and reproducible multi-resolution Windows icon source.
 - `package.json`: local Windows executable icon plus an immutable commit-pinned Squirrel icon metadata URL.
 
 ### Verification state
 
-This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. The local status/completeness inventories intentionally show those evidence types as pending rather than verified. A packaging attempt against `7671f55f2cc6642df274d2352015661b534253b1` reached Squirrel.Windows but stopped because `squirrelWindows.iconUrl` was absent; that output is superseded. The follow-up candidate pins both the local executable icon and an immutable Squirrel icon metadata URL. No release, deployment, tag, or publish action was performed here.
+This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. The local status/completeness inventories intentionally show those evidence types as pending rather than verified. The failed package attempt against `7671f55f2cc6642df274d2352015661b534253b1` is superseded by local package evidence pinned to `4f6021fb40380487a6be919695b936ce18b014e5`: the unsigned Squirrel output contains `Setup.exe`, `RELEASES`, and the full `.nupkg`, while `Setup.exe` reports `NotSigned`. That local evidence is not a tag, GitHub Release, deployment, runtime test, or capture. No release, deployment, tag, or publish action was performed here.
 
 ### Remaining work
 
 - Complete a dedicated Java runtime-manager discovery/preflight module beyond the current version matrix and runtime inventory.
 - Add a provider-specific authenticated WebSocket connector before treating a stored management bearer credential as transmitted authentication.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
-- Build/package against the immutable candidate if the delivery owner authorizes the package pass, then inspect and report only the package output.
-- Integrate, publish, and release through the repository owner workflow when external authority is available.
+- Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.

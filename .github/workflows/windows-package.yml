@@ -1,20 +1,22 @@
-name: Windows package
+name: Windows package and release
 
 on:
   push:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
 
-# Dependency inventory: the runner supplies Windows; setup-node supplies Node.js 22
-# and npm; npm ci restores the versions pinned in package-lock.json. The package
-# command invokes the repository's Squirrel.Windows configuration only.
+# Dependency inventory: Windows is supplied by the runner; setup-node provides
+# Node.js and npm; package-lock.json fixes the restored dependency graph.
+# This workflow deliberately packages only. It does not run tests, linting,
+# type checks, accessibility checks, reviews, or capture work.
 jobs:
-  package:
-    name: Build unsigned Squirrel package
+  package-and-release:
+    name: Build and release unsigned Squirrel package
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       CSC_LINK: ""
@@ -23,8 +25,21 @@ jobs:
       WIN_CSC_LINK: ""
       WIN_CSC_KEY_PASSWORD: ""
     steps:
-      - name: Check out source
+      - name: Check out source and history
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record workflow start time
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          $startedAt = & gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" --jq '.run_started_at'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($startedAt)) {
+            throw 'Unable to obtain the workflow start timestamp from GitHub Actions.'
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "WORKFLOW_STARTED_AT=$startedAt"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -38,6 +53,197 @@ jobs:
       - name: Build unsigned Squirrel.Windows package
         run: npm run package
 
+      - name: Validate unsigned Squirrel artifacts
+        shell: pwsh
+        run: |
+          $squirrelOutput = Join-Path $env:GITHUB_WORKSPACE 'dist\squirrel-windows'
+          if (-not (Test-Path -LiteralPath $squirrelOutput -PathType Container)) {
+            throw "Squirrel output directory was not created: $squirrelOutput"
+          }
+
+          $setupFiles = @(Get-ChildItem -LiteralPath $squirrelOutput -File -Filter '*Setup.exe')
+          if ($setupFiles.Count -ne 1) {
+            throw "Expected exactly one Setup.exe artifact, found $($setupFiles.Count)."
+          }
+          $setupFile = $setupFiles[0]
+
+          $releasesFile = Join-Path $squirrelOutput 'RELEASES'
+          if (-not (Test-Path -LiteralPath $releasesFile -PathType Leaf)) {
+            throw "Squirrel RELEASES file is missing: $releasesFile"
+          }
+
+          $fullPackages = @(Get-ChildItem -LiteralPath $squirrelOutput -File -Filter '*-full.nupkg')
+          if ($fullPackages.Count -lt 1) {
+            throw 'No Squirrel full package (*.nupkg) was produced.'
+          }
+          $releasesText = Get-Content -LiteralPath $releasesFile -Raw
+          foreach ($fullPackage in $fullPackages) {
+            if ($releasesText -notmatch [regex]::Escape($fullPackage.Name)) {
+              throw "RELEASES does not reference the full package $($fullPackage.Name)."
+            }
+          }
+
+          $signature = Get-AuthenticodeSignature -FilePath $setupFile.FullName
+          if ($signature.Status -ne 'NotSigned') {
+            throw "Setup executable must be unsigned; Get-AuthenticodeSignature reported $($signature.Status)."
+          }
+
+          $deltaPackages = @(Get-ChildItem -LiteralPath $squirrelOutput -File -Filter '*-delta.nupkg')
+          $releaseAssets = @($setupFile.FullName, $releasesFile) +
+            @($fullPackages | ForEach-Object { $_.FullName }) +
+            @($deltaPackages | ForEach-Object { $_.FullName })
+          $releaseAssets = @($releaseAssets | Select-Object -Unique)
+
+          $evidenceRoot = Join-Path $env:RUNNER_TEMP 'windows-package-evidence'
+          New-Item -ItemType Directory -Force -Path $evidenceRoot | Out-Null
+          $hashRows = foreach ($assetPath in $releaseAssets) {
+            $hash = Get-FileHash -LiteralPath $assetPath -Algorithm SHA256
+            [pscustomobject]@{
+              File = [IO.Path]::GetFileName($assetPath)
+              SHA256 = $hash.Hash
+              Bytes = (Get-Item -LiteralPath $assetPath).Length
+            }
+          }
+          $hashRows = @($hashRows | Sort-Object File)
+          $hashMarkdown = @(
+            '| Artifact | SHA-256 | Bytes |',
+            '| --- | --- | ---: |'
+          )
+          $hashMarkdown += $hashRows | ForEach-Object {
+            "| $($_.File) | ``$($_.SHA256)`` | $($_.Bytes) |"
+          }
+          $hashFile = Join-Path $evidenceRoot 'artifact-hashes.md'
+          $hashRowsFile = Join-Path $evidenceRoot 'artifact-hashes.json'
+          Set-Content -LiteralPath $hashFile -Value ($hashMarkdown -join [Environment]::NewLine) -Encoding utf8
+          $hashRows | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $hashRowsFile -Encoding utf8
+
+          Add-Content -Path $env:GITHUB_ENV -Value "SQUIRREL_OUTPUT=$squirrelOutput"
+          Add-Content -Path $env:GITHUB_ENV -Value "SETUP_PATH=$($setupFile.FullName)"
+          Add-Content -Path $env:GITHUB_ENV -Value "RELEASES_PATH=$releasesFile"
+          Add-Content -Path $env:GITHUB_ENV -Value "ARTIFACT_HASHES_PATH=$hashFile"
+          Add-Content -Path $env:GITHUB_ENV -Value "ARTIFACT_HASHES_JSON_PATH=$hashRowsFile"
+
+      - name: Count source lines for the release record
+        shell: pwsh
+        run: |
+          $lineCountPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\line-count.md'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $lineCountPath) | Out-Null
+          $lineCount = & node scripts/line-count.cjs --format markdown
+          if ($LASTEXITCODE -ne 0) {
+            throw "The committed line-count script failed with exit code $LASTEXITCODE."
+          }
+          $lineCount | Set-Content -LiteralPath $lineCountPath -Encoding utf8
+          Add-Content -Path $env:GITHUB_ENV -Value "LINE_COUNT_PATH=$lineCountPath"
+
+      - name: Create or update non-draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v0.1.0-build.$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
+          $releaseTitle = "Minecraft Server Studio $tag"
+          $fullPackages = @(Get-ChildItem -LiteralPath $env:SQUIRREL_OUTPUT -File -Filter '*-full.nupkg')
+          $deltaPackages = @(Get-ChildItem -LiteralPath $env:SQUIRREL_OUTPUT -File -Filter '*-delta.nupkg')
+          $assets = @($env:SETUP_PATH, $env:RELEASES_PATH) +
+            @($fullPackages | ForEach-Object { $_.FullName }) +
+            @($deltaPackages | ForEach-Object { $_.FullName })
+          $assets = @($assets | Select-Object -Unique)
+
+          $initialBodyPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\release-body-initial.md'
+          @(
+            "# $releaseTitle",
+            '',
+            'Packaging completed on Windows with Squirrel.Windows. Detailed artifact hashes, timing, and line counts are being finalized by this workflow.'
+          ) | Set-Content -LiteralPath $initialBodyPath -Encoding utf8
+
+          $existingJson = & gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,isDraft,url 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $existing = $existingJson | ConvertFrom-Json
+            if ($existing.targetCommitish -ne $env:GITHUB_SHA) {
+              throw "Existing release $tag targets $($existing.targetCommitish), not $env:GITHUB_SHA."
+            }
+            if ($existing.isDraft) {
+              throw "Existing release $tag is a draft and cannot satisfy this workflow's non-draft release contract."
+            }
+            & gh release upload $tag @assets --clobber --repo $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to refresh release assets for $tag."
+            }
+          } else {
+            & gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title $releaseTitle --notes-file $initialBodyPath @assets
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to create the non-draft release $tag."
+            }
+          }
+
+          $completedAt = [DateTimeOffset]::UtcNow
+          $startedAt = [DateTimeOffset]::Parse($env:WORKFLOW_STARTED_AT)
+          $duration = $completedAt - $startedAt
+          $durationText = ('{0:00}:{1:00}:{2:00}' -f [math]::Floor($duration.TotalHours), $duration.Minutes, $duration.Seconds)
+          $hashMarkdown = Get-Content -LiteralPath $env:ARTIFACT_HASHES_PATH -Raw
+          $lineCountMarkdown = Get-Content -LiteralPath $env:LINE_COUNT_PATH -Raw
+          $releaseBodyPath = Join-Path $env:RUNNER_TEMP 'windows-package-evidence\release-body.md'
+          @(
+            "# $releaseTitle",
+            '',
+            '> [!WARNING]',
+            '> The attached Windows Squirrel installer and update packages are unsigned. Windows may show an unknown-publisher or SmartScreen warning.',
+            '',
+            '## Workflow timing',
+            "- Workflow started (UTC): $($startedAt.ToUniversalTime().ToString('o'))",
+            "- Workflow completed (UTC): $($completedAt.ToString('o'))",
+            "- Workflow duration: $durationText",
+            '',
+            '## Validated artifacts',
+            $hashMarkdown.TrimEnd(),
+            '',
+            'The package validation confirmed one Setup.exe artifact, RELEASES, at least one full Squirrel package referenced by RELEASES, and an unsigned Setup.exe status.',
+            '',
+            '## Source line count',
+            'Generated by `node scripts/line-count.cjs --format markdown` at the release commit. The report includes its category table and explicit exclusions for generated dependency resolution data, dependencies, vendor trees, build output, and coverage output.',
+            '',
+            $lineCountMarkdown.TrimEnd(),
+            '',
+            '## Verification boundary',
+            'This workflow restored dependencies, packaged the Windows artifact, validated the Squirrel output, calculated hashes, and recorded the line count. It did not run tests, linting, type checks, accessibility checks, reviews, or capture work.',
+            '',
+            '## Release code name and photo',
+            'A dim sum code name and photo are unavailable because this workflow has not resolved a verified catalog asset. It does not query, copy, or bundle catalog assets.'
+          ) | Set-Content -LiteralPath $releaseBodyPath -Encoding utf8
+
+          & gh release edit $tag --repo $env:GITHUB_REPOSITORY --title $releaseTitle --notes-file $releaseBodyPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to finalize the release notes for $tag."
+          }
+          $verified = (& gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,isDraft,url,assets) | ConvertFrom-Json
+          if ($verified.isDraft -or $verified.targetCommitish -ne $env:GITHUB_SHA) {
+            throw "Release verification failed for $tag."
+          }
+          $expectedAssetNames = @($assets | ForEach-Object { [IO.Path]::GetFileName($_) } | Select-Object -Unique)
+          $publishedAssets = @{}
+          foreach ($asset in @($verified.assets)) {
+            $publishedAssets[$asset.name] = $asset
+          }
+          $missingAssets = @($expectedAssetNames | Where-Object { -not $publishedAssets.ContainsKey($_) })
+          if ($missingAssets.Count -gt 0) {
+            throw "Release $tag is missing required assets: $($missingAssets -join ', ')."
+          }
+          $unavailableAssets = @($expectedAssetNames | Where-Object {
+            $asset = $publishedAssets[$_]
+            $asset.size -le 0 -or [string]::IsNullOrWhiteSpace($asset.downloadUrl)
+          })
+          if ($unavailableAssets.Count -gt 0) {
+            throw "Release $tag has missing or non-downloadable assets: $($unavailableAssets -join ', ')."
+          }
+          @(
+            '## Windows package release',
+            '',
+            "- Release: $($verified.url)",
+            "- Tag: $($verified.tagName)",
+            "- Target commit: $($verified.targetCommitish)",
+            "- Status: non-draft"
+          ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+
       - name: Collect package evidence
         if: ${{ always() }}
         continue-on-error: true
@@ -46,7 +252,6 @@ jobs:
           $evidenceRoot = Join-Path $env:RUNNER_TEMP 'windows-package-evidence'
           $artifactRoot = Join-Path $evidenceRoot 'squirrel-windows'
           New-Item -ItemType Directory -Force -Path $artifactRoot | Out-Null
-
           $metadata = [ordered]@{
             runId = $env:GITHUB_RUN_ID
             runAttempt = $env:GITHUB_RUN_ATTEMPT
@@ -58,10 +263,9 @@ jobs:
             node = (node --version)
             npm = (npm --version)
           }
-          $metadata | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $evidenceRoot 'build-context.json')
-
+          $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidenceRoot 'build-context.json') -Encoding utf8
           $squirrelOutput = Join-Path $env:GITHUB_WORKSPACE 'dist\squirrel-windows'
-          if (Test-Path -LiteralPath $squirrelOutput) {
+          if (Test-Path -LiteralPath $squirrelOutput -PathType Container) {
             Copy-Item -LiteralPath (Join-Path $squirrelOutput '*') -Destination $artifactRoot -Recurse -Force
           }
 

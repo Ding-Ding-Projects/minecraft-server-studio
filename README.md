@@ -51,6 +51,19 @@ Run `build.bat` from the repository root. It detects or installs Node.js LTS, in
 
 Run `build-installer.bat` to create the unsigned Squirrel.Windows installer assets. It checks that `Setup.exe` exists, reports its SHA-256, and verifies that the installer is unsigned. The script builds only; it never creates a tag, release, or upload.
 
+## GitHub Actions release workflow
+
+The Windows release workflow at `.github/workflows/windows-package.yml` runs for every GitHub push and for manual `workflow_dispatch` runs. It builds the Windows Squirrel.Windows package with signing disabled, then verifies the expected release set before publication:
+
+- the generated `Setup.exe` installer;
+- the `RELEASES` index and its full-package entry;
+- the full `.nupkg` package; and
+- the installer signature state, which must be `NotSigned`.
+
+Each workflow execution uploads safe package evidence, including the bounded Squirrel output and build context, even when an earlier packaging step fails. It also runs `node scripts/line-count.cjs --format markdown` to create the release-note line-count table from the tagged source tree. The table separates source, tests, styles/markup, documentation, workflows/configuration, other hand-written text, and generated text; it also records tracked-file exclusions and surviving-line automation-versus-human attribution.
+
+When the workflow reaches publication, it creates one non-draft GitHub Release with a rerun-unique tag, attaches the validated unsigned Squirrel assets, and includes the line-count table plus verified workflow timing in the release notes. The release remains unsigned by design and may trigger the operating system's unknown-publisher warning. A dim sum code name or photo is not asserted unless a separately verified catalog asset is available; this workflow neither fetches nor copies catalog assets. The workflow does not run tests or lint jobs; package production and release evidence are not test or runtime-interaction evidence.
+
 ## Security and operational boundaries
 
 - Server Java commands use direct executable arguments with `shell: false`; the app does not compose user settings into shell commands.
