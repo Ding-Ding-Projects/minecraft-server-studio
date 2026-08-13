@@ -172,8 +172,9 @@ builders for tab and appearance-control searches.
 This is deliberately not an every-element appearance editor or complete tab
 management suite. Installed-font enumeration, Word-style typography, an
 infinite color translator, pinning, grouping, reordering, master tab search,
-bulk close, and command-palette coverage remain unavailable and are shown as
-such in the preferences inventory.
+and bulk close remain unavailable and are shown as such in the preferences
+inventory. A later bounded `Ctrl+Shift+F` palette can reveal known local
+targets, but does not complete application-wide command-palette coverage.
 
 ### Directly related paths
 
@@ -196,6 +197,44 @@ capture ran for this source-only appearance/navigation candidate. The local
 inventory continues to mark evidence incomplete, and this lane makes no
 claim of every-element editing, complete tab management, or packaged-runtime
 verification.
+
+## Desktop command-palette foundation
+
+The desktop renderer now has a bounded command palette opened by
+`Ctrl+Shift+F`; `Ctrl+K` has no competing binding. It builds a local index from
+actual renderer destinations, visible server tabs/panels, loaded bundled
+offline-document records, and non-secret DOM controls. Plain-text search is
+the default, with a bounded local regular-expression builder, result/status
+feedback, and keyboard arrows, `Enter`, and `Escape`.
+
+Activating a result reveals the owning destination, settings dialog, or server
+tab, then scrolls, focuses, and briefly highlights the exact real element. One
+immediate update preference mirrors the existing `#updates-enabled` toggle
+through its existing change handler. The palette excludes password, credential,
+token, and secret controls; it does not run a server command, contact RCON,
+start a process, or add a new IPC route.
+
+### Directly related paths
+
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `src/main/offline-docs.cjs`
+- `docs/features/desktop-command-palette.md`
+- `docs/features/local-status-and-completeness.md`
+- `docs/features/README.md`
+- `README.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, runtime interaction,
+accessibility review, or screen capture ran or is claimed for this
+source-level fast-delivery lane. This foundation does not claim a complete
+application index, complete localization, voice behavior, rich execution
+controls, packaged-runtime evidence, or capture evidence.
 
 ## Release code-name metadata
 
@@ -639,9 +678,9 @@ The backup/update candidate adds a bounded local snapshot lifecycle for world, c
 - The local-history and safe-export foundation still needs complete mutation coverage, accessibility/localization work, focused checks, packaged-runtime interaction, and real captures. Its append-only redacted journal is not a Git history, backup, snapshot, or restoration implementation.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.
-- The settings foundation now includes bounded narrator/schedule, authenticator/toy-lock, converter, local-model, and appearance/tab source modules, but does not yet complete universal localization, personal-vocabulary upload, every-element appearance editing, complete tab management/regex/palette coverage, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.
+- The settings foundation now includes bounded narrator/schedule, authenticator/toy-lock, converter, local-model, appearance/tab, and `Ctrl+Shift+F` command-palette source modules, but does not yet complete universal localization, personal-vocabulary upload, every-element appearance editing, complete tab management/regex/palette coverage, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.
 - The local Ollama foundation does not yet complete the exhaustive official Model Store, catalog pagination and revision evidence, hardware-fit assessment, batch pulls, streamed chat, capability-gated attachments, registered harness profiles, rollback, offline documentation/troubleshooting, or their required proof set.
-- The documentation destination bundles and renders the current feature-article inventory, but local history, notification center, full localization, complete command-palette/tabs coverage, tests, packaged interaction, and captures remain pending.
+- The documentation destination bundles and renders the current feature-article inventory, and the bounded palette can reveal loaded documentation records, but local history, notification center, full localization, complete command-palette/tabs coverage, tests, packaged interaction, and captures remain pending.
 - Scheduled appearance values, validated external schedule sources, full narrator runtime evidence, broad local-model/converter workflows, universal localization, personal-vocabulary upload, history, exports, and packaged-runtime evidence remain open work. The bounded settings modules above do not stand in for those complete contracts.
 
 ## Browser-local companion-site file converter

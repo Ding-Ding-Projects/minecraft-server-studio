@@ -56,6 +56,7 @@ The template includes these desktop surface rows:
 | `backups-and-updates` | Backup, restore, and Paper server-JAR update/rollback controls |
 | `application-updates` | Unsigned Squirrel application-update controls |
 | `settings-appearance-and-localization` | Settings, appearance, and localization |
+| `command-palette` | Bounded desktop command palette for local renderer destinations and non-secret controls |
 | `file-converter` | Local file converter |
 | `ollama` | Local Ollama service health plus bounded installed/running inventory; complete Model Store, pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
@@ -66,6 +67,23 @@ The template includes these desktop surface rows:
 | `export` | Export |
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
+
+## Command-palette inventory boundary
+
+The `command-palette` row is a separate hand-written desktop surface. Its
+source-level foundation names the renderer dialog, its local index of actual
+destinations/tabs/document records/non-secret controls, local plain-text and
+regular-expression search, exact-element reveal/focus behavior, and the
+existing update-toggle mirror. Its documentation path is
+`docs/features/desktop-command-palette.md`.
+
+The row remains incomplete until its localized copy, focused automated checks,
+built-artifact interaction, capture, and exact implementation evidence are
+recorded independently. It must not inherit proof from the settings surface,
+the offline documentation browser, the application-update controller, or a
+source-level article. It excludes credentials and secret-like controls, does
+not execute a server or RCON operation, and does not create a general IPC
+action route.
 
 ## Paper JAR CLI inventory boundary
 
@@ -206,4 +224,5 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Local file-converter foundation](file-converter.md)
 - [App-logo customization](app-logo-customization.md)
 - [Appearance and tab-navigation foundation](appearance-and-tabs.md)
+- [Desktop command palette foundation](desktop-command-palette.md)
 - [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)

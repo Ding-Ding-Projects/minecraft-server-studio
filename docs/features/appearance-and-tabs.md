@@ -110,5 +110,6 @@ This documentation candidate was prepared under the active fast-delivery boundar
 ## Suggested related articles
 
 - [Presentation settings and shared School mode](experience-settings.md)
+- [Desktop command palette foundation](desktop-command-palette.md)
 - [Local status and desktop completeness](local-status-and-completeness.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
