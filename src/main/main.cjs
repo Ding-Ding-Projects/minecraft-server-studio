@@ -499,6 +499,28 @@ ipcMain.handle('studio:sync-status-hub-bridge', async () => {
 ipcMain.handle('studio:refresh-spigot-versions', () => requireManager().refreshSpigotVersionMetadata());
 ipcMain.handle('studio:buildtools-preflight', (_event, id, input) => requireManager().buildToolsPreflight(id, input));
 ipcMain.handle('studio:execute-buildtools-plan', (_event, id, confirmation) => requireManager().executeBuildToolsPlan(id, confirmation));
+ipcMain.handle('studio:paper-cli-preflight', (_event, id, profile) => requireManager().paperCliPreflight(id, profile));
+ipcMain.handle('studio:paper-cli-probe', (_event, id) => requireManager().collectPaperCliJarEvidence(id));
+ipcMain.handle('studio:pick-paper-cli-path', async (_event, kind) => {
+  const requestedKind = String(kind || '');
+  const definitions = {
+    'config-file': {
+      properties: ['openFile'],
+      filters: [{ name: 'Paper configuration', extensions: ['yml', 'yaml', 'properties', 'txt'] }]
+    },
+    'pid-file': {
+      properties: ['openFile'],
+      filters: [{ name: 'PID file', extensions: ['pid', 'txt'] }]
+    },
+    directory: {
+      properties: ['openDirectory', 'createDirectory']
+    }
+  };
+  const definition = definitions[requestedKind];
+  if (!definition) throw new Error('Choose a supported Paper CLI path type.');
+  const result = await dialog.showOpenDialog(mainWindow, definition);
+  return result.canceled ? null : result.filePaths[0];
+});
 ipcMain.handle('studio:pick-java', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],

@@ -511,7 +511,7 @@ function memoryGigabytes(value) {
 
 function normalizeServerArgs(value) {
   const args = Array.isArray(value) ? value : ['nogui'];
-  if (!args.length || args.length > 16) throw runtimeError('JAVA_SERVER_ARGS_INVALID', 'Server arguments must contain between one and 16 direct tokens.');
+  if (!args.length || args.length > 48) throw runtimeError('JAVA_SERVER_ARGS_INVALID', 'Server arguments must contain between one and 48 direct tokens.');
   return Object.freeze(args.map((item) => {
     const token = text(item).trim();
     if (!token || token.length > 512 || /[\r\n\0]/.test(token) || /[;&|\x60]/.test(token) || token.startsWith('@')) {

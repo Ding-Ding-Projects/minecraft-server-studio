@@ -2,7 +2,7 @@
 
 ## Current delivery
 
-- Windows Electron control center for Paper and Spigot creation, setup, configuration, version-aware Java selection, capability-first live management, command composition, console operation, plugins, CLI, and automatic dependency installation.
+- Windows Electron control center for Paper and Spigot creation, setup, configuration, version-aware Java selection, typed Paper post-JAR CLI planning, capability-first live management, command composition, console operation, plugins, CLI, and automatic dependency installation.
 - Pages-ready public marketing surface with browser-local controls and a truthful desktop-execution boundary.
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
 

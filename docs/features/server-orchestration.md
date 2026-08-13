@@ -21,6 +21,8 @@ The app updates `server.properties` through a bounded lossless line model: GUI-m
 
 For Paper, the app reads the official Paper project metadata, selects the latest downloadable build for the chosen Minecraft revision, downloads it into `server.jar`, and validates the file with the publisher-provided SHA-256 value when it is available.
 
+Paper-specific post-JAR options are planned through the typed [Paper JAR CLI controls](paper-jar-cli-controls.md), not a free-form launcher field. Those controls keep JVM tokens before `-jar`, use only direct arguments after it, provide explicit bounded `--help` and `--version` evidence collection, and leave world-changing upgrade/cache/region flags disabled until an exact destructive confirmation can be bound to a stored launch preflight.
+
 ## Spigot setup
 
 For Spigot, the app exposes an explicit BuildTools preflight before an execution request can be prepared. It refreshes official version metadata only when the user requests it, verifies a dedicated workspace outside both the server home and source repository, derives structured BuildTools arguments, and prepares a stage/swap/rollback plan. The generated JAR is never put in the public source repository. BuildTools can take several minutes because it assembles the requested revision locally.
@@ -62,4 +64,5 @@ This initial implementation records the intended lifecycle and configuration beh
 
 - [CLI RCON gateway](cli-rcon-gateway.md)
 - [Command Center](command-center.md)
+- [Paper JAR CLI controls](paper-jar-cli-controls.md)
 - [Automatic dependency bootstrap](dependency-bootstrap.md)

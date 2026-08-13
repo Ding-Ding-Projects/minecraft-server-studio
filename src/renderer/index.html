@@ -95,6 +95,7 @@
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay" data-i18n="tab.gameplay">Gameplay</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network" data-i18n="tab.network">Network</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime" data-i18n="tab.runtime">Runtime</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-paper-cli" data-tab="paper-cli">Paper JAR CLI</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools" data-i18n="tab.buildtools">BuildTools</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-backups" data-tab="backups">Backups + updates</button>
             <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live" data-i18n="tab.live">Live management</button>
@@ -192,6 +193,76 @@
                 <label class="field wide"><span>Resource pack prompt</span><textarea id="resource-pack-prompt" rows="2" maxlength="256" placeholder="Optional message shown before download"></textarea></label>
                 <label class="switch-field"><input id="sync-chunk-writes" type="checkbox"><span><strong>Synchronize chunk writes</strong><small>Use the server's safer synchronous chunk write behavior.</small></span></label>
                 <label class="switch-field"><input id="hide-online-players" type="checkbox"><span><strong>Hide online players in status responses</strong><small>Limit player-name disclosure through server-list ping responses.</small></span></label>
+              </div>
+            </section>
+
+            <section id="panel-paper-cli" class="settings-panel" role="tabpanel" data-panel="paper-cli" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">PAPER DIRECT JAR ARGUMENTS</p>
+                  <h3>Paper JAR CLI profile</h3>
+                  <p id="paper-cli-boundary" class="muted">Typed Paper options appear after <code>-jar server.jar</code>. JVM controls stay in Runtime; this surface never accepts a shell command, raw argument file, Java agent, native agent, or plugin command.</p>
+                </div>
+                <button id="prepare-paper-cli-button" type="button" class="primary-action" data-paper-cli-control>Prepare read-only argv preview</button>
+              </div>
+              <div class="settings-grid">
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Bounded JAR help and version evidence</h4>
+                    <p id="paper-cli-probe-copy" class="muted">Choose this explicitly to run only <code>java -jar server.jar --help</code> and <code>java -jar server.jar --version</code> with the existing bounded direct-probe adapter. It never starts a server lifecycle.</p>
+                  </div>
+                  <button id="paper-cli-probe-button" type="button" class="outlined-action" data-paper-cli-control>Collect --help and --version</button>
+                </section>
+                <label class="switch-field wide"><input id="paper-cli-no-gui" type="checkbox" checked disabled><span><strong>Run without the Paper graphical interface</strong><small>This managed desktop profile always emits <code>--nogui</code>; the local app console remains the normal observation surface.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-disable-console" type="checkbox" data-paper-cli-control><span><strong>Disable Paper console input</strong><small>Adds <code>--noconsole</code>. Leave off to retain the app-managed local console.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-vanilla-console" type="checkbox" data-paper-cli-control><span><strong>Use vanilla-style console input</strong><small>Adds <code>--nojline</code> without changing the Java or process boundary.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-init-settings" type="checkbox" data-paper-cli-control><span><strong>Initialize settings only</strong><small>Adds <code>--initSettings</code>, then Paper stops before it creates worlds.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-demo" type="checkbox" data-paper-cli-control><span><strong>Create a demo world</strong><small>Adds <code>--demo</code> for Paper’s documented demo mode.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-bonus-chest" type="checkbox" data-paper-cli-control><span><strong>Create a bonus chest</strong><small>Adds <code>--bonusChest</code> only for initial world creation.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-safe-mode" type="checkbox" data-paper-cli-control><span><strong>Load Vanilla datapacks only</strong><small>Adds <code>--safeMode</code>. This is a startup choice, not a claim that installed datapacks are compatible.</small></span></label>
+                <label class="switch-field"><input id="paper-cli-jfr" type="checkbox" data-paper-cli-control><span><strong>Enable Paper JFR profile</strong><small>Adds Paper’s post-JAR <code>--jfrProfile</code>. It is separate from the Runtime tab’s JVM recording option.</small></span></label>
+
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Configuration and plugin paths</h4>
+                    <p class="muted">Every entered path must remain inside this server folder. Paper receives only a plugin directory; individual plugin JARs stay in the separately inspected Plugins flow.</p>
+                  </div>
+                  <button id="paper-cli-open-plugins-button" type="button" class="outlined-action" data-paper-cli-control>Open Plugins tab</button>
+                </section>
+                <label class="field wide"><span>Server properties path (<code>-c</code>)</span><div class="browse-row"><input id="paper-cli-server-properties" type="text" maxlength="1024" placeholder="Leave empty for server.properties" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="config-file" data-paper-cli-target="paper-cli-server-properties" data-paper-cli-control>Browse file</button></div><small>Typed paths and selected files follow the same inside-server validation.</small></label>
+                <label class="field wide"><span>Bukkit settings path (<code>-b</code>)</span><div class="browse-row"><input id="paper-cli-bukkit-settings" type="text" maxlength="1024" placeholder="Leave empty for bukkit.yml" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="config-file" data-paper-cli-target="paper-cli-bukkit-settings" data-paper-cli-control>Browse file</button></div></label>
+                <label class="field wide"><span>Commands settings path (<code>-C</code>)</span><div class="browse-row"><input id="paper-cli-commands-settings" type="text" maxlength="1024" placeholder="Leave empty for commands.yml" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="config-file" data-paper-cli-target="paper-cli-commands-settings" data-paper-cli-control>Browse file</button></div></label>
+                <label class="field wide"><span>Paper settings directory (<code>--paper-dir</code>)</span><div class="browse-row"><input id="paper-cli-paper-directory" type="text" maxlength="1024" placeholder="Leave empty for config" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="directory" data-paper-cli-target="paper-cli-paper-directory" data-paper-cli-control>Browse folder</button></div></label>
+                <label class="field wide"><span>Plugin directory (<code>-P</code>)</span><div class="browse-row"><input id="paper-cli-plugins-directory" type="text" maxlength="1024" placeholder="Leave empty for plugins" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="directory" data-paper-cli-target="paper-cli-plugins-directory" data-paper-cli-control>Browse folder</button></div></label>
+                <label class="field wide"><span>PID file path (<code>--pidFile</code>)</span><div class="browse-row"><input id="paper-cli-pid-file" type="text" maxlength="1024" placeholder="Optional existing or planned PID file inside this server" data-paper-cli-control><button type="button" class="outlined-action" data-paper-cli-browse="pid-file" data-paper-cli-target="paper-cli-pid-file" data-paper-cli-control>Browse file</button></div></label>
+
+                <label class="field"><span>World name (<code>-w</code>)</span><input id="paper-cli-world-name" type="text" maxlength="64" placeholder="Leave empty for server.properties" data-paper-cli-control><small>Names only, not paths. Slashes and path traversal are rejected.</small></label>
+                <label class="field"><span>World folder preview</span><input id="paper-cli-world-path" type="text" readonly placeholder="Set a world name to preview its folder"></label>
+                <label class="field"><span>Server display name (<code>--server-name</code>)</span><input id="paper-cli-server-name" type="text" maxlength="80" placeholder="Optional Paper server name" data-paper-cli-control></label>
+                <label class="field"><span>Server identifier (<code>--serverId</code>)</span><input id="paper-cli-server-id" type="text" maxlength="128" placeholder="Optional crash-file identifier" data-paper-cli-control></label>
+                <label class="field"><span>Host override (<code>-h</code>)</span><input id="paper-cli-host" type="text" maxlength="253" placeholder="Optional hostname or IP literal" data-paper-cli-control></label>
+                <label class="field"><span>Port override (<code>-p</code>)</span><input id="paper-cli-port" type="number" min="1" max="65535" step="1" placeholder="Optional 1–65535" data-paper-cli-control></label>
+                <label class="field"><span>Maximum players (<code>-s</code>)</span><input id="paper-cli-max-players" type="number" min="1" max="2147483647" step="1" placeholder="Optional positive integer" data-paper-cli-control></label>
+                <label class="field"><span>Online mode (<code>-o</code>)</span><select id="paper-cli-online-mode" data-paper-cli-control><option value="">Use server.properties</option><option value="true">Require authenticated accounts</option><option value="false">Disable online-mode authentication</option></select></label>
+
+                <section class="wide guarded-action-card">
+                  <div>
+                    <h4>Upgrade and cache operations are disabled</h4>
+                    <p>Paper’s <code>--forceUpgrade</code>, <code>--eraseCache</code>, and <code>--recreateRegionFiles</code> can change world data. This foundation deliberately does not add them until the existing two-key destructive confirmation can authorize an exact stored launch preflight.</p>
+                  </div>
+                  <div class="paper-cli-disabled-flags" aria-label="Destructive Paper CLI options disabled pending confirmation wiring">
+                    <label class="switch-field"><input id="paper-cli-force-upgrade" type="checkbox" disabled><span><strong>Force world upgrade</strong><small>Disabled: no authorized destructive preflight exists.</small></span></label>
+                    <label class="switch-field"><input id="paper-cli-erase-cache" type="checkbox" disabled><span><strong>Erase upgrade cache</strong><small>Disabled: no authorized destructive preflight exists.</small></span></label>
+                    <label class="switch-field"><input id="paper-cli-recreate-region-files" type="checkbox" disabled><span><strong>Recreate region files</strong><small>Disabled: no authorized destructive preflight exists.</small></span></label>
+                  </div>
+                </section>
+                <section class="wide status-detail-card">
+                  <div>
+                    <h4>Read-only direct argv preview</h4>
+                    <p id="paper-cli-preview-state" class="muted">Prepare the profile to validate its typed direct argument vector. Java/JVM tokens appear before <code>-jar</code>; Paper tokens appear after the JAR.</p>
+                  </div>
+                  <pre id="paper-cli-argv-preview" class="console-output" aria-live="polite">No Paper CLI preflight has been prepared.</pre>
+                </section>
               </div>
             </section>
 

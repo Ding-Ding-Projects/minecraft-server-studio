@@ -64,6 +64,19 @@ The template includes these desktop surface rows:
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
 
+## Paper JAR CLI inventory boundary
+
+The `paper` row also includes the typed Paper JAR CLI profile in
+`src/main/paper-cli-profile.cjs`, its desktop IPC and renderer controls, and
+the [Paper JAR CLI controls](paper-jar-cli-controls.md) article. The source
+models only direct post-`-jar` Paper tokens and delegates selected-JAR
+`--help`/`--version` evidence to the existing bounded Command Center adapter.
+It does not make a JAR probe, an argv preview, or a stored profile evidence that
+Java launched, Paper accepted an option, a plugin loaded, or a world operation
+completed. Its three world-changing upgrade/cache/region options remain
+disabled until a stored exact launch preflight is wired to the existing
+two-key destructive confirmation flow.
+
 ## Application-update inventory boundary
 
 The `application-updates` row is separate from server backups, server rollback,

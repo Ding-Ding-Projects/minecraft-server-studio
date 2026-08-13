@@ -4,6 +4,42 @@
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
+## Paper JAR CLI control candidate
+
+The Paper JAR CLI lane adds `src/main/paper-cli-profile.cjs`, a typed profile
+that constructs only Paper server arguments after `-jar <server.jar>`. It keeps
+JVM controls in the existing Runtime profile, rejects raw token, argument-file,
+agent, native-agent, class-path, and shell routes, and limits custom paths to
+the selected server folder. The renderer adds Paper-only rich controls,
+native browse paths, an explicit bounded `--help`/`--version` JAR-evidence
+action, and a read-only direct-argv preview. Its world-changing Paper flags are
+visibly disabled and rejected by the profile until an exact stored preflight can
+be authorized by the existing two-key destructive-confirmation component.
+
+### Directly related paths
+
+- `src/main/paper-cli-profile.cjs`
+- `src/main/server-manager.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/main/java-runtime-manager.cjs`
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/paper-jar-cli-controls.md`
+- `docs/features/README.md`
+- `docs/features/local-status-and-completeness.md`
+- `CHANGELOG.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, runtime interaction, or
+visual capture ran for this candidate under the active fast-delivery workflow.
+Its local status inventory remains incomplete until localization, focused tests,
+built-artifact interaction, and real capture evidence exist. The explicit JAR
+help/version action is source wiring only; no JAR probe was invoked during this
+implementation lane.
+
 ### Changed areas
 
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
