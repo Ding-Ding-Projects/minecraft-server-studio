@@ -29,7 +29,7 @@ For Spigot, the app exposes an explicit BuildTools preflight before an execution
 
 The desktop lifecycle controls start Java with the configured fixed memory allocation and `nogui`, keep standard output and error in the built-in console, and send console commands through the child process standard input. Stop requests send Minecraft's `stop` command first and only terminate the local Java process after a 20-second grace period.
 
-The CLI shares the registry. `start` remains foreground so the operator can observe the process. The desktop app defaults to a local child-process console; RCON is an explicit fallback that requires the Network settings and a protected credential.
+The CLI shares the registry. `start` remains foreground so the operator can observe the process. The desktop app defaults to a local child-process console; RCON is an explicit fallback that requires the Network settings and a protected credential. CLI `command` and `stop` run through a one-shot Electron main-process gateway instead of reading a password in the Node CLI. The gateway is limited to the desktop app's default local registry and a fixed `127.0.0.1` RCON host; it rejects a custom `MSS_DATA_DIR`, remote host routing, and password configuration through the CLI.
 
 ## Minecraft Server Management Protocol
 
@@ -48,11 +48,18 @@ The Plugins tab accepts a user-selected local `.jar` file and copies it into the
 - An unsupported version or an unavailable upstream build reports the publisher response instead of substituting a different revision.
 - A missing EULA acceptance blocks startup without changing any server process state.
 - A failed RCON authentication reports the failure without revealing the configured password.
+- CLI command or stop refuses when the desktop app's protected storage is unavailable, the server is not a local profile, RCON is disabled, or a protected password has not been saved in the desktop Network tab. The recovery path is to repair that desktop configuration, not to provide a password on the command line.
 
 ## Security considerations
 
-The app runs server Java with `shell: false`, does not interpolate settings into shell commands, redacts password-like output patterns in its own console feed, and uses a private application-data registry rather than a repository inside a server folder. RCON and management-protocol secrets use the operating system protected-storage boundary and are excluded from the registry, exports, and console logs. When RCON is enabled, Minecraft still needs its password in the local server configuration to operate; protect the server folder according to your local access policy.
+The app runs server Java with `shell: false`, does not interpolate settings into shell commands, redacts password-like output patterns in its own console feed, and uses a private application-data registry rather than a repository inside a server folder. RCON and management-protocol secrets use the operating system protected-storage boundary and are excluded from the registry, exports, and console logs. The CLI's gateway process receives no password in arguments, environment, registry JSON, or standard input; it reads the protected value in Electron only long enough to authenticate one fixed-loopback RCON request, bounds packets and output, then exits. When RCON is enabled, Minecraft still needs its password in its local server configuration to operate; protect the server folder according to your local access policy.
 
 ## Verification boundary
 
 This initial implementation records the intended lifecycle and configuration behavior in source. The speed-delivery pass intentionally did not run tests, visual captures, or runtime interaction verification, including for management-protocol discovery and reconnect handling.
+
+## Suggested related articles
+
+- [CLI RCON gateway](cli-rcon-gateway.md)
+- [Command Center](command-center.md)
+- [Automatic dependency bootstrap](dependency-bootstrap.md)
