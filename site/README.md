@@ -8,11 +8,15 @@ The landing page describes:
 - automatic Java and Git prerequisite setup performed by the installed desktop application;
 - local server planning, configuration, lifecycle, and plugin-management capabilities;
 - browser-local previews of product destinations such as settings, documentation, file conversion, authenticator and lock management, local Ollama integration, local history, notification center, and download states; and
-- the availability boundary for the future installer.
+- the verified public installer availability boundary.
 
 ## Truthful static boundary
 
-This public page is static. It has no account system, backend, analytics, installer, server process, remote control channel, file upload, or credential storage. It does not install prerequisites, download a Paper or Spigot distribution, create files, start a Minecraft server, send a console command, convert a file, access an Ollama runtime, or retain a selected file or secret.
+This public page is static. It has no account system, backend, analytics, installer service, server process, remote control channel, file upload, or credential storage. It presents one static direct link to the verified `Minecraft.Server.Studio-0.1.0-x64-Setup.exe` asset from release `v0.1.0-build.33.1`; after a visitor activates that link, the browser handles the transfer. The page does not monitor, pause, resume, confirm, or install that download.
+
+The published installer is for Windows x64 version 0.1.0 and is unsigned. Windows may show an unknown-publisher or SmartScreen warning. The page links to the asset and release status without claiming that a download or installation completed.
+
+The page does not install prerequisites, download a Paper or Spigot distribution, create files, start a Minecraft server, send a console command, convert a file, access an Ollama runtime, or retain a selected file or secret.
 
 Those operations belong exclusively to the installed desktop application, where local paths, prerequisite checks, process status, data handling, and outcomes can be verified.
 
@@ -36,7 +40,7 @@ The visible destinations are:
 
 ## Browser-local engine wiring
 
-`index.html` loads `contract.js` before `app.js` at the end of the document. The contract and interaction engines may enrich the browser-local preview state, accessibility announcements, and local demonstration controls. They do not establish a chat bridge, backend connection, desktop command channel, server connection, installer route, or credential store.
+`index.html` loads `contract.js` before `app.js` at the end of the document. The contract and interaction engines may enrich the browser-local preview state, accessibility announcements, and local demonstration controls. They do not establish a chat bridge, backend connection, desktop command channel, server connection, installer service, or credential store. The static installer anchors remain ordinary browser links and are not transformed into an in-page transfer flow.
 
 The Status destination uses `data-contract-surface="status"` and separate hooks for current state, last updated, local evidence, active local interactions, next steps, and the explicit no-bridge boundary. Its status is intentionally limited to this public page's browser-local state.
 
@@ -61,4 +65,4 @@ This is a public-source inventory, not a claim that the installed application ha
 
 The exact static publish source is the repository-relative `site/` directory, whose entry point is `site/index.html`. A Pages workflow may upload that directory directly as its artifact; the included `.nojekyll` marker prevents Jekyll processing. This directory also contains `.openai/hosting.json`, scoped only to this static source and declaring no database or object-storage binding.
 
-Do not create a download link until a verified public installer release exists. Until then, the page must retain its disabled installer call-to-action and clear availability text.
+The verified public installer is release `v0.1.0-build.33.1`, targeting `5b9790c6fce037f9197a7f65c8d1bd2693abc508`. Its Windows x64 asset is [`Minecraft.Server.Studio-0.1.0-x64-Setup.exe`](https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/download/v0.1.0-build.33.1/Minecraft.Server.Studio-0.1.0-x64-Setup.exe). The asset is unsigned; keep the page's Windows unknown-publisher or SmartScreen warning next to every direct installer call-to-action. The page must not claim transfer, installation, or runtime success.
