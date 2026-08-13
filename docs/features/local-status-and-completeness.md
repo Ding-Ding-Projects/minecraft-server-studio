@@ -93,7 +93,7 @@ required proof record is verified; an application-update source record is not a
 substitute for backup, restore, localization, tests, built-artifact interaction,
 or capture evidence.
 
-The `settings-appearance-and-localization` row now names the implemented presentation-settings foundation: app-private persisted language modes, independent English/Cantonese message-playfulness values, dialog/message emoji preference, display-name label, and a watched shared local School-mode record with a protected unlock-credential boundary. Its localization, test, capture, and complete-evidence fields remain intentionally incomplete because the broader settings, appearance, and universal surface contract is not yet complete.
+The `settings-appearance-and-localization` row now names the implemented presentation-settings foundation: app-private persisted language modes, independent English/Cantonese message-playfulness values, dialog/message emoji preference, display-name label, and a watched shared local School-mode record with a protected unlock-credential boundary. It also records the narrator preferences, platform-only voice enumeration and serialized renderer queue, plus the bounded local scheduled-language model. HTTPS API and Home Assistant sources remain visible but disabled because no validated privileged adapter exists in this build. Its localization, test, capture, and complete-evidence fields remain intentionally incomplete because the broader settings, appearance, and universal surface contract is not yet complete.
 
 The update-controller record must distinguish an unconfigured runtime from an
 offline or invalid approved public feed, preserve the installed application when
@@ -169,3 +169,4 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
 - [Local file-converter foundation](file-converter.md)
+- [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)

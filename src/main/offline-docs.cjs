@@ -35,6 +35,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('command-center', 'command-center.md', 'Command Center registry', 'Use structured Minecraft command families and evidence.'),
   entry('rcon-response-safety', 'rcon-response-safety.md', 'RCON response safety', 'Bound and redact renderer-visible RCON output.'),
   entry('experience-settings', 'experience-settings.md', 'Presentation settings and shared School mode', 'Set presentation preferences and the shared mode boundary.'),
+  entry('narrator-and-scheduled-settings', 'narrator-and-scheduled-settings.md', 'Event narrator and scheduled language settings', 'Configure local platform narration and bounded local-time language schedules.'),
   entry('cli-rcon-gateway', 'cli-rcon-gateway.md', 'CLI RCON gateway', 'Use the protected one-shot CLI route for RCON commands.'),
   entry('local-ollama-suite', 'local-ollama-suite.md', 'Local Ollama suite foundation', 'Inspect the bounded fixed-loopback local service inventory.'),
   entry('unsigned-automatic-updates', 'unsigned-automatic-updates.md', 'Unsigned automatic updates', 'Understand the fixed Squirrel update feed and restart choice.'),

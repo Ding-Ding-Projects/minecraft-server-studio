@@ -285,7 +285,13 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 .toast-copy { min-width: 0; white-space: pre-line; }
 
 .experience-settings-form { width: min(900px, calc(100vw - 32px)); }
+.settings-search-shell { display: grid; gap: 10px; position: relative; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: var(--surface-container); }
+.settings-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.regex-builder { display: grid; gap: 14px; max-height: min(520px, 60vh); overflow: auto; padding: 16px; border: 1px solid var(--outline); border-radius: 16px; background: var(--surface-container-highest); box-shadow: 0 12px 32px #0008; }
+.regex-builder[hidden] { display: none; }
+.regex-builder-actions, .narrator-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .experience-card { display: grid; gap: 16px; padding: 18px; border: 1px solid var(--outline-variant); border-radius: 20px; background: #151922; }
+.experience-card.search-filtered { display: none; }
 .experience-card h3, .experience-card h4 { color: var(--on-surface); }
 .experience-card p { line-height: 1.45; }
 .language-mode-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0; border: 0; }
@@ -298,6 +304,24 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 .experience-status[data-state="active"] { border-color: #4f9d75; color: var(--success); }
 .school-mode-actions { display: flex; flex-wrap: wrap; align-content: end; align-items: end; gap: 8px; }
 .credential-card { display: grid; gap: 16px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container); }
+.narrator-voice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.narrator-voice-grid .credential-card { min-width: 0; }
+.schedule-card { border-color: color-mix(in srgb, var(--secondary) 45%, var(--outline-variant)); }
+.schedule-weekdays { display: grid; gap: 12px; margin: 0; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container); }
+.schedule-weekdays legend { padding: 0 6px; color: var(--on-surface); font-size: .9rem; font-weight: 700; }
+.weekday-options { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.weekday-options label { display: flex; align-items: center; justify-content: center; min-height: 40px; gap: 6px; padding: 7px; border: 1px solid var(--outline-variant); border-radius: 12px; color: var(--on-surface-variant); background: #151922; font-size: .78rem; }
+.weekday-options input { width: 18px; height: 18px; accent-color: var(--primary); }
+.schedule-list-section { display: grid; gap: 14px; padding-top: 8px; border-top: 1px solid var(--outline-variant); }
+.schedule-list-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.schedule-search-field { width: min(360px, 100%); }
+.scheduled-settings-list { display: grid; gap: 10px; }
+.scheduled-setting { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container); }
+.scheduled-setting strong, .scheduled-setting small { display: block; }
+.scheduled-setting strong { color: var(--on-surface); }
+.scheduled-setting small { margin-top: 4px; color: var(--on-surface-variant); line-height: 1.4; }
+.scheduled-setting[data-active="true"] { border-color: #4f9d75; }
+.scheduled-setting-empty { padding: 14px; border: 1px dashed var(--outline); border-radius: 14px; color: var(--on-surface-variant); background: var(--surface-container); }
 body.school-mode-active [data-school-hidden] { display: none !important; }
 
 @media (max-width: 1050px) {
@@ -308,6 +332,17 @@ body.school-mode-active [data-school-hidden] { display: none !important; }
   .dependency-actions { grid-template-columns: 1fr auto; }
   .dependency-list { grid-column: 1 / -1; }
   .language-mode-group { grid-template-columns: 1fr; }
+  .narrator-voice-grid { grid-template-columns: 1fr; }
+  .weekday-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .schedule-list-heading { align-items: stretch; flex-direction: column; }
+  .schedule-search-field { width: 100%; }
+}
+
+@media (max-width: 620px) {
+  .settings-search-row { grid-template-columns: 1fr; }
+  .regex-builder-actions, .narrator-actions { align-items: stretch; flex-direction: column; }
+  .weekday-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scheduled-setting { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 850px) {

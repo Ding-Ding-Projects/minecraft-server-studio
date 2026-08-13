@@ -21,6 +21,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Browse the bundled in-app feature documentation without a network request. The documentation destination reads a fixed packaged inventory, renders Markdown through an isolated escaped renderer, resolves listed feature links inside the app, and keeps plain-text search plus a bounded local regex-builder route.
 - Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
 - Inspect the fixed local Ollama service through main-process-only reads for version, installed models, and running models. The Local Ollama destination keeps Model Store catalog, pull, chat, and harness controls visibly disabled until their full local workflows exist; it never sends requests to a cloud endpoint or accepts an arbitrary shell command.
+- Optionally enable a local event narrator with independently selected English and Cantonese platform voices, rate and pitch controls, serialized speech, and a screen-reader yield boundary; add bounded local-time language schedules without a network schedule source.
 
 ## Desktop workflow
 
@@ -97,6 +98,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [BuildTools plan-only orchestration](docs/features/buildtools-orchestration.md)
 - [Command Center](docs/features/command-center.md)
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
+- [Event narrator and scheduled language settings](docs/features/narrator-and-scheduled-settings.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
 - [Local Ollama suite foundation](docs/features/local-ollama-suite.md)
 - [Local file-converter foundation](docs/features/file-converter.md)

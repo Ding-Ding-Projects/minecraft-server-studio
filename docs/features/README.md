@@ -11,6 +11,7 @@
 - [Command Center](command-center.md)
 - [RCON response safety](rcon-response-safety.md)
 - [Presentation settings and shared School mode](experience-settings.md)
+- [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)
 - [CLI RCON gateway](cli-rcon-gateway.md)
 - [Local Ollama suite foundation](local-ollama-suite.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)

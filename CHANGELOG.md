@@ -32,6 +32,7 @@
 - Desktop presentation-settings foundation: persisted English, playful Hong Kong-style Cantonese, and bilingual modes; independent 1–5 message-playfulness levels; optional decorative dialog/message emoji; a display-name label that preserves installed identity; and a watched shared local School-mode record with protected password/PIN unlock storage and honest unavailable-state handling.
 - Local Ollama suite foundation: a fixed-loopback, main-process-only version/installed-model/running-model inventory with bounded response normalization, explicit local-service status, and an honest disabled boundary for Model Store catalog, pull, chat, and harness-launch workflows.
 - In-app offline documentation browser foundation: a fixed packaged feature-article inventory, package-time bundle check, narrow main-process reader IPC, isolated escaped Markdown rendering, internal feature-link navigation, and plain-text search with a bounded local regex-builder route.
+- Optional local event narrator with platform-only voice enumeration, separately persisted English/Cantonese voice identities, rate and pitch controls, serialized debounced speech, and an accessibility-client yield state; plus bounded local-time scheduled language rules with deterministic precedence, base-language fallback, cross-midnight semantics, and visible disabled HTTPS/Home Assistant source choices.
 
 ### Fixed
 

@@ -644,7 +644,17 @@
           <button class="icon-action" type="button" id="close-experience-settings-dialog" aria-label="Close preferences">×</button>
         </div>
 
-        <section class="experience-card" data-school-hidden>
+        <section class="settings-search-shell" aria-label="Search Studio preferences">
+          <label class="field" for="experience-settings-search"><span>Search these preferences</span><div class="settings-search-row"><input id="experience-settings-search" type="search" autocomplete="off" placeholder="Find narrator or schedule settings"><button id="experience-settings-regex-toggle" type="button" class="outlined-action" aria-expanded="false" aria-controls="experience-settings-regex-builder">Regex builder</button></div></label>
+          <section id="experience-settings-regex-builder" class="regex-builder" hidden aria-label="Preferences search regex builder">
+            <div class="settings-grid"><label class="field"><span>Pattern</span><input id="experience-settings-regex-pattern" type="text" maxlength="256" autocomplete="off" placeholder="Use plain search unless you enable regex"></label><label class="field"><span>Flags</span><input id="experience-settings-regex-flags" type="text" maxlength="8" value="i" autocomplete="off" placeholder="i, m, or u"></label><label class="field wide"><span>Sample text</span><input id="experience-settings-regex-sample" type="text" maxlength="512" autocomplete="off" placeholder="Try the pattern against this local sample"></label></div>
+            <div class="regex-builder-actions"><button type="button" class="outlined-action" data-regex-insert="literal">Literal</button><button type="button" class="outlined-action" data-regex-insert="anchor">Anchor</button><button type="button" class="outlined-action" data-regex-insert="class">Character class</button><button type="button" class="outlined-action" data-regex-insert="group">Group</button><button type="button" class="outlined-action" data-regex-insert="alternation">Alternation</button><button type="button" class="outlined-action" data-regex-insert="quantifier">Quantifier</button><button id="experience-settings-regex-use" type="button" class="primary-action">Use regex</button><button id="experience-settings-regex-clear" type="button" class="outlined-action">Return to plain search</button></div>
+            <p id="experience-settings-regex-status" class="experience-status" aria-live="polite">Plain-text search is active.</p>
+          </section>
+          <p id="experience-settings-search-status" class="muted" aria-live="polite">All preference sections are visible.</p>
+        </section>
+
+        <section class="experience-card" data-school-hidden data-settings-card data-settings-search="language message style English Cantonese bilingual funny playfulness">
           <div>
             <h3 data-i18n="settings.languageTitle">Language and message style</h3>
             <p class="muted" data-i18n="settings.languageDescription">Choose how app-owned navigation, headings, dialog framing, and notification framing are presented. Dynamic server facts and external error text stay exact.</p>
@@ -662,14 +672,57 @@
           <p class="muted" data-i18n="settings.funnyDescription">This styles all app-owned messages, including errors and warnings, without changing facts. You can reset it at any time.</p>
         </section>
 
-        <section class="experience-card">
+        <section class="experience-card" data-settings-card data-settings-search="dialog emoji display name title">
           <div class="settings-grid">
             <label class="switch-field"><input id="dialog-emoji" type="checkbox"><span><strong data-i18n="settings.dialogEmoji">Show emoji decorations in dialogs and message boxes</strong><small data-i18n="settings.dialogEmojiDescription">Decorative emoji never replace the factual message or control labels.</small></span></label>
             <label class="field"><span data-i18n="settings.displayName">Display name</span><input id="experience-display-name" type="text" maxlength="80" required><small data-i18n="settings.displayNameDescription">Changes only what this app shows in its title and app-owned copy. Package identity, data location, installer identity, and update identity do not change.</small></label>
           </div>
         </section>
 
-        <section class="experience-card school-mode-card">
+        <section class="experience-card narrator-card" data-school-hidden data-settings-card data-settings-search="narrator speech voice English Cantonese rate pitch accessibility screen reader">
+          <div>
+            <p class="eyebrow">SPOKEN APP EVENTS</p>
+            <h3>Event narrator</h3>
+            <p class="muted">The narrator is off by default. It uses only platform voices exposed by this Electron runtime, speaks one queued event at a time, and yields when Electron reports an active accessibility client.</p>
+          </div>
+          <p id="narrator-status" class="experience-status" aria-live="polite">Checking platform narrator availability…</p>
+          <label class="switch-field"><input id="narrator-enabled" type="checkbox"><span><strong>Enable spoken event narration</strong><small>Narration is optional and does not replace visible notifications, labels, or assistive names.</small></span></label>
+          <div class="settings-grid">
+            <label class="field"><span>Narrated language</span><select id="narrator-language"><option value="english">English</option><option value="cantonese">Cantonese</option><option value="both">Both — English then Cantonese</option></select><small>Both queues English before Cantonese; the tracks never overlap.</small></label>
+            <div class="narrator-actions"><button id="narrator-preview" type="button" class="outlined-action">Speak a short preview</button><button id="save-narrator-settings-button" type="button" class="primary-action">Save narrator settings</button></div>
+          </div>
+          <div class="settings-grid narrator-voice-grid">
+            <section class="credential-card" aria-labelledby="narrator-english-title"><div><h4 id="narrator-english-title">English voice</h4><p id="narrator-english-status" class="muted" aria-live="polite">Loading available English voices…</p></div><label class="field"><span>Voice</span><select id="narrator-english-voice"><option value="automatic">Choose automatically</option></select></label><label class="field"><span>Rate <output id="narrator-english-rate-output" class="range-output">1</output></span><input id="narrator-english-rate" type="range" min="0.5" max="2" step="0.1" value="1"></label><label class="field"><span>Pitch <output id="narrator-english-pitch-output" class="range-output">1</output></span><input id="narrator-english-pitch" type="range" min="0" max="2" step="0.1" value="1"></label></section>
+            <section class="credential-card" aria-labelledby="narrator-cantonese-title"><div><h4 id="narrator-cantonese-title">Cantonese voice</h4><p id="narrator-cantonese-status" class="muted" aria-live="polite">Loading available Cantonese voices…</p></div><label class="field"><span>Voice</span><select id="narrator-cantonese-voice"><option value="automatic">Choose automatically</option></select></label><label class="field"><span>Rate <output id="narrator-cantonese-rate-output" class="range-output">1</output></span><input id="narrator-cantonese-rate" type="range" min="0.5" max="2" step="0.1" value="1"></label><label class="field"><span>Pitch <output id="narrator-cantonese-pitch-output" class="range-output">1</output></span><input id="narrator-cantonese-pitch" type="range" min="0" max="2" step="0.1" value="1"></label></section>
+          </div>
+        </section>
+
+        <section class="experience-card schedule-card" data-school-hidden data-settings-card data-settings-search="scheduled setting local time language weekday date timezone source Home Assistant HTTPS API">
+          <div>
+            <p class="eyebrow">LOCAL-TIME RULES</p>
+            <h3>Scheduled language settings</h3>
+            <p class="muted">This foundation schedules the saved language mode only. Rules use this computer’s local timezone. Higher priority wins; matching equal-priority rules resolve by stable schedule identifier. Cross-midnight windows belong to the day on which they start.</p>
+          </div>
+          <p id="schedule-effective-status" class="experience-status" aria-live="polite">Loading local schedule state…</p>
+          <div class="settings-grid">
+            <label class="field"><span>Rule source</span><select id="schedule-source"><option value="local">Local schedule</option><option value="https-api" disabled>Validated HTTPS API — unavailable in this build</option><option value="home-assistant" disabled>Home Assistant boolean entity — unavailable in this build</option></select><small id="schedule-source-detail">Only the local source is active. No schedule-source network request is made.</small></label>
+            <label class="field"><span>Rule label</span><input id="schedule-label" type="text" maxlength="80" value="Scheduled language"></label>
+            <label class="field"><span>Scheduled language</span><select id="schedule-language"><option value="english">English</option><option value="cantonese">Playful Hong Kong-style Cantonese</option><option value="bilingual">Bilingual</option></select></label>
+            <label class="field"><span>Priority</span><input id="schedule-priority" type="number" min="0" max="999" step="1" value="100"><small>Higher number wins. A stable identifier breaks exact ties.</small></label>
+            <label class="field"><span>Optional start date</span><input id="schedule-date-start" type="date"></label>
+            <label class="field"><span>Optional end date</span><input id="schedule-date-end" type="date"></label>
+            <label class="field"><span>Start time</span><input id="schedule-time-start" type="time" value="09:00" required></label>
+            <label class="field"><span>End time</span><input id="schedule-time-end" type="time" value="17:00" required><small>Equal times are rejected. A later start than end is a cross-midnight window.</small></label>
+          </div>
+          <fieldset class="schedule-weekdays"><legend>Active local weekdays</legend><label class="switch-field"><input id="schedule-every-day" type="checkbox" checked><span><strong>Every day</strong><small>Every day selects all local weekdays instead of creating seven duplicate rules.</small></span></label><div id="schedule-weekday-options" class="weekday-options"><label><input type="checkbox" value="0" checked>Sun</label><label><input type="checkbox" value="1" checked>Mon</label><label><input type="checkbox" value="2" checked>Tue</label><label><input type="checkbox" value="3" checked>Wed</label><label><input type="checkbox" value="4" checked>Thu</label><label><input type="checkbox" value="5" checked>Fri</label><label><input type="checkbox" value="6" checked>Sat</label></div></fieldset>
+          <div class="narrator-actions"><button id="add-scheduled-setting-button" type="button" class="primary-action">Add local language rule</button></div>
+          <section class="schedule-list-section" aria-labelledby="scheduled-settings-list-title"><div class="schedule-list-heading"><div><h4 id="scheduled-settings-list-title">Saved local language rules</h4><p class="muted">Disable a rule to retain it without applying it. This source-only foundation does not delete rules automatically.</p></div><label class="field schedule-search-field"><span>Search scheduled rules</span><div class="settings-search-row"><input id="schedule-search" type="search" autocomplete="off" placeholder="Find a label or language"><button id="schedule-regex-toggle" type="button" class="outlined-action" aria-expanded="false" aria-controls="schedule-regex-builder">Regex builder</button></div></label></div>
+            <section id="schedule-regex-builder" class="regex-builder" hidden aria-label="Scheduled rule search regex builder"><div class="settings-grid"><label class="field"><span>Pattern</span><input id="schedule-regex-pattern" type="text" maxlength="256" autocomplete="off"></label><label class="field"><span>Flags</span><input id="schedule-regex-flags" type="text" maxlength="8" value="i" autocomplete="off"></label><label class="field wide"><span>Sample text</span><input id="schedule-regex-sample" type="text" maxlength="512" autocomplete="off"></label></div><div class="regex-builder-actions"><button type="button" class="outlined-action" data-schedule-regex-insert="literal">Literal</button><button type="button" class="outlined-action" data-schedule-regex-insert="anchor">Anchor</button><button type="button" class="outlined-action" data-schedule-regex-insert="class">Character class</button><button type="button" class="outlined-action" data-schedule-regex-insert="group">Group</button><button type="button" class="outlined-action" data-schedule-regex-insert="alternation">Alternation</button><button type="button" class="outlined-action" data-schedule-regex-insert="quantifier">Quantifier</button><button id="schedule-regex-use" type="button" class="primary-action">Use regex</button><button id="schedule-regex-clear" type="button" class="outlined-action">Return to plain search</button></div><p id="schedule-regex-status" class="experience-status" aria-live="polite">Plain-text search is active.</p></section>
+            <p id="schedule-search-status" class="muted" aria-live="polite">Loading saved local language rules…</p><div id="scheduled-settings-list" class="scheduled-settings-list" role="list" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <section class="experience-card school-mode-card" data-settings-card data-settings-search="School mode shared local credential password PIN recovery">
           <div>
             <p class="eyebrow" id="school-mode-eyebrow" data-i18n="settings.schoolEyebrow">SHARED LOCAL EXPERIENCE CONTROL</p>
             <h3 id="school-mode-title">Shared local mode control</h3>
@@ -712,6 +765,7 @@
     <script src="experience-copy.js"></script>
     <script src="rcon-response-safety.js"></script>
     <script src="markdown-renderer.js"></script>
+    <script src="narrator.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

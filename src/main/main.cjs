@@ -4,6 +4,7 @@ const path = require('node:path');
 const { ServerManager } = require('./server-manager.cjs');
 const { MinecraftManagementProtocolClient } = require('./minecraft-management-protocol.cjs');
 const { StudioSettingsService } = require('./studio-settings.cjs');
+const { NarrationScheduleSettingsService } = require('./narration-schedule-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { FileConverter } = require('./file-converter.cjs');
@@ -30,6 +31,7 @@ let mainWindow;
 let serverManager;
 let credentialVault;
 let studioSettings;
+let narrationScheduleSettings;
 let schoolModeVault;
 let schoolModeCredentialKey;
 
@@ -41,6 +43,7 @@ let ollamaSuite;
 let fileConverter;
 let buildToolsController;
 let offlineDocumentation;
+let scheduleTickTimer;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -182,9 +185,34 @@ function schoolModeVaultStatus() {
 }
 
 function experienceSnapshot() {
+  const settings = requireStudioSettings().snapshot();
+  const narrationSchedule = requireNarrationScheduleSettings().snapshot({ baseLanguage: settings.local.language });
   return {
-    ...requireStudioSettings().snapshot(),
+    ...settings,
+    effectiveLocal: {
+      ...settings.local,
+      language: narrationSchedule.effective.language
+    },
+    narrationSchedule,
+    narratorRuntime: narratorRuntimeSnapshot(),
     credential: schoolModeVaultStatus()
+  };
+}
+
+function narratorRuntimeSnapshot() {
+  if (typeof app.accessibilitySupportEnabled !== 'boolean') {
+    return {
+      screenReaderActive: true,
+      state: 'unavailable',
+      detail: 'This Electron runtime cannot report whether a platform accessibility client is active. Narrator speech yields until an equivalent supported signal is available.'
+    };
+  }
+  return {
+    screenReaderActive: app.accessibilitySupportEnabled === true,
+    state: app.accessibilitySupportEnabled === true ? 'active' : 'inactive',
+    detail: app.accessibilitySupportEnabled === true
+      ? 'A platform accessibility client is active, so narrator speech yields instead of competing with a screen reader.'
+      : 'No platform accessibility client is currently reported by Electron.'
   };
 }
 
@@ -316,6 +344,13 @@ app.whenReady().then(async () => {
     onChange: publishExperienceSettings
   });
   studioSettings.initialize();
+  narrationScheduleSettings = new NarrationScheduleSettingsService({
+    dataDir: path.join(app.getPath('userData'), 'settings'),
+    onChange: publishExperienceSettings
+  });
+  narrationScheduleSettings.initialize();
+  scheduleTickTimer = setInterval(() => publishExperienceSettings(), 20_000);
+  scheduleTickTimer.unref?.();
   credentialVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
@@ -375,6 +410,7 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  app.on('accessibility-support-changed', () => publishExperienceSettings());
 });
 
 app.on('window-all-closed', () => {
@@ -384,6 +420,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   studioSettings?.stopWatching();
   updateController?.shutdown();
+  if (scheduleTickTimer) clearInterval(scheduleTickTimer);
+  scheduleTickTimer = null;
 });
 
 function requireManager() {
@@ -416,10 +454,28 @@ function requireOfflineDocumentation() {
   return offlineDocumentation;
 }
 
+function requireNarrationScheduleSettings() {
+  if (!narrationScheduleSettings) throw new Error('Narrator and scheduled settings are still starting.');
+  return narrationScheduleSettings;
+}
+
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
 ipcMain.handle('studio:experience-settings', () => experienceSnapshot());
 ipcMain.handle('studio:update-experience-settings', (_event, patch) => {
   requireStudioSettings().updateLocal(patch);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:narration-schedule-settings', () => experienceSnapshot().narrationSchedule);
+ipcMain.handle('studio:update-narrator-settings', (_event, patch) => {
+  requireNarrationScheduleSettings().updateNarrator(patch);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:add-scheduled-setting', (_event, draft) => {
+  requireNarrationScheduleSettings().addSchedule(draft);
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:set-scheduled-setting-enabled', (_event, id, enabled) => {
+  requireNarrationScheduleSettings().setScheduleEnabled(id, enabled);
   return experienceSnapshot();
 });
 ipcMain.handle('studio:create-school-mode-record', () => {
