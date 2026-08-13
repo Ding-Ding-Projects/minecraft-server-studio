@@ -8,6 +8,7 @@
 - Structured server creation, rich server-property controls, lifecycle controls, local console, plugin installation, and shared CLI commands.
 - Version-aware Java compatibility source for Paper and Spigot/BuildTools, including Java 8, 11, 16, 17, 21, and Paper 26.1+ Java 25 requirements.
 - Automatic Java/Git detection, installation, retry status, and user-scoped portable fallback installation.
+- Dedicated Java runtime manager with strict Paper/Spigot compatibility gaps, direct `--version` then `-version` probing, bounded configured/PATH/JAVA_HOME candidate discovery, explicit package-manager plans, configured-only portable source handling, and direct-argv launch preflight token rejection.
 - Capability-first Minecraft Server Management Protocol transport: TLS-first JSON-RPC WebSocket discovery with `rpc.discover`, advertised-method allowlisting, and protected credential boundary.
 - Version/flavor/capability Command Center registry with typed action families, source badges, tokenized Minecraft-only fallback, and high-impact confirmation metadata.
 - Official Spigot metadata and BuildTools preflight source, safe workspace planning, structured flag composer, generated configuration preservation, plugin metadata inspection, and staged JAR rollback plan.
