@@ -16,6 +16,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
 - Use the capability-first Command Center for structured command families, source badges, typed controls, tokenized Minecraft-only raw fallback, and guarded consequential operations.
 - Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory without a chat or external status-service bridge.
+- Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
 
 ## Desktop workflow
 
@@ -85,6 +86,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Version-aware Java runtime and launch profiles](docs/features/java-runtime-and-launch.md)
 - [Spigot BuildTools planning](docs/features/spigot-buildtools.md)
 - [Command Center](docs/features/command-center.md)
+- [Presentation settings and shared School mode](docs/features/experience-settings.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Feature documentation index](docs/features/README.md)
 - [Changelog](CHANGELOG.md)

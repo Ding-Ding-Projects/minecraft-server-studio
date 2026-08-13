@@ -12,19 +12,20 @@
         <div class="brand-lockup">
           <div class="brand-mark" aria-hidden="true">MS</div>
           <div>
-            <p class="eyebrow">LOCAL CONTROL CENTER</p>
-            <h1>Minecraft Server Studio</h1>
+            <p class="eyebrow" id="brand-eyebrow" data-i18n="brand.eyebrow">LOCAL CONTROL CENTER</p>
+            <h1 id="brand-title">Minecraft Server Studio</h1>
           </div>
         </div>
 
-        <button class="primary-action" id="new-server-button" type="button">Create server</button>
+        <button class="primary-action" id="new-server-button" type="button" data-i18n="nav.createServer">Create server</button>
         <label class="field search-field" for="server-search">
-          <span>Find a server</span>
-          <input id="server-search" type="search" placeholder="Filter by name or software" autocomplete="off">
+          <span data-i18n="nav.findServer">Find a server</span>
+          <input id="server-search" type="search" placeholder="Filter by name or software" data-i18n-placeholder="nav.searchPlaceholder" autocomplete="off">
         </label>
         <div class="server-list" id="server-list" role="list" aria-live="polite"></div>
         <div class="sidebar-footer">
-          <button class="text-action" id="refresh-button" type="button">Refresh local data</button>
+          <button class="text-action" id="refresh-button" type="button" data-i18n="nav.refresh">Refresh local data</button>
+          <button class="text-action" id="experience-settings-button" type="button" aria-haspopup="dialog" aria-controls="experience-settings-dialog" data-i18n="nav.preferences">Studio preferences</button>
           <p id="data-directory" class="muted">Loading local data location…</p>
         </div>
       </aside>
@@ -33,7 +34,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow" id="server-software">NO SERVER SELECTED</p>
-            <h2 id="server-title">Create your first Minecraft server</h2>
+          <h2 id="server-title">Create your first Minecraft server</h2>
           </div>
           <div class="topbar-actions">
             <span class="status-chip status-stopped" id="server-status">Stopped</span>
@@ -48,7 +49,7 @@
           <div>
             <p class="eyebrow">AUTOMATIC SETUP</p>
             <h3 id="dependency-title">Required tools</h3>
-            <p>Paper needs Java. Spigot setup also needs Git. Minecraft Server Studio detects both and can install missing tools using Windows package managers after you select the action.</p>
+            <p data-i18n-display-name="dependency.description">Paper needs Java. Spigot setup also needs Git. Minecraft Server Studio detects both and can install missing tools using Windows package managers after you select the action.</p>
           </div>
           <div class="dependency-actions">
             <div class="dependency-list" id="dependency-list" aria-live="polite"></div>
@@ -59,25 +60,25 @@
 
         <section class="empty-state" id="empty-state">
           <div class="empty-glyph" aria-hidden="true">▦</div>
-          <h3>Build a local server, not a pile of terminal commands.</h3>
-          <p>Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.</p>
-          <button class="primary-action" id="empty-create-button" type="button">Create server</button>
+          <h3 data-i18n="empty.title">Build a local server, not a pile of terminal commands.</h3>
+          <p data-i18n="empty.description">Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.</p>
+          <button class="primary-action" id="empty-create-button" type="button" data-i18n="nav.createServer">Create server</button>
         </section>
 
         <section class="server-editor hidden" id="server-editor" aria-label="Server configuration">
           <div class="tab-strip" role="tablist" aria-label="Server settings tabs">
-            <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-general" data-tab="general">General</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world">World</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay">Gameplay</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network">Network</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime">Runtime</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools">BuildTools</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live">Live management</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands">Command Center</button>
-            <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status">Local status</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced">Advanced</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins">Plugins</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console">Console</button>
+            <button class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-general" data-tab="general" data-i18n="tab.general">General</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-world" data-tab="world" data-i18n="tab.world">World</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-gameplay" data-tab="gameplay" data-i18n="tab.gameplay">Gameplay</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-network" data-tab="network" data-i18n="tab.network">Network</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-runtime" data-tab="runtime" data-i18n="tab.runtime">Runtime</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-buildtools" data-tab="buildtools" data-i18n="tab.buildtools">BuildTools</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-tab="live" data-i18n="tab.live">Live management</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-commands" data-tab="commands" data-i18n="tab.commands">Command Center</button>
+            <button class="tab" id="status-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-status" data-tab="status" data-i18n="tab.status">Local status</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-advanced" data-tab="advanced" data-i18n="tab.advanced">Advanced</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-plugins" data-tab="plugins" data-i18n="tab.plugins">Plugins</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-console" data-tab="console" data-i18n="tab.console">Console</button>
           </div>
 
           <form id="settings-form">
@@ -254,7 +255,7 @@
             <section id="panel-plugins" class="settings-panel" role="tabpanel" data-panel="plugins" hidden>
               <div class="panel-heading"><div><p class="eyebrow">PAPER AND SPIGOT EXTENSIONS</p><h3>Plugin folder</h3></div></div>
               <div class="plugin-install-card">
-                <div><h4>Install a plugin JAR</h4><p>Select a local plugin JAR. Minecraft Server Studio copies it into the selected server's plugins folder without opening a shell.</p></div>
+                <div><h4>Install a plugin JAR</h4><p data-i18n-display-name="plugins.description">Select a local plugin JAR. Minecraft Server Studio copies it into the selected server's plugins folder without opening a shell.</p></div>
                 <div class="plugin-actions"><input id="plugin-path" type="text" readonly placeholder="No plugin selected"><button id="browse-plugin-button" class="outlined-action" type="button">Choose JAR</button><button id="install-plugin-button" class="primary-action" type="button">Install plugin</button></div>
               </div>
               <div class="plugin-list" id="plugin-list" aria-live="polite"></div>
@@ -273,8 +274,8 @@
 
     <dialog id="create-dialog" aria-labelledby="create-title">
       <form id="create-form" method="dialog">
-        <div class="dialog-heading"><div><p class="eyebrow">NEW LOCAL SERVER</p><h2 id="create-title">Create a Minecraft server</h2></div><button class="icon-action" type="button" id="close-create-dialog" aria-label="Close create server dialog">×</button></div>
-        <p>Choose the server software, version, folder, and initial capacity. All other settings remain editable after creation.</p>
+        <div class="dialog-heading"><div><p class="eyebrow" data-i18n="dialog.createEyebrow">NEW LOCAL SERVER</p><h2 id="create-title" data-i18n="dialog.createTitle">Create a Minecraft server</h2></div><span class="dialog-emoji" aria-hidden="true">⛏️</span><button class="icon-action" type="button" id="close-create-dialog" aria-label="Close create server dialog">×</button></div>
+        <p data-i18n="dialog.createDescription">Choose the server software, version, folder, and initial capacity. All other settings remain editable after creation.</p>
         <div class="settings-grid">
           <label class="field"><span>Server name</span><input id="create-name" type="text" maxlength="80" required placeholder="Weekend Paper"></label>
           <label class="field"><span>Folder name</span><input id="create-directory" type="text" maxlength="64" required placeholder="weekend-paper"></label>
@@ -285,13 +286,76 @@
           <label class="field"><span>Initial memory: <output id="create-memory-output">4</output> GB</span><input id="create-memory" type="range" min="1" max="32" value="4"></label>
           <label class="switch-field wide"><input id="create-eula" type="checkbox"><span><strong>I have read and accept the Minecraft EULA for this server</strong><small>The server cannot be started until this is selected. Your acceptance is written to the server's eula.txt file.</small></span></label>
         </div>
-        <div class="dialog-actions"><button type="button" id="cancel-create-button" class="outlined-action">Cancel</button><button type="submit" class="primary-action">Create server</button></div>
+        <div class="dialog-actions"><button type="button" id="cancel-create-button" class="outlined-action" data-i18n="dialog.cancel">Cancel</button><button type="submit" class="primary-action" data-i18n="dialog.create">Create server</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="experience-settings-dialog" aria-labelledby="experience-settings-title">
+      <form id="experience-settings-form" method="dialog" class="experience-settings-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow" data-i18n="settings.subtitle">Personal presentation controls</p>
+            <h2 id="experience-settings-title" data-i18n="settings.title">Studio preferences</h2>
+          </div>
+          <span class="dialog-emoji" aria-hidden="true">⚙️</span>
+          <button class="icon-action" type="button" id="close-experience-settings-dialog" aria-label="Close preferences">×</button>
+        </div>
+
+        <section class="experience-card" data-school-hidden>
+          <div>
+            <h3 data-i18n="settings.languageTitle">Language and message style</h3>
+            <p class="muted" data-i18n="settings.languageDescription">Choose how app-owned navigation, headings, dialog framing, and notification framing are presented. Dynamic server facts and external error text stay exact.</p>
+          </div>
+          <fieldset id="language-mode-group" class="language-mode-group">
+            <legend class="sr-only" data-i18n="settings.languageMode">Language mode</legend>
+            <label><input type="radio" name="language-mode" value="english"><span data-i18n="settings.languageEnglish">English</span></label>
+            <label><input type="radio" name="language-mode" value="cantonese"><span data-i18n="settings.languageCantonese">Playful Hong Kong-style Cantonese</span></label>
+            <label><input type="radio" name="language-mode" value="bilingual"><span data-i18n="settings.languageBilingual">Bilingual</span></label>
+          </fieldset>
+          <div class="settings-grid">
+            <label class="field"><span data-i18n="settings.englishFunny">English message playfulness</span><output id="funny-english-output" class="range-output">Friendly</output><input id="funny-english" type="range" min="1" max="5" step="1" value="2"></label>
+            <label class="field"><span data-i18n="settings.cantoneseFunny">Cantonese message playfulness</span><output id="funny-cantonese-output" class="range-output">醒神</output><input id="funny-cantonese" type="range" min="1" max="5" step="1" value="3"></label>
+          </div>
+          <p class="muted" data-i18n="settings.funnyDescription">This styles all app-owned messages, including errors and warnings, without changing facts. You can reset it at any time.</p>
+        </section>
+
+        <section class="experience-card">
+          <div class="settings-grid">
+            <label class="switch-field"><input id="dialog-emoji" type="checkbox"><span><strong data-i18n="settings.dialogEmoji">Show emoji decorations in dialogs and message boxes</strong><small data-i18n="settings.dialogEmojiDescription">Decorative emoji never replace the factual message or control labels.</small></span></label>
+            <label class="field"><span data-i18n="settings.displayName">Display name</span><input id="experience-display-name" type="text" maxlength="80" required><small data-i18n="settings.displayNameDescription">Changes only what this app shows in its title and app-owned copy. Package identity, data location, installer identity, and update identity do not change.</small></label>
+          </div>
+        </section>
+
+        <section class="experience-card school-mode-card">
+          <div>
+            <p class="eyebrow" id="school-mode-eyebrow" data-i18n="settings.schoolEyebrow">SHARED LOCAL EXPERIENCE CONTROL</p>
+            <h3 id="school-mode-title">Shared local mode control</h3>
+            <p class="muted" data-i18n-school-label="settings.schoolDescription">This is a shared local user-experience control, not a security boundary. It forces English while active and hides language and message-playfulness controls. It does not encrypt data or prevent a local reset.</p>
+          </div>
+          <p id="school-mode-status" class="experience-status" aria-live="polite">Loading shared local mode status…</p>
+          <div class="settings-grid">
+            <label class="field"><span data-i18n="settings.schoolLabel">Mode label</span><input id="school-mode-label" type="text" maxlength="80" required></label>
+            <div class="school-mode-actions"><button id="save-school-mode-label-button" type="button" class="outlined-action" data-i18n="settings.saveSchoolLabel">Save mode label</button><button id="create-school-mode-record-button" type="button" class="outlined-action" data-i18n="settings.createSchoolRecord">Create shared local record</button></div>
+          </div>
+          <label class="switch-field"><input id="school-mode-enabled" type="checkbox"><span><strong id="school-mode-toggle-label">Enable shared mode</strong><small data-i18n="settings.schoolToggleDescription">Turning it off requires the shared unlock password or PIN. While the shared record is unavailable, English safety presentation remains active.</small></span></label>
+          <section class="credential-card" aria-labelledby="school-mode-credential-title">
+            <div><h4 id="school-mode-credential-title" data-i18n="settings.unlockTitle">Shared unlock password or PIN</h4><p class="muted" data-i18n="settings.unlockDescription">The credential is stored through operating-system protection, never in the shared record. To reset after losing it, delete the shared local application-data record yourself; this is a user-experience recovery route, not account support.</p><p class="muted"><span data-i18n="settings.recoveryFolder">Recovery folder:</span> <code id="school-mode-recovery-path">Loading local application-data location…</code></p></div>
+            <div class="settings-grid">
+              <label class="field"><span data-i18n="settings.currentCredential">Current password or PIN</span><input id="school-mode-current-credential" type="password" autocomplete="current-password" maxlength="256"></label>
+              <label class="field"><span data-i18n="settings.newCredential">New password or PIN</span><input id="school-mode-new-credential" type="password" autocomplete="new-password" maxlength="256"></label>
+              <label class="field"><span data-i18n="settings.confirmCredential">Confirm new password or PIN</span><input id="school-mode-confirm-credential" type="password" autocomplete="new-password" maxlength="256"></label>
+              <div class="school-mode-actions"><button id="save-school-mode-credential-button" type="button" class="outlined-action" data-i18n="settings.saveCredential">Save unlock credential</button></div>
+            </div>
+          </section>
+        </section>
+
+        <div class="dialog-actions"><button id="close-experience-settings-button" type="button" class="outlined-action" data-i18n="settings.close">Close preferences</button><button id="save-experience-settings-button" type="submit" class="primary-action" data-i18n="settings.savePresentation">Save presentation settings</button></div>
       </form>
     </dialog>
 
     <dialog id="command-confirmation-dialog" aria-labelledby="command-confirmation-title">
       <section class="confirmation-dialog">
-        <div class="dialog-heading"><div><p class="eyebrow">CONSEQUENTIAL SERVER ACTION</p><h2 id="command-confirmation-title">Confirm operation</h2></div></div>
+        <div class="dialog-heading"><div><p class="eyebrow">CONSEQUENTIAL SERVER ACTION</p><h2 id="command-confirmation-title">Confirm operation</h2></div><span class="dialog-emoji" aria-hidden="true">⚠️</span></div>
         <p id="command-confirmation-copy">Review this operation before it is sent.</p>
         <p id="command-confirmation-target" class="confirmation-target"></p>
         <label class="switch-field"><input id="command-confirmation-first" type="checkbox"><span><strong>First independent confirmation</strong><small>I reviewed the affected local server and the action's impact.</small></span></label>
@@ -302,6 +366,7 @@
     </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="experience-copy.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

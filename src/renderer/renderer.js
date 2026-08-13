@@ -8,7 +8,8 @@ const state = {
   buildToolsMetadata: null,
   buildToolsPlan: null,
   activeTab: 'general',
-  pluginPath: ''
+  pluginPath: '',
+  experience: null
 };
 
 const ADVANCED_FIELDS = [
@@ -99,6 +100,52 @@ let selectedCommandAction = null;
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
+const FALLBACK_EXPERIENCE = Object.freeze({
+  local: Object.freeze({ language: 'english', funnyLevels: Object.freeze({ english: 2, cantonese: 3 }), dialogEmoji: true, displayName: 'Minecraft Server Studio' }),
+  shared: Object.freeze({ state: 'not-loaded', effectiveSchoolMode: true, schoolMode: Object.freeze({ enabled: false, label: 'Mode' }) }),
+  credential: Object.freeze({ state: 'unavailable', configured: false })
+});
+
+function currentExperience() {
+  return state.experience || FALLBACK_EXPERIENCE;
+}
+
+function currentExperienceLocal() {
+  return currentExperience().local || FALLBACK_EXPERIENCE.local;
+}
+
+function currentSchoolMode() {
+  return currentExperience().shared || FALLBACK_EXPERIENCE.shared;
+}
+
+function effectiveLanguage() {
+  const local = currentExperienceLocal();
+  if (currentSchoolMode().effectiveSchoolMode) return 'english';
+  return ['english', 'cantonese', 'bilingual'].includes(local.language) ? local.language : 'english';
+}
+
+function copyText(key, values = {}) {
+  const copy = window.StudioExperienceCopy;
+  return copy?.format ? copy.format(key, effectiveLanguage(), values) : key;
+}
+
+function toneText(language, level) {
+  const copy = window.StudioExperienceCopy;
+  return copy?.tone ? copy.tone(language, level) : String(level);
+}
+
+function toastPrefix(kind) {
+  const copy = window.StudioExperienceCopy;
+  return copy?.toastPrefix
+    ? copy.toastPrefix(effectiveLanguage(), currentExperienceLocal().funnyLevels, kind)
+    : kind;
+}
+
+function messageText(message) {
+  if (message && typeof message === 'object' && typeof message.key === 'string') return copyText(message.key, message.values || {});
+  return String(message || '');
+}
+
 function selectedServer() {
   return state.servers.find((server) => server.id === state.selectedId) || null;
 }
@@ -106,7 +153,17 @@ function selectedServer() {
 function toast(message, kind = 'info') {
   const item = document.createElement('div');
   item.className = `toast ${kind}`;
-  item.textContent = message;
+  if (currentExperienceLocal().dialogEmoji) {
+    const decoration = document.createElement('span');
+    decoration.className = 'toast-emoji';
+    decoration.setAttribute('aria-hidden', 'true');
+    decoration.textContent = kind === 'error' ? '⚠️' : kind === 'success' ? '✓' : 'ℹ️';
+    item.append(decoration);
+  }
+  const copy = document.createElement('span');
+  copy.className = 'toast-copy';
+  copy.textContent = `${toastPrefix(kind)}: ${messageText(message)}`;
+  item.append(copy);
   $('#toast-region').append(item);
   setTimeout(() => item.remove(), kind === 'error' ? 9000 : 5000);
 }
@@ -119,6 +176,225 @@ async function safely(work, successMessage) {
   } catch (error) {
     toast(error?.message || String(error), 'error');
     return null;
+  }
+}
+
+function applyDialogEmojiSetting() {
+  const visible = Boolean(currentExperienceLocal().dialogEmoji);
+  $$('.dialog-emoji').forEach((element) => {
+    element.hidden = !visible;
+  });
+}
+
+function applySchoolModePresentation() {
+  const school = currentSchoolMode();
+  const active = Boolean(school.effectiveSchoolMode);
+  document.body.classList.toggle('school-mode-active', active);
+  const hiddenSections = $$('[data-school-hidden]');
+  const hadHiddenFocus = active && hiddenSections.some((element) => element.contains(document.activeElement));
+  hiddenSections.forEach((element) => {
+    element.hidden = active;
+    element.querySelectorAll('input, select, textarea, button').forEach((control) => {
+      control.disabled = active;
+    });
+  });
+  $$('[data-school-suppressed-route]').forEach((element) => {
+    element.hidden = active;
+    element.querySelectorAll('input, select, textarea, button, a').forEach((control) => {
+      control.setAttribute('tabindex', active ? '-1' : '0');
+    });
+  });
+  if (hadHiddenFocus) $('#school-mode-label')?.focus();
+}
+
+function applyLocalizedCopy() {
+  const language = effectiveLanguage();
+  document.documentElement.lang = language === 'cantonese' ? 'zh-Hant' : 'en';
+  document.title = currentExperienceLocal().displayName;
+  $$('[data-i18n]').forEach((element) => {
+    element.textContent = copyText(element.dataset.i18n);
+  });
+  $$('[data-i18n-placeholder]').forEach((element) => {
+    element.placeholder = copyText(element.dataset.i18nPlaceholder);
+  });
+  $$('[data-i18n-display-name]').forEach((element) => {
+    element.textContent = copyText(element.dataset.i18nDisplayName, { appName: currentExperienceLocal().displayName });
+  });
+  const schoolLabel = currentSchoolMode().schoolMode?.label || FALLBACK_EXPERIENCE.shared.schoolMode.label;
+  $$('[data-i18n-school-label]').forEach((element) => {
+    element.textContent = copyText(element.dataset.i18nSchoolLabel, { label: schoolLabel });
+  });
+  const copy = window.StudioExperienceCopy;
+  if (copy?.brandingEyebrow) {
+    $('#brand-eyebrow').textContent = copy.brandingEyebrow(language, currentExperienceLocal().funnyLevels);
+  }
+  $('#brand-title').textContent = currentExperienceLocal().displayName;
+  $('#close-experience-settings-dialog')?.setAttribute('aria-label', copyText('settings.close'));
+  applyDialogEmojiSetting();
+  applySchoolModePresentation();
+}
+
+function renderFunnyLevelOutputs() {
+  const local = currentExperienceLocal();
+  const english = $('#funny-english');
+  const cantonese = $('#funny-cantonese');
+  if (english) {
+    english.value = String(local.funnyLevels.english);
+    $('#funny-english-output').textContent = `1–5 · ${toneText('english', local.funnyLevels.english)}`;
+  }
+  if (cantonese) {
+    cantonese.value = String(local.funnyLevels.cantonese);
+    $('#funny-cantonese-output').textContent = `1–5 · ${toneText('cantonese', local.funnyLevels.cantonese)}`;
+  }
+}
+
+function previewFunnyLevelOutputs() {
+  const english = $('#funny-english');
+  const cantonese = $('#funny-cantonese');
+  if (english) $('#funny-english-output').textContent = `1–5 · ${toneText('english', Number(english.value))}`;
+  if (cantonese) $('#funny-cantonese-output').textContent = `1–5 · ${toneText('cantonese', Number(cantonese.value))}`;
+}
+
+function renderSchoolModeControls() {
+  const experience = currentExperience();
+  const shared = experience.shared || FALLBACK_EXPERIENCE.shared;
+  const mode = shared.schoolMode || FALLBACK_EXPERIENCE.shared.schoolMode;
+  const credential = experience.credential || FALLBACK_EXPERIENCE.credential;
+  const recordReady = shared.state === 'ready';
+  const label = mode.label || FALLBACK_EXPERIENCE.shared.schoolMode.label;
+  const status = $('#school-mode-status');
+  const toggle = $('#school-mode-enabled');
+  const createRecord = $('#create-school-mode-record-button');
+  const saveLabel = $('#save-school-mode-label-button');
+  const saveCredential = $('#save-school-mode-credential-button');
+  if (!status || !toggle || !createRecord || !saveLabel || !saveCredential) return;
+
+  $('#school-mode-label').value = label;
+  $('#school-mode-title').textContent = copyText('settings.schoolTitle', { label });
+  $('#school-mode-toggle-label').textContent = copyText('settings.schoolEnabled', { label });
+  $('#school-mode-recovery-path').textContent = shared.location || 'Shared local application-data folder unavailable.';
+
+  toggle.indeterminate = !recordReady;
+  toggle.checked = recordReady ? Boolean(mode.enabled) : false;
+  toggle.disabled = !recordReady || credential.state !== 'ready' || !credential.configured;
+  saveLabel.disabled = !recordReady;
+  saveCredential.disabled = !recordReady || credential.state !== 'ready';
+  createRecord.hidden = shared.state !== 'missing';
+  createRecord.disabled = shared.state !== 'missing';
+
+  if (!recordReady) {
+    status.textContent = shared.state === 'missing'
+      ? copyText('settings.schoolRecordMissing')
+      : copyText('settings.schoolRecordUnavailable');
+    status.dataset.state = shared.state || 'unavailable';
+    return;
+  }
+  if (credential.state !== 'ready') {
+    status.textContent = copyText('settings.credentialUnavailable');
+    status.dataset.state = 'unavailable';
+    return;
+  }
+  if (!credential.configured) {
+    status.textContent = copyText('settings.credentialRequired');
+    status.dataset.state = 'missing';
+    return;
+  }
+  status.textContent = mode.enabled
+    ? copyText('settings.schoolActive', { label })
+    : copyText('settings.schoolInactive', { label });
+  status.dataset.state = mode.enabled ? 'active' : 'ready';
+}
+
+function hydrateExperienceControls() {
+  const local = currentExperienceLocal();
+  const languageValue = ['english', 'cantonese', 'bilingual'].includes(local.language) ? local.language : 'english';
+  const language = document.querySelector(`input[name="language-mode"][value="${languageValue}"]`);
+  if (language) language.checked = true;
+  $('#dialog-emoji').checked = Boolean(local.dialogEmoji);
+  $('#experience-display-name').value = local.displayName;
+  renderFunnyLevelOutputs();
+  renderSchoolModeControls();
+}
+
+function applyExperienceSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return;
+  state.experience = snapshot;
+  applyLocalizedCopy();
+  hydrateExperienceControls();
+  renderServers();
+  renderEditor();
+  renderConsole();
+}
+
+function openExperienceSettings() {
+  hydrateExperienceControls();
+  const dialog = $('#experience-settings-dialog');
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+function closeExperienceSettings() {
+  const dialog = $('#experience-settings-dialog');
+  if (dialog?.open) dialog.close();
+}
+
+async function saveExperienceSettings(event) {
+  event.preventDefault();
+  const local = currentExperienceLocal();
+  const activeSchoolMode = Boolean(currentSchoolMode().effectiveSchoolMode);
+  const selectedLanguage = document.querySelector('input[name="language-mode"]:checked')?.value || local.language;
+  const snapshot = await safely(() => window.studio.updateExperienceSettings({
+    language: activeSchoolMode ? local.language : selectedLanguage,
+    funnyLevels: activeSchoolMode
+      ? local.funnyLevels
+      : { english: Number($('#funny-english').value), cantonese: Number($('#funny-cantonese').value) },
+    dialogEmoji: $('#dialog-emoji').checked,
+    displayName: $('#experience-display-name').value
+  }), { key: 'toast.presentationSaved' });
+  if (snapshot) applyExperienceSnapshot(snapshot);
+}
+
+async function createSchoolModeRecord() {
+  const snapshot = await safely(() => window.studio.createSchoolModeRecord(), { key: 'toast.schoolRecordCreated' });
+  if (snapshot) applyExperienceSnapshot(snapshot);
+}
+
+async function saveSchoolModeLabel() {
+  const snapshot = await safely(() => window.studio.updateSchoolModeLabel($('#school-mode-label').value), { key: 'toast.schoolLabelSaved' });
+  if (snapshot) applyExperienceSnapshot(snapshot);
+}
+
+async function saveSchoolModeCredential() {
+  const currentCredential = $('#school-mode-current-credential').value;
+  const newCredential = $('#school-mode-new-credential').value;
+  const confirmation = $('#school-mode-confirm-credential').value;
+  if (newCredential !== confirmation) {
+    toast('The new unlock password or PIN and its confirmation do not match.', 'error');
+    return;
+  }
+  const snapshot = await safely(() => window.studio.saveSchoolModeCredential({ currentCredential, newCredential }), { key: 'toast.credentialSaved' });
+  if (snapshot) {
+    $('#school-mode-current-credential').value = '';
+    $('#school-mode-new-credential').value = '';
+    $('#school-mode-confirm-credential').value = '';
+    applyExperienceSnapshot(snapshot);
+  }
+}
+
+async function changeSchoolMode() {
+  const toggle = $('#school-mode-enabled');
+  const desired = toggle.checked;
+  const label = currentSchoolMode().schoolMode?.label || 'Mode';
+  const snapshot = await safely(() => window.studio.setSchoolMode({
+    enabled: desired,
+    credential: desired ? '' : $('#school-mode-current-credential').value
+  }), desired
+    ? { key: 'toast.schoolEnabled', values: { label } }
+    : { key: 'toast.schoolDisabled', values: { label } });
+  if (snapshot) {
+    $('#school-mode-current-credential').value = '';
+    applyExperienceSnapshot(snapshot);
+  } else {
+    hydrateExperienceControls();
   }
 }
 
@@ -586,8 +862,8 @@ function renderEditor() {
   if (!server) {
     editor.classList.add('hidden');
     empty.classList.remove('hidden');
-    $('#server-title').textContent = 'Create your first Minecraft server';
-    $('#server-software').textContent = 'NO SERVER SELECTED';
+    $('#server-title').textContent = copyText('heading.firstServer');
+    $('#server-software').textContent = copyText('heading.noServer');
     $('#server-status').textContent = 'Stopped';
     $('#server-status').className = 'status-chip status-stopped';
     ['open-folder-button', 'setup-button', 'start-button', 'stop-button'].forEach((id) => { $(`#${id}`).disabled = true; });
@@ -596,7 +872,7 @@ function renderEditor() {
   empty.classList.add('hidden');
   editor.classList.remove('hidden');
   $('#server-title').textContent = server.name;
-  $('#server-software').textContent = `${server.software.toUpperCase()} · MINECRAFT ${server.minecraftVersion}`;
+  $('#server-software').textContent = copyText('heading.serverType', { software: `${server.software.toUpperCase()} · MINECRAFT ${server.minecraftVersion}` });
   $('#server-status').textContent = server.status[0].toUpperCase() + server.status.slice(1);
   $('#server-status').className = `status-chip status-${server.status}`;
   $('#open-folder-button').disabled = false;
@@ -947,11 +1223,11 @@ function openCommandConfirmation(payload) {
   const dialog = $('#command-confirmation-dialog');
   if (!dialog) return;
   const label = payload.action.label || payload.action.title || payload.action.id;
-  $('#command-confirmation-title').textContent = `Confirm ${label}`;
+  $('#command-confirmation-title').textContent = copyText('dialog.confirmTitle', { action: label });
   $('#command-confirmation-copy').textContent = payload.action.backupRequirement === 'required' || payload.action.backup
-    ? 'This action can change world or server state. Review the affected server, create the required backup, operate both confirmation controls, then move the slider to authorize it.'
-    : 'This action can affect the selected server or connected players. Review the affected server, operate both confirmation controls, then move the slider to authorize it.';
-  $('#command-confirmation-target').textContent = `Affected resource: ${selectedServer()?.name || 'selected local server'} · command /${payload.command}`;
+    ? copyText('dialog.confirmBackup')
+    : copyText('dialog.confirmImpact');
+  $('#command-confirmation-target').textContent = copyText('dialog.affectedResource', { server: selectedServer()?.name || 'selected local server', command: payload.command });
   const first = $('#command-confirmation-first');
   const second = $('#command-confirmation-second');
   const slider = $('#command-confirmation-slider');
@@ -979,7 +1255,25 @@ function logEvent(event) {
   if (event.type === 'server-state') refreshServers();
 }
 
+function handleStudioEvent(event) {
+  if (event?.type === 'experience-settings') {
+    applyExperienceSnapshot(event.payload);
+    return;
+  }
+  logEvent(event || {});
+}
+
 function bindEvents() {
+  $('#experience-settings-button').addEventListener('click', openExperienceSettings);
+  $('#close-experience-settings-dialog').addEventListener('click', closeExperienceSettings);
+  $('#close-experience-settings-button').addEventListener('click', closeExperienceSettings);
+  $('#experience-settings-form').addEventListener('submit', saveExperienceSettings);
+  $('#funny-english').addEventListener('input', previewFunnyLevelOutputs);
+  $('#funny-cantonese').addEventListener('input', previewFunnyLevelOutputs);
+  $('#create-school-mode-record-button').addEventListener('click', createSchoolModeRecord);
+  $('#save-school-mode-label-button').addEventListener('click', saveSchoolModeLabel);
+  $('#save-school-mode-credential-button').addEventListener('click', saveSchoolModeCredential);
+  $('#school-mode-enabled').addEventListener('change', changeSchoolMode);
   $('#new-server-button').addEventListener('click', openCreateDialog);
   $('#empty-create-button').addEventListener('click', openCreateDialog);
   $('#close-create-dialog').addEventListener('click', () => $('#create-dialog').close());
@@ -1052,7 +1346,9 @@ function bindEvents() {
 async function initialize() {
   renderAdvancedControls();
   bindEvents();
-  window.studio.onEvent(logEvent);
+  window.studio.onEvent(handleStudioEvent);
+  const experience = await safely(() => window.studio.experienceSettings());
+  if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
   await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus()]);

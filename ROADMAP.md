@@ -11,5 +11,5 @@
 - Complete the version-aware Java runtime manager and JAR preflight user flow.
 - Add authenticated remote-host adapters without exposing local server controls publicly.
 - Add user-directed backup, restore, and scheduled-maintenance flows.
-- Complete universal desktop controls that remain marked incomplete in the Local status inventory, including converter, local Ollama suite, authenticator, history, export, language, and appearance surfaces.
+- Extend the existing presentation-settings foundation into complete universal desktop controls still marked incomplete in the Local status inventory, including converter, local Ollama suite, authenticator, history, export, broader localization, and appearance surfaces.
 - Produce release packaging and runtime verification evidence after the speed-delivery boundary is lifted.

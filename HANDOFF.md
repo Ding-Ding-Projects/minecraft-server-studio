@@ -9,7 +9,9 @@ The application source provides a Windows Electron control center, shared CLI, s
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
 - `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules.
 - `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
+- `src/main/studio-settings.cjs`, `src/main/main.cjs`, and `src/main/preload.cjs`: app-private presentation settings, a watched shared per-user School-mode record, protected shared unlock-credential boundary, and narrow renderer IPC.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
+- `src/renderer/experience-copy.js` and the preferences dialog: persisted English/Cantonese/bilingual presentation, independent message-playfulness controls, decorative message emoji preference, display-name label, and School-mode status/recovery controls.
 - `src/cli/mss.cjs`: shared local CLI.
 - `site/`: public marketing and browser-local interaction source, including a local Status destination.
 - `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. It does not assert a dim sum code name or photo unless a separately verified catalog asset is available.
@@ -26,3 +28,4 @@ This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime int
 - Add a provider-specific authenticated WebSocket connector before treating a stored management bearer credential as transmitted authentication.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.
+- The presentation-settings foundation does not yet complete universal localization, personal-vocabulary upload, narration, scheduled settings, appearance customization, tabs/regex/palette, converter, local model manager, authenticator/toy locks, history, exports, or packaged-runtime evidence. Its status inventory keeps those requirements pending.

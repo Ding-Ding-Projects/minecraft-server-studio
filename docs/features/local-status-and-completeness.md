@@ -62,6 +62,8 @@ The template includes these desktop surface rows:
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
 
+The `settings-appearance-and-localization` row now names the implemented presentation-settings foundation: app-private persisted language modes, independent English/Cantonese message-playfulness values, dialog/message emoji preference, display-name label, and a watched shared local School-mode record with a protected unlock-credential boundary. Its localization, test, capture, and complete-evidence fields remain intentionally incomplete because the broader settings, appearance, and universal surface contract is not yet complete.
+
 ## Source and evidence boundaries
 
 The module is only a schema and evaluator. It is not source evidence that any server action, installer, converter, authenticator, or local model manager exists. A caller must populate implementation and documentation paths, then attach evidence for the exact desktop surface it has implemented.
