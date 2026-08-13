@@ -25,6 +25,7 @@
         <div class="server-list" id="server-list" role="list" aria-live="polite"></div>
         <div class="sidebar-footer">
           <button class="text-action" id="refresh-button" type="button" data-i18n="nav.refresh">Refresh local data</button>
+          <button class="text-action" id="open-documentation-button" type="button" aria-controls="documentation-destination">Offline documentation</button>
           <button class="text-action" id="experience-settings-button" type="button" aria-haspopup="dialog" aria-controls="experience-settings-dialog" data-i18n="nav.preferences">Studio preferences</button>
           <p id="data-directory" class="muted">Loading local data location…</p>
         </div>
@@ -207,6 +208,44 @@
           <h3 data-i18n="empty.title">Build a local server, not a pile of terminal commands.</h3>
           <p data-i18n="empty.description">Create a Paper or Spigot server, choose its world and network settings with structured controls, then run it from the same console.</p>
           <button class="primary-action" id="empty-create-button" type="button" data-i18n="nav.createServer">Create server</button>
+        </section>
+
+        <section class="documentation-destination hidden" id="documentation-destination" aria-labelledby="documentation-title">
+          <header class="panel-heading documentation-heading">
+            <div>
+              <p class="eyebrow">BUNDLED FEATURE DOCUMENTATION</p>
+              <h3 id="documentation-title">Offline documentation</h3>
+              <p class="muted">Articles are read only from this installed app. The browser never downloads a replacement from the network.</p>
+            </div>
+            <button class="outlined-action" id="close-documentation-button" type="button">Back to server workspace</button>
+          </header>
+          <div class="documentation-layout">
+            <aside class="documentation-browser" aria-label="Documentation article list">
+              <label class="field documentation-search" for="documentation-search">
+                <span>Find documentation</span>
+                <span class="documentation-search-row"><input id="documentation-search" type="search" maxlength="256" autocomplete="off" placeholder="Search titles and summaries"><button id="open-documentation-regex-button" type="button" class="icon-action" aria-label="Open the documentation search regex builder" aria-expanded="false" aria-controls="documentation-regex-builder">.*</button></span>
+              </label>
+              <section class="documentation-regex-builder hidden" id="documentation-regex-builder" aria-label="Documentation search regex builder">
+                <div class="panel-heading"><div><h4>Regex builder</h4><p class="muted">Plain-text search remains the default. Patterns stay local and are bounded before matching article metadata.</p></div><button id="close-documentation-regex-button" type="button" class="icon-action" aria-label="Close the documentation search regex builder">×</button></div>
+                <label class="field"><span>Raw pattern</span><input id="documentation-regex-pattern" type="text" maxlength="256" autocomplete="off" placeholder="Example: ^Server|Java$"></label>
+                <fieldset class="documentation-regex-flags"><legend>Flags</legend><label><input id="documentation-regex-flag-i" type="checkbox"> Case-insensitive</label><label><input id="documentation-regex-flag-m" type="checkbox"> Multiline</label><label><input id="documentation-regex-flag-s" type="checkbox"> Dot matches newlines</label></fieldset>
+                <div class="documentation-regex-tools" aria-label="Guided pattern tokens"><button type="button" class="outlined-action" data-documentation-regex-token="literal">Literal</button><button type="button" class="outlined-action" data-documentation-regex-token="class">Character class</button><button type="button" class="outlined-action" data-documentation-regex-token="anchor">Anchor</button><button type="button" class="outlined-action" data-documentation-regex-token="group">Group</button><button type="button" class="outlined-action" data-documentation-regex-token="alternation">Alternation</button><button type="button" class="outlined-action" data-documentation-regex-token="quantifier">Quantifier</button></div>
+                <label class="field"><span>Sample text</span><textarea id="documentation-regex-sample" rows="3" maxlength="4096" placeholder="Try the pattern against local sample text"></textarea></label>
+                <p id="documentation-regex-status" class="documentation-regex-status" role="status">Regex mode is off. Plain-text search is active.</p>
+                <div class="documentation-regex-actions"><button id="apply-documentation-regex-button" type="button" class="primary-action">Apply regex to documentation</button><button id="reset-documentation-regex-button" type="button" class="outlined-action">Return to plain text</button></div>
+              </section>
+              <p id="documentation-bundle-boundary" class="muted">Loading bundled documentation inventory…</p>
+              <div id="documentation-article-list" class="documentation-article-list" role="list" aria-live="polite"></div>
+            </aside>
+            <article class="documentation-reader" aria-labelledby="documentation-article-title">
+              <header>
+                <p class="eyebrow" id="documentation-article-source">BUNDLED ARTICLE</p>
+                <h3 id="documentation-article-title">Choose an article</h3>
+                <p id="documentation-article-summary" class="muted">Select a listed article to read its local documentation.</p>
+              </header>
+              <div id="documentation-markdown" class="documentation-markdown" tabindex="-1" aria-live="polite"><p class="muted">No article is selected.</p></div>
+            </article>
+          </div>
         </section>
 
         <section class="server-editor hidden" id="server-editor" aria-label="Server configuration">
@@ -672,6 +711,7 @@
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     <script src="experience-copy.js"></script>
     <script src="rcon-response-safety.js"></script>
+    <script src="markdown-renderer.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

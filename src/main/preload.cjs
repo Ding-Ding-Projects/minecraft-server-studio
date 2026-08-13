@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('studio', {
   pickConverterSource: () => ipcRenderer.invoke('studio:pick-converter-source'),
   openFolder: (folder) => ipcRenderer.invoke('studio:open-folder', folder),
   dataDirectory: () => ipcRenderer.invoke('studio:data-directory'),
+  offlineDocs: () => ipcRenderer.invoke('studio:offline-docs'),
+  offlineDoc: (id) => ipcRenderer.invoke('studio:offline-doc', id),
   localStatus: () => ipcRenderer.invoke('studio:local-status'),
   ollamaStatus: () => ipcRenderer.invoke('studio:ollama-status'),
   refreshOllama: () => ipcRenderer.invoke('studio:refresh-ollama'),

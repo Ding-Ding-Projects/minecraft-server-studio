@@ -7,6 +7,7 @@ const { StudioSettingsService } = require('./studio-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { FileConverter } = require('./file-converter.cjs');
+const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
 const { BuildToolsOrchestrationController } = require('./buildtools-orchestration.cjs');
@@ -39,6 +40,7 @@ let updateController;
 let ollamaSuite;
 let fileConverter;
 let buildToolsController;
+let offlineDocumentation;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -363,6 +365,7 @@ app.whenReady().then(async () => {
   ollamaSuite = new LocalOllamaSuiteManager({
     onStateChange: (ollama) => sendToRenderer({ type: 'ollama-suite', ollama })
   });
+  offlineDocumentation = new OfflineDocumentationLibrary({ appPath: app.getAppPath() });
   await updateController.initialize();
   createWindow();
   ollamaSuite.refresh().catch(() => {});
@@ -406,6 +409,11 @@ function requireFileConverter() {
 function requireBuildToolsController() {
   if (!buildToolsController) throw new Error('BuildTools planning controls are still starting.');
   return buildToolsController;
+}
+
+function requireOfflineDocumentation() {
+  if (!offlineDocumentation) throw new Error('Offline documentation is still starting.');
+  return offlineDocumentation;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -523,6 +531,8 @@ ipcMain.handle('studio:open-folder', async (_event, folder) => {
   if (error) throw new Error(error);
 });
 ipcMain.handle('studio:data-directory', () => path.join(app.getPath('userData'), 'servers'));
+ipcMain.handle('studio:offline-docs', () => requireOfflineDocumentation().list());
+ipcMain.handle('studio:offline-doc', (_event, id) => requireOfflineDocumentation().read(id));
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
 ipcMain.handle('studio:ollama-status', () => requireOllamaSuite().status());
 ipcMain.handle('studio:refresh-ollama', () => requireOllamaSuite().refresh());

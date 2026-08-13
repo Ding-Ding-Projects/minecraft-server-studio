@@ -59,7 +59,7 @@ The template includes these desktop surface rows:
 | `file-converter` | Local file converter |
 | `ollama` | Local Ollama service health plus bounded installed/running inventory; complete Model Store, pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
-| `docs-history-and-notifications` | Documentation, history, and notifications |
+| `docs-history-and-notifications` | Offline documentation, history, and notifications |
 | `export` | Export |
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
@@ -134,6 +134,18 @@ its exact bundled offline dependency, resource bounds, output validator,
 localization, tests, built-artifact interaction, and capture evidence are
 independently supplied. See [Local file-converter foundation](file-converter.md)
 for the present local-only boundary.
+
+## Offline-documentation inventory boundary
+
+The `docs-history-and-notifications` row now includes the source-level offline
+documentation-browser foundation. Its implementation is limited to a
+hand-written, app-bundled feature-article inventory; a safe main-process
+loader; narrow renderer IPC; escaped Markdown rendering; internal article-link
+resolution; and a local documentation search with its own regex-builder route.
+It does not prove local history, a notification center, full localization,
+runtime interaction, or a built-artifact capture. See [Offline documentation
+browser](offline-documentation-browser.md) for the package and source-boundary
+details.
 
 ## Source and evidence boundaries
 

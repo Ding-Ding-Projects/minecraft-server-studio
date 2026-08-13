@@ -18,6 +18,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
 - Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory. An optional main-process Status Hub bridge can be configured separately; it keeps the local destination as the fallback and never reports registration, update, inbox-poll, or reply delivery without an accepted transport response.
+- Browse the bundled in-app feature documentation without a network request. The documentation destination reads a fixed packaged inventory, renders Markdown through an isolated escaped renderer, resolves listed feature links inside the app, and keeps plain-text search plus a bounded local regex-builder route.
 - Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
 - Inspect the fixed local Ollama service through main-process-only reads for version, installed models, and running models. The Local Ollama destination keeps Model Store catalog, pull, chat, and harness controls visibly disabled until their full local workflows exist; it never sends requests to a cloud endpoint or accepts an arbitrary shell command.
 
@@ -101,6 +102,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Local file-converter foundation](docs/features/file-converter.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
+- [Offline documentation browser](docs/features/offline-documentation-browser.md)
 - [Feature documentation index](docs/features/README.md)
 - [Changelog](CHANGELOG.md)
 - [Handoff](HANDOFF.md)
