@@ -29,6 +29,7 @@
 - [Browser-local authenticator, toy locks, and recovery](browser-local-authenticator-and-toy-locks.md)
 - [Local status and completeness](local-status-and-completeness.md)
 - [Local history and safe exports](local-history-and-safe-exports.md)
+- [Desktop notifications and destructive confirmation](desktop-notifications-and-destructive-confirmation.md)
 - [Offline changelog viewer](changelog-viewer.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Offline documentation browser](offline-documentation-browser.md)
