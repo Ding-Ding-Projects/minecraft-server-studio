@@ -95,8 +95,6 @@ contextBridge.exposeInMainWorld('studio', {
   configureStatusHubBridge: (configuration) => ipcRenderer.invoke('studio:configure-status-hub-bridge', configuration),
   syncStatusHubBridge: () => ipcRenderer.invoke('studio:sync-status-hub-bridge'),
   refreshSpigotVersions: () => ipcRenderer.invoke('studio:refresh-spigot-versions'),
-  buildToolsPreflight: (id, input) => ipcRenderer.invoke('studio:buildtools-preflight', id, input),
-  executeBuildToolsPlan: (id, confirmation) => ipcRenderer.invoke('studio:execute-buildtools-plan', id, confirmation),
   paperCliPreflight: (id, profile) => ipcRenderer.invoke('studio:paper-cli-preflight', id, profile),
   collectPaperCliJarEvidence: (id) => ipcRenderer.invoke('studio:paper-cli-probe', id),
   pickPaperCliPath: (kind) => ipcRenderer.invoke('studio:pick-paper-cli-path', kind),
