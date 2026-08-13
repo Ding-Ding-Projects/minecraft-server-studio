@@ -3754,7 +3754,7 @@ function commandPaletteTargetIsFocusable(target) {
 function focusCommandPaletteTarget(targetId) {
   const target = document.getElementById(targetId);
   if (!commandPaletteTargetIsFocusable(target)) return false;
-  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const reduceMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
   target.focus({ preventScroll: true });
   target.classList.add('palette-target-highlight');
