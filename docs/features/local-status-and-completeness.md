@@ -83,3 +83,4 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Automatic dependency bootstrap](dependency-bootstrap.md)
 - [Spigot BuildTools adapter](spigot-buildtools.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
+- [Bounded backups and Paper updates](backups-and-paper-updates.md)

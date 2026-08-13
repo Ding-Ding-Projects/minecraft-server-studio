@@ -56,6 +56,15 @@ contextBridge.exposeInMainWorld('studio', {
   commandCatalog: (id) => ipcRenderer.invoke('studio:command-catalog', id),
   refreshCommandDiscovery: (id, input) => ipcRenderer.invoke('studio:refresh-command-discovery', id, input),
   commandPlan: (id, request) => ipcRenderer.invoke('studio:command-plan', id, request),
+  backupOverview: (id) => ipcRenderer.invoke('studio:backup-overview', id),
+  backupPreflight: (id) => ipcRenderer.invoke('studio:backup-preflight', id),
+  createBackup: (id, confirmation) => ipcRenderer.invoke('studio:create-backup', id, confirmation),
+  restorePreflight: (id, backupId) => ipcRenderer.invoke('studio:restore-preflight', id, backupId),
+  restoreBackup: (id, confirmation) => ipcRenderer.invoke('studio:restore-backup', id, confirmation),
+  paperUpdatePreflight: (id) => ipcRenderer.invoke('studio:paper-update-preflight', id),
+  applyPaperUpdate: (id, confirmation) => ipcRenderer.invoke('studio:apply-paper-update', id, confirmation),
+  paperRollbackPreflight: (id) => ipcRenderer.invoke('studio:paper-rollback-preflight', id),
+  applyPaperRollback: (id, confirmation) => ipcRenderer.invoke('studio:apply-paper-rollback', id, confirmation),
   onEvent: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('studio:event', listener);

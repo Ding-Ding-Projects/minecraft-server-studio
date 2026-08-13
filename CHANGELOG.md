@@ -18,6 +18,8 @@
 - Lossless, comment- and unknown-key-preserving `server.properties` updates with line-ending retention and atomic same-directory writes.
 - Minecraft 1.21.9+ gamerule delivery states for `pvp`, `allowEnteringNetherUsingPortals`, `spawnMonsters`, `commandBlocksEnabled`, and `spawnerBlocksEnabled`, using serialized local-console or configured RCON command routes instead of obsolete server-property keys.
 - Bounded local plugin JAR safety plans with ZIP signature, SHA-256, manifest and descriptor inspection, dependency/alias/cycle checks, active-server staging, stopped-server atomic promotion, and local rollback records.
+- Bounded local directory-snapshot backups for world, configuration, plugin JAR/configuration, logs, and `server.jar`, with free-space preflight, manifest hashes, local save acknowledgement for running managed servers, and explicit restore confirmation.
+- Explicit stopped-server Paper stable-update and retained-JAR rollback source using official Downloads Service metadata, reviewed byte size/SHA-256, local staging, pre-replacement backup, and plugin-update exclusion.
 - Independent local desktop status destination and browser-local public-site status destination, both with explicit no-external-bridge boundaries and incomplete-evidence disclosure.
 - Optional desktop Status Hub bridge contract with HTTPS-only endpoint rules, protected enrollment/session credentials, explicit connection states, local-status fallback, and no claim of external registration, updates, inbox polls, or replies until each action receives an accepted transport response.
 - Pages-ready public marketing source with `contract.js` loaded before its browser-local interaction engine.

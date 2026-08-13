@@ -8,6 +8,11 @@ const state = {
   statusHubBridge: null,
   buildToolsMetadata: null,
   buildToolsPlan: null,
+  backupOverview: null,
+  backupPlan: null,
+  restorePlan: null,
+  paperUpdatePlan: null,
+  paperRollbackPlan: null,
   activeTab: 'general',
   pluginPath: '',
   experience: null,
@@ -979,6 +984,118 @@ function renderLocalStatus() {
   }, 'No completeness inventory rows are available.');
 }
 
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return 'Unknown size';
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let amount = bytes / 1024;
+  let index = 0;
+  while (amount >= 1024 && index < units.length - 1) {
+    amount /= 1024;
+    index += 1;
+  }
+  return `${amount >= 10 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
+}
+
+function resetBackupLifecycleState() {
+  state.backupOverview = null;
+  state.backupPlan = null;
+  state.restorePlan = null;
+  state.paperUpdatePlan = null;
+  state.paperRollbackPlan = null;
+}
+
+function planCopy(plan, fallback) {
+  if (!plan) return fallback;
+  if (plan.state === 'ready') return 'Preview ready. Review the details before starting the action.';
+  if (plan.state === 'up-to-date') return 'The selected server JAR already matches the reviewed latest stable Paper build.';
+  return (plan.blockers || []).join(' ') || `This preview is ${plan.state}.`;
+}
+
+function setText(selector, value) {
+  const element = $(selector);
+  if (element) element.textContent = value;
+}
+
+function renderBackupLifecycle() {
+  const server = selectedServer();
+  const overview = state.backupOverview;
+  const disabled = !server;
+  const backups = Array.isArray(overview?.backups) ? overview.backups : [];
+  setText('#backup-server-state', server ? (overview?.serverStatus || server.status || 'Loading') : 'No server selected');
+  setText('#backup-consistency-copy', server
+    ? (overview?.consistency?.message || 'Refresh the local backup state to inspect consistency requirements.')
+    : 'Choose a local server to inspect its backup and update lifecycle.');
+  setText('#backup-storage-copy', server
+    ? (overview?.backupStoragePath ? `App backup storage: ${overview.backupStoragePath}` : 'Refresh the local backup state to inspect app backup storage.')
+    : 'No local backup storage is selected.');
+  setText('#backup-latest-copy', backups.length
+    ? `Latest local backup: ${backups[0].backupId} · ${new Date(backups[0].createdAt).toLocaleString()} · ${backups[0].fileCount.toLocaleString()} files · ${formatBytes(backups[0].totalBytes)}.`
+    : 'No complete local backup is available yet.');
+
+  const backupPlan = state.backupPlan;
+  setText('#backup-plan-copy', planCopy(backupPlan, 'Prepare a bounded backup preview to inventory world, configuration, plugin, log, and server JAR state before copying.'));
+  setText('#backup-plan-detail', backupPlan
+    ? `${backupPlan.inventory?.fileCount?.toLocaleString?.() || 0} files · ${formatBytes(backupPlan.inventory?.totalBytes)} · free space ${backupPlan.storage?.bytes === null || backupPlan.storage?.bytes === undefined ? 'not verified' : formatBytes(backupPlan.storage.bytes)} · required ${formatBytes(backupPlan.storage?.requiredBytes)}.`
+    : 'The app never reads or serializes the credential vault into a backup snapshot.');
+
+  const select = $('#restore-backup-select');
+  if (select) {
+    const selected = select.value;
+    select.replaceChildren();
+    const initial = document.createElement('option');
+    initial.value = '';
+    initial.textContent = backups.length ? 'Choose a complete local backup' : 'No complete local backups available';
+    select.append(initial);
+    for (const backup of backups) {
+      const option = document.createElement('option');
+      option.value = backup.backupId;
+      option.textContent = `${new Date(backup.createdAt).toLocaleString()} — ${backup.fileCount.toLocaleString()} files — ${formatBytes(backup.totalBytes)}`;
+      select.append(option);
+    }
+    const preferred = state.restorePlan?.backup?.backupId || selected;
+    if ([...select.options].some((option) => option.value === preferred)) select.value = preferred;
+  }
+
+  const restorePlan = state.restorePlan;
+  setText('#restore-plan-copy', planCopy(restorePlan, 'Choose a complete local snapshot, then prepare a restore preview. Restore is stopped-server-only and creates a new pre-restore safety backup first.'));
+  setText('#restore-plan-detail', restorePlan
+    ? `Affected roots: ${(restorePlan.targets || []).join(', ') || 'none'}. Source backup: ${restorePlan.backup?.backupId || 'not available'}.`
+    : 'No restore preview has been prepared.');
+
+  const updatePlan = state.paperUpdatePlan;
+  setText('#paper-update-plan-copy', planCopy(updatePlan, 'Check the official Paper Downloads Service for a stable JAR and a SHA-256-verified replacement preview.'));
+  setText('#paper-update-plan-detail', updatePlan?.release
+    ? `Reviewed stable build ${updatePlan.release.build} for Minecraft ${updatePlan.release.minecraftVersion}: ${updatePlan.release.name} · ${formatBytes(updatePlan.release.bytes)} · SHA-256 ${updatePlan.release.sha256}.`
+    : 'Only a stopped Paper server can receive a reviewed server.jar replacement. Plugins are never auto-updated.');
+
+  const rollbackPlan = state.paperRollbackPlan;
+  setText('#paper-rollback-copy', overview?.rollback?.available
+    ? 'A retained app-controlled prior server JAR is available. Prepare a rollback preview before replacing the current JAR.'
+    : (overview?.rollback?.reason || 'No Paper JAR rollback record is available.'));
+  setText('#paper-rollback-plan-copy', planCopy(rollbackPlan, 'A Paper rollback also requires a fresh pre-replacement backup and destructive confirmation.'));
+
+  const controlStates = [
+    ['#backup-refresh-button', disabled, 'Choose a local server before refreshing its backup state.'],
+    ['#backup-preflight-button', disabled, 'Choose a local server before preparing a backup preview.'],
+    ['#backup-create-button', disabled || backupPlan?.state !== 'ready', planCopy(backupPlan, 'Prepare a ready backup preview before creating a snapshot.')],
+    ['#restore-preflight-button', disabled || !$('#restore-backup-select')?.value, backups.length ? 'Choose a complete local backup before preparing a restore preview.' : 'Create a complete local backup before preparing a restore preview.'],
+    ['#restore-backup-button', disabled || restorePlan?.state !== 'ready', planCopy(restorePlan, 'Prepare a ready restore preview before replacing managed server state.')],
+    ['#paper-update-preflight-button', disabled, 'Choose a local server before checking the official Paper update metadata.'],
+    ['#paper-update-apply-button', disabled || updatePlan?.state !== 'ready', planCopy(updatePlan, 'Prepare a ready official Paper update preview before replacing server.jar.')],
+    ['#paper-rollback-preflight-button', disabled || !overview?.rollback?.available, overview?.rollback?.reason || 'A retained app-controlled Paper rollback JAR is required before preparing rollback.'],
+    ['#paper-rollback-apply-button', disabled || rollbackPlan?.state !== 'ready', planCopy(rollbackPlan, 'Prepare a ready Paper rollback preview before replacing server.jar.')]
+  ];
+  for (const [selector, isDisabled, reason] of controlStates) {
+    const control = $(selector);
+    if (control) {
+      control.disabled = Boolean(isDisabled);
+      control.title = isDisabled ? reason : '';
+    }
+  }
+}
+
 function renderServers() {
   const query = $('#server-search').value.trim().toLowerCase();
   const container = $('#server-list');
@@ -997,6 +1114,7 @@ function renderServers() {
     item.className = `server-card ${server.id === state.selectedId ? 'selected' : ''}`;
     item.innerHTML = `<strong>${escapeHtml(server.name)}</strong><span class="server-meta"><span>${escapeHtml(server.software)} · ${escapeHtml(server.minecraftVersion)}</span><span><i class="dot ${server.status}"></i>${escapeHtml(server.status)}</span></span>`;
     item.addEventListener('click', () => {
+      if (state.selectedId !== server.id) resetBackupLifecycleState();
       state.selectedId = server.id;
       state.pluginPath = '';
       state.pluginPlan = null;
@@ -1004,6 +1122,7 @@ function renderServers() {
       renderAll();
       refreshCommandCatalog();
       refreshDependencies();
+      refreshBackupOverview();
     });
     container.append(item);
   }
@@ -1155,6 +1274,7 @@ function renderAll() {
   renderEditor();
   renderConsole();
   renderLocalStatus();
+  renderBackupLifecycle();
   setActiveTab(state.activeTab);
 }
 
@@ -1175,11 +1295,14 @@ function setActiveTab(tab) {
 async function refreshServers() {
   const servers = await safely(() => window.studio.listServers());
   if (!servers) return;
+  const previouslySelected = state.selectedId;
   state.servers = servers;
   if (!selectedServer() && servers.length) state.selectedId = servers[0].id;
+  if (previouslySelected !== state.selectedId) resetBackupLifecycleState();
   renderAll();
   await refreshCommandCatalog();
   await refreshDependencies();
+  await refreshBackupOverview();
 }
 
 async function refreshDependencies() {
@@ -1250,6 +1373,20 @@ async function clearStatusHubBridgeSettings() {
   renderStatusHubBridge(bridge);
   toast('Bridge settings were removed. Local status remains available.');
   await refreshLocalStatus();
+}
+
+async function refreshBackupOverview() {
+  const server = selectedServer();
+  if (!server) {
+    resetBackupLifecycleState();
+    renderBackupLifecycle();
+    return;
+  }
+  const overview = await safely(() => window.studio.backupOverview(server.id));
+  if (!overview) return;
+  if (selectedServer()?.id !== server.id) return;
+  state.backupOverview = overview;
+  renderBackupLifecycle();
 }
 
 async function refreshVersions() {
@@ -1576,6 +1713,127 @@ async function discoverManagement() {
   if (discovered) await refreshServers();
 }
 
+function destructiveConfirmationFor(plan) {
+  return {
+    confirmed: true,
+    firstConfirmation: true,
+    secondConfirmation: true,
+    sliderValue: 100,
+    digest: plan?.authority?.digest || '',
+    confirmedAt: new Date().toISOString()
+  };
+}
+
+async function prepareBackup() {
+  const server = selectedServer();
+  if (!server) return;
+  const plan = await safely(() => window.studio.backupPreflight(server.id));
+  if (!plan) return;
+  state.backupPlan = plan;
+  renderBackupLifecycle();
+  toast(plan.state === 'ready' ? 'Bounded backup preview prepared. Review the inventory before copying.' : planCopy(plan, 'Backup preview is blocked.'), plan.state === 'ready' ? 'success' : 'error');
+}
+
+async function createBackup() {
+  const server = selectedServer();
+  const plan = state.backupPlan;
+  if (!server || !plan || plan.state !== 'ready') return toast('Prepare a ready backup preview before creating a local snapshot.', 'error');
+  const backup = await safely(() => window.studio.createBackup(server.id, { digest: plan.authority?.digest || '' }), 'Local backup created with a manifest and per-file SHA-256 values.');
+  if (!backup) return;
+  state.backupPlan = null;
+  await refreshBackupOverview();
+  await refreshLocalStatus();
+}
+
+async function prepareRestore() {
+  const server = selectedServer();
+  const backupId = $('#restore-backup-select')?.value;
+  if (!server || !backupId) return toast('Choose a complete local backup before preparing a restore preview.', 'error');
+  const plan = await safely(() => window.studio.restorePreflight(server.id, backupId));
+  if (!plan) return;
+  state.restorePlan = plan;
+  renderBackupLifecycle();
+  toast(plan.state === 'ready' ? 'Restore preview prepared. It will create a new safety backup before replacement.' : planCopy(plan, 'Restore preview is blocked.'), plan.state === 'ready' ? 'success' : 'error');
+}
+
+function requestRestore() {
+  const server = selectedServer();
+  const plan = state.restorePlan;
+  if (!server || !plan || plan.state !== 'ready') return toast('Prepare a ready restore preview before replacing managed server state.', 'error');
+  openDestructiveConfirmation({
+    title: 'Confirm snapshot restore',
+    copy: 'This replaces the listed managed world, configuration, plugin, log, and server JAR roots. The server must remain stopped. The app creates a new safety backup before replacement, then retains no vault credentials in either snapshot.',
+    target: `Affected resource: ${server.name} · backup ${plan.backup?.backupId || 'unknown'} · roots ${(plan.targets || []).join(', ') || 'none'}`,
+    execute: async () => {
+      const restored = await safely(() => window.studio.restoreBackup(server.id, destructiveConfirmationFor(plan)), 'Snapshot restore completed after a new safety backup was created.');
+      if (!restored) return;
+      state.restorePlan = null;
+      state.paperUpdatePlan = null;
+      state.paperRollbackPlan = null;
+      await refreshServers();
+      await refreshLocalStatus();
+    }
+  });
+}
+
+async function preparePaperUpdate() {
+  const server = selectedServer();
+  if (!server) return;
+  const plan = await safely(() => window.studio.paperUpdatePreflight(server.id));
+  if (!plan) return;
+  state.paperUpdatePlan = plan;
+  renderBackupLifecycle();
+  toast(plan.state === 'ready' ? 'Official stable Paper update preview prepared with checksum and backup preflight.' : planCopy(plan, 'Paper update preview is unavailable.'), plan.state === 'ready' ? 'success' : 'error');
+}
+
+function requestPaperUpdate() {
+  const server = selectedServer();
+  const plan = state.paperUpdatePlan;
+  if (!server || !plan || plan.state !== 'ready') return toast('Prepare a ready official Paper update preview before replacing server.jar.', 'error');
+  openDestructiveConfirmation({
+    title: 'Confirm Paper server JAR update',
+    copy: 'This replaces only server.jar while the server is stopped. The app creates a new verified local backup first, downloads the reviewed stable Paper JAR to local staging, verifies its byte size and SHA-256, then retains the previous JAR as an app-controlled rollback record. Plugins are never auto-updated.',
+    target: `Affected resource: ${server.name} · server.jar · Paper build ${plan.release?.build || 'unknown'} · pre-update backup required`,
+    execute: async () => {
+      const updated = await safely(() => window.studio.applyPaperUpdate(server.id, destructiveConfirmationFor(plan)), 'Paper server JAR updated with a new backup and rollback record.');
+      if (!updated) return;
+      state.paperUpdatePlan = null;
+      state.paperRollbackPlan = null;
+      await refreshServers();
+      await refreshLocalStatus();
+    }
+  });
+}
+
+async function preparePaperRollback() {
+  const server = selectedServer();
+  if (!server) return;
+  const plan = await safely(() => window.studio.paperRollbackPreflight(server.id));
+  if (!plan) return;
+  state.paperRollbackPlan = plan;
+  renderBackupLifecycle();
+  toast(plan.state === 'ready' ? 'Paper rollback preview prepared with its required pre-replacement backup.' : planCopy(plan, 'Paper rollback preview is unavailable.'), plan.state === 'ready' ? 'success' : 'error');
+}
+
+function requestPaperRollback() {
+  const server = selectedServer();
+  const plan = state.paperRollbackPlan;
+  if (!server || !plan || plan.state !== 'ready') return toast('Prepare a ready Paper rollback preview before replacing server.jar.', 'error');
+  openDestructiveConfirmation({
+    title: 'Confirm Paper server JAR rollback',
+    copy: 'This replaces only server.jar while the server is stopped. The app creates a new verified local backup before promoting the retained app-controlled rollback JAR. Plugins are never auto-updated or replaced.',
+    target: `Affected resource: ${server.name} · server.jar · retained rollback record · pre-rollback backup required`,
+    execute: async () => {
+      const rolledBack = await safely(() => window.studio.applyPaperRollback(server.id, destructiveConfirmationFor(plan)), 'Paper server JAR rollback completed with a new backup and a retained reverse rollback record.');
+      if (!rolledBack) return;
+      state.paperRollbackPlan = null;
+      state.paperUpdatePlan = null;
+      await refreshServers();
+      await refreshLocalStatus();
+    }
+  });
+}
+
 function requiresSuperConfirmation(action) {
   return action?.confirmationRequirement === 'super-confirmation' || ['consequential', 'destructive', 'world-mutation', 'content-mutation'].includes(action?.risk);
 }
@@ -1623,15 +1881,12 @@ async function executeCommandAction({ action, command, transport, transportState
   }
 }
 
-function openCommandConfirmation(payload) {
+function openDestructiveConfirmation({ title, copy, target, execute }) {
   const dialog = $('#command-confirmation-dialog');
   if (!dialog) return;
-  const label = payload.action.label || payload.action.title || payload.action.id;
-  $('#command-confirmation-title').textContent = copyText('dialog.confirmTitle', { action: label });
-  $('#command-confirmation-copy').textContent = payload.action.backupRequirement === 'required' || payload.action.backup
-    ? copyText('dialog.confirmBackup')
-    : copyText('dialog.confirmImpact');
-  $('#command-confirmation-target').textContent = copyText('dialog.affectedResource', { server: selectedServer()?.name || 'selected local server', command: payload.command });
+  $('#command-confirmation-title').textContent = title;
+  $('#command-confirmation-copy').textContent = copy;
+  $('#command-confirmation-target').textContent = target;
   const first = $('#command-confirmation-first');
   const second = $('#command-confirmation-second');
   const slider = $('#command-confirmation-slider');
@@ -1643,10 +1898,23 @@ function openCommandConfirmation(payload) {
   first.onchange = update;
   second.onchange = update;
   slider.oninput = update;
-  confirm.onclick = () => { dialog.close('confirmed'); executeCommandAction(payload); };
+  confirm.onclick = () => { dialog.close('confirmed'); execute(); };
   $('#command-confirmation-cancel').onclick = () => dialog.close('cancelled');
   update();
   dialog.showModal();
+}
+
+function openCommandConfirmation(payload) {
+  const label = payload.action.label || payload.action.title || payload.action.id;
+  const requiresBackup = payload.action.backupRequirement === 'required' || payload.action.backup;
+  openDestructiveConfirmation({
+    title: `Confirm ${label}`,
+    copy: requiresBackup
+      ? 'This action can change world or server state. Review the affected server, create the required backup, operate both confirmation controls, then move the slider to authorize it.'
+      : 'This action can affect the selected server or connected players. Review the affected server, operate both confirmation controls, then move the slider to authorize it.',
+    target: `Affected resource: ${selectedServer()?.name || 'selected local server'} · command /${payload.command}`,
+    execute: () => executeCommandAction(payload)
+  });
 }
 
 function logEvent(event) {
@@ -1662,6 +1930,7 @@ function logEvent(event) {
   if (state.logs.length > 800) state.logs.splice(0, state.logs.length - 800);
   renderConsole();
   if (event.type === 'server-state') refreshServers();
+  if (/^(backup|paper-)/.test(String(event.type || ''))) refreshBackupOverview();
 }
 
 function handleStudioEvent(event) {
@@ -1729,6 +1998,19 @@ function bindEvents() {
   $('#browse-buildtools-workspace').addEventListener('click', async () => { const folder = await safely(() => window.studio.pickFolder()); if (folder) $('#buildtools-workspace').value = folder; });
   $('#plan-buildtools-button').addEventListener('click', prepareBuildToolsPlan);
   $('#execute-buildtools-button').addEventListener('click', executeBuildToolsPlan);
+  $('#backup-refresh-button').addEventListener('click', refreshBackupOverview);
+  $('#backup-preflight-button').addEventListener('click', prepareBackup);
+  $('#backup-create-button').addEventListener('click', createBackup);
+  $('#restore-preflight-button').addEventListener('click', prepareRestore);
+  $('#restore-backup-button').addEventListener('click', requestRestore);
+  $('#restore-backup-select').addEventListener('change', () => {
+    state.restorePlan = null;
+    renderBackupLifecycle();
+  });
+  $('#paper-update-preflight-button').addEventListener('click', preparePaperUpdate);
+  $('#paper-update-apply-button').addEventListener('click', requestPaperUpdate);
+  $('#paper-rollback-preflight-button').addEventListener('click', preparePaperRollback);
+  $('#paper-rollback-apply-button').addEventListener('click', requestPaperRollback);
   $('#save-management-token-button').addEventListener('click', saveManagementConnection);
   $('#clear-management-token-button').addEventListener('click', clearManagementCredential);
   $('#discover-management-button').addEventListener('click', discoverManagement);
