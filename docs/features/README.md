@@ -20,7 +20,7 @@
 - [Desktop tab workspace](desktop-tab-workspace.md)
 - [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)
 - [CLI RCON gateway](cli-rcon-gateway.md)
-- [Local Ollama suite foundation](local-ollama-suite.md)
+- [Local Ollama suite](local-ollama-suite.md)
 - [Browser-local Ollama observer](browser-local-ollama-observer.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
 - [Windows release packaging metadata](release-packaging.md)

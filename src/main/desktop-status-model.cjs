@@ -93,7 +93,7 @@ const DESKTOP_SURFACES = deepFreeze([
   surface('personal-vocabulary-upload', 'Private vocabulary upload', 'Bounded local replacement-data validation, private cache handling, controlled text application, and reset.'),
   surface('command-palette', 'Desktop command palette', 'A local Ctrl+Shift+F palette that navigates documented destinations, tabs, articles, and safe renderer controls.'),
   surface('file-converter', 'Local file converter', 'Offline adapter catalog, conversion queue, validation, and result history.'),
-  surface('ollama', 'Local Ollama suite', 'Local runtime, model store, chat, batch pull, hardware-fit, and harness controls.'),
+  surface('ollama', 'Local Ollama suite', 'Local runtime, selected installed-model maintenance, model store, chat, batch pull, hardware-fit, and harness controls.'),
   surface('authenticator-and-toy-locks', 'Authenticator and toy locks', 'Local authenticator, toy-lock flows, credential-vault boundaries, and recovery guidance.'),
   surface('docs-history-and-notifications', 'Documentation, history, and notifications', 'Offline documentation, local history, and notification center.'),
   surface('changelog-viewer', 'Offline changelog viewer', 'Bundled version records, local filtering, safe commit handoff, copy, and export.'),

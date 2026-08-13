@@ -30,6 +30,7 @@ const HISTORY_SUBJECTS = Object.freeze([
   'toy-lock',
   'school-mode',
   'status-bridge',
+  'ollama',
   'history-export'
 ]);
 

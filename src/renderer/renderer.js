@@ -63,6 +63,10 @@ const state = {
     pattern: '',
     flags: 'i'
   },
+  ollamaOperation: {
+    model: '',
+    copyDestination: ''
+  },
   converterSnapshot: null,
   converterSource: null,
   converterTargetId: '',
@@ -7632,6 +7636,8 @@ const OLLAMA_FALLBACK = Object.freeze({
   version: null,
   installedModels: [],
   runningModels: [],
+  operationEligibleModels: [],
+  operation: null,
   capabilities: {}
 });
 
@@ -7643,6 +7649,7 @@ function ollamaStateLabel(value) {
   return ({
     'not-checked': 'Not checked',
     checking: 'Checking local service',
+    operating: 'Local model operation in progress',
     healthy: 'Local service healthy',
     unavailable: 'Local service unavailable',
     offline: 'Local API offline',
@@ -7700,6 +7707,67 @@ function distinctObservedOllamaModels(source) {
     seen.add(key);
     return true;
   }).slice(0, 256);
+}
+
+function eligibleOllamaOperationModels(source) {
+  if (!Array.isArray(source.operationEligibleModels)) return [];
+  const names = new Set();
+  source.operationEligibleModels.forEach((value) => {
+    const name = typeof value === 'string' ? value.trim() : '';
+    if (name && name.length <= 160) names.add(name);
+  });
+  return [...names].sort((left, right) => left.localeCompare(right)).slice(0, 256);
+}
+
+function renderOllamaOperations(source) {
+  const select = $('#ollama-operation-model');
+  const copyDestination = $('#ollama-copy-destination');
+  const pull = $('#ollama-pull-model-button');
+  const copy = $('#ollama-copy-model-button');
+  const remove = $('#ollama-delete-model-button');
+  const cancel = $('#ollama-cancel-operation-button');
+  const status = $('#ollama-operation-status');
+  if (!select || !copyDestination || !pull || !copy || !remove || !cancel || !status) return;
+  const names = eligibleOllamaOperationModels(source);
+  if (!names.includes(state.ollamaOperation.model)) state.ollamaOperation.model = names[0] || '';
+  if (document.activeElement !== select) {
+    select.replaceChildren();
+    if (!names.length) {
+      const unavailable = document.createElement('option');
+      unavailable.value = '';
+      unavailable.textContent = 'No eligible installed model is currently observed';
+      select.append(unavailable);
+    } else {
+      names.forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = name === state.ollamaOperation.model;
+        select.append(option);
+      });
+    }
+  }
+  if (document.activeElement !== copyDestination) copyDestination.value = state.ollamaOperation.copyDestination;
+  const operation = source.operation && typeof source.operation === 'object' ? source.operation : null;
+  const active = Boolean(operation?.cancellable);
+  const fresh = source.state === 'healthy' && source.stale !== true && Boolean(source.lastSuccessfulAt);
+  const ready = fresh && names.length > 0 && !active;
+  const hasDestination = Boolean(state.ollamaOperation.copyDestination.trim());
+  select.disabled = !ready;
+  copyDestination.disabled = !ready;
+  pull.disabled = !ready;
+  remove.disabled = !ready;
+  copy.disabled = !ready || !hasDestination;
+  cancel.disabled = !active;
+  if (operation?.detail) {
+    status.textContent = operation.detail;
+  } else if (!fresh) {
+    status.textContent = 'Refresh the fixed local inventory and wait for a healthy non-stale result before changing an installed model.';
+  } else if (!names.length) {
+    status.textContent = 'No currently observed installed model has a name that this bounded local maintenance surface can safely use.';
+  } else {
+    status.textContent = 'Choose one freshly observed installed local model, then select a bounded maintenance action.';
+  }
 }
 
 function renderOllamaRegexBuilder(source, matcher) {
@@ -7818,11 +7886,12 @@ function renderOllama() {
   $('#ollama-version').textContent = source.version || 'Not observed';
   $('#ollama-last-success').textContent = source.lastSuccessfulAt ? new Date(source.lastSuccessfulAt).toLocaleString() : 'None this session';
   $('#ollama-detail').textContent = source.detail || OLLAMA_FALLBACK.detail;
-  $('#refresh-ollama-button').disabled = source.state === 'checking';
+  $('#refresh-ollama-button').disabled = source.state === 'checking' || source.operation?.cancellable === true;
   const matcher = ollamaSearchMatcher();
   renderOllamaRegexBuilder(source, matcher);
   renderOllamaModelList('#ollama-installed-models', source.installedModels, 'Installed', matcher, false);
   renderOllamaModelList('#ollama-running-models', source.runningModels, 'Running', matcher, true);
+  renderOllamaOperations(source);
   renderOllamaCapabilities(source);
   setOllamaTab(state.ollamaTab);
 }
@@ -7848,6 +7917,65 @@ async function refreshOllama() {
   if (!snapshot) return;
   state.ollama = snapshot;
   renderOllama();
+}
+
+function selectedOllamaOperationModel() {
+  return typeof state.ollamaOperation.model === 'string' ? state.ollamaOperation.model.trim() : '';
+}
+
+async function pullSelectedOllamaModel() {
+  const model = selectedOllamaOperationModel();
+  if (!model) return toast('Refresh the local inventory and choose one observed installed model before requesting a re-pull.', 'error');
+  const snapshot = await safely(() => window.studio.pullOllamaModel({ model }));
+  if (!snapshot) return;
+  state.ollama = snapshot;
+  renderOllama();
+  toast('The selected local model re-pull completed through the fixed local service.', 'success');
+}
+
+async function copySelectedOllamaModel() {
+  const source = selectedOllamaOperationModel();
+  const destination = state.ollamaOperation.copyDestination.trim();
+  if (!source) return toast('Refresh the local inventory and choose one observed installed model before copying it.', 'error');
+  if (!destination) return toast('Enter a bounded local destination name before copying the selected model.', 'error');
+  const snapshot = await safely(() => window.studio.copyOllamaModel({ source, destination }));
+  if (!snapshot) return;
+  state.ollama = snapshot;
+  state.ollamaOperation.copyDestination = '';
+  renderOllama();
+  toast('The selected local model copy completed through the fixed local service.', 'success');
+}
+
+async function requestSelectedOllamaModelDeletion() {
+  const model = selectedOllamaOperationModel();
+  if (!model) return toast('Refresh the local inventory and choose one observed installed model before deleting it.', 'error');
+  const preview = await safely(() => window.studio.previewOllamaModelDeletion({ model }));
+  if (!preview) return;
+  openDestructiveConfirmation({
+    title: 'Delete selected local model',
+    copy: 'This permanently asks the fixed local Ollama service to remove the selected installed model. Review the local selection, operate both independent confirmations, then move the authorization slider to 100%.',
+    target: 'Affected resource: one selected observed installed local model in the fixed local runtime.',
+    execute: async () => {
+      const snapshot = await safely(() => window.studio.deleteOllamaModel({
+        model,
+        confirmation: destructiveConfirmationFor(preview)
+      }));
+      if (!snapshot) return;
+      state.ollama = snapshot;
+      renderOllama();
+      toast('The selected local model deletion completed through the fixed local service.', 'success');
+    }
+  });
+}
+
+async function cancelSelectedOllamaOperation() {
+  const operationId = currentOllama().operation?.id;
+  if (!operationId) return toast('No active local model operation is available to cancel.', 'error');
+  const snapshot = await safely(() => window.studio.cancelOllamaOperation({ operationId }));
+  if (!snapshot) return;
+  state.ollama = snapshot;
+  renderOllama();
+  toast('Cancellation was requested for the active local model operation.', 'progress');
 }
 
 function unsavedWorkState() {
@@ -8589,6 +8717,18 @@ function bindOllamaSuiteEvents() {
       target.focus();
     });
   });
+  $('#ollama-operation-model')?.addEventListener('change', () => {
+    state.ollamaOperation.model = $('#ollama-operation-model')?.value || '';
+    renderOllama();
+  });
+  $('#ollama-copy-destination')?.addEventListener('input', () => {
+    state.ollamaOperation.copyDestination = ($('#ollama-copy-destination')?.value || '').slice(0, 160);
+    renderOllama();
+  });
+  $('#ollama-pull-model-button')?.addEventListener('click', pullSelectedOllamaModel);
+  $('#ollama-copy-model-button')?.addEventListener('click', copySelectedOllamaModel);
+  $('#ollama-delete-model-button')?.addEventListener('click', requestSelectedOllamaModelDeletion);
+  $('#ollama-cancel-operation-button')?.addEventListener('click', cancelSelectedOllamaOperation);
   $('#refresh-ollama-button')?.addEventListener('click', refreshOllama);
 }
 

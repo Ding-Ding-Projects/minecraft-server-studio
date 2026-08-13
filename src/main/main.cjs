@@ -550,6 +550,7 @@ app.on('before-quit', () => {
   totpPairingService?.dispose();
   studioSettings?.stopWatching();
   updateController?.shutdown();
+  ollamaSuite?.shutdown();
   if (scheduleTickTimer) clearInterval(scheduleTickTimer);
   scheduleTickTimer = null;
 });
@@ -659,6 +660,16 @@ async function recordLogoHistory(detail) {
     subject: 'presentation',
     subjectId: 'app-logo',
     label: 'App logo settings changed',
+    detail
+  });
+}
+
+async function recordOllamaHistory(action, label, detail) {
+  await recordLocalHistory({
+    action,
+    subject: 'ollama',
+    subjectId: 'local-model-operation',
+    label,
     detail
   });
 }
@@ -1066,6 +1077,35 @@ ipcMain.handle('studio:open-changelog-commit', async (_event, value) => {
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
 ipcMain.handle('studio:ollama-status', () => requireOllamaSuite().status());
 ipcMain.handle('studio:refresh-ollama', () => requireOllamaSuite().refresh());
+ipcMain.handle('studio:ollama-pull', async (_event, input) => {
+  const snapshot = await requireOllamaSuite().pullModel(input);
+  await recordOllamaHistory(
+    'record-updated',
+    'Local Ollama model re-pull completed',
+    'A selected local model re-pull completed through the fixed local service. Model names and service responses were omitted from local history.'
+  );
+  return snapshot;
+});
+ipcMain.handle('studio:ollama-copy', async (_event, input) => {
+  const snapshot = await requireOllamaSuite().copyModel(input);
+  await recordOllamaHistory(
+    'record-created',
+    'Local Ollama model copy completed',
+    'A selected local model copy completed through the fixed local service. Model names and service responses were omitted from local history.'
+  );
+  return snapshot;
+});
+ipcMain.handle('studio:ollama-delete-preview', (_event, input) => requireOllamaSuite().prepareDelete(input));
+ipcMain.handle('studio:ollama-delete', async (_event, input) => {
+  const snapshot = await requireOllamaSuite().deleteModel(input);
+  await recordOllamaHistory(
+    'record-deleted',
+    'Local Ollama model deletion completed',
+    'A selected local model deletion completed through the fixed local service. Model names and service responses were omitted from local history.'
+  );
+  return snapshot;
+});
+ipcMain.handle('studio:ollama-cancel', (_event, input) => requireOllamaSuite().cancelOperation(input));
 ipcMain.handle('studio:authenticator-status', () => authenticatorStatusWithPairing());
 ipcMain.handle('studio:authenticator-snapshot', () => {
   const snapshot = requireAuthenticator().snapshot();

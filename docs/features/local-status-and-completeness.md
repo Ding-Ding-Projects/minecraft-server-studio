@@ -59,7 +59,7 @@ The template includes these desktop surface rows:
 | `settings-appearance-and-localization` | Settings, appearance, and localization |
 | `command-palette` | Bounded desktop command palette for local renderer destinations and non-secret controls |
 | `file-converter` | Local file converter |
-| `ollama` | Local Ollama service health plus bounded installed/running inventory; complete Model Store, pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
+| `ollama` | Local Ollama service health plus bounded installed/running inventory and selected-installed-model re-pull/copy/delete maintenance; complete Model Store, batch pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
 | `docs-history-and-notifications` | Offline documentation, history, and notifications |
 | `notifications-and-destructive-confirmation` | App-private notification history and reusable irreversible-action confirmation |
@@ -170,20 +170,26 @@ records.
 
 The `ollama` row currently covers a narrow, main-process-only local foundation:
 the fixed `http://127.0.0.1:11434` service version, bounded installed-model
-inventory, and bounded running-model inventory. Its implementation never asks a
-renderer for an endpoint, cloud credential, proxy, shell command, model name, or
-raw API response. A healthy local version response is not proof that a model is
-installed, running, compatible, or ready for a requested task.
+inventory, bounded running-model inventory, and one-at-a-time maintenance of a
+freshly observed installed model. Named IPC methods can request a re-pull, copy,
+delete preview/delete, or cancellation; the renderer cannot select an endpoint,
+cloud credential, proxy, method, path, shell command, or arbitrary body. Every
+selected model name is revalidated against a short-lived local inventory before
+it becomes a request argument, and deletion also requires a selection-bound
+two-key/full-slider authority. Raw API responses remain outside renderer state,
+history, notifications, logs, exports, and status evidence. A healthy local
+version response is not proof that a model is installed, running, compatible, or
+ready for a requested task.
 
 This row remains incomplete until it independently receives its localized-copy,
 focused-test, built-artifact interaction, capture, and evidence records. It
 does not inherit proof from server setup, Java installation, the desktop status
 destination, or a future application feature. Complete catalog pagination,
-hardware-fit assessment, batch pulls, chat, attachments, harness registration,
-snapshots, rollback, and offline recovery each need their own implemented and
-documented records before they can be treated as available. See [Local Ollama
-suite foundation](local-ollama-suite.md) for the current scope and recovery
-states.
+arbitrary catalog selection, hardware-fit assessment, batch pulls with
+progress/resume, chat, attachments, harness registration, snapshots, rollback,
+and offline recovery each need their own implemented and documented records
+before they can be treated as available. See [Local Ollama suite](local-ollama-suite.md)
+for the current scope and recovery states.
 
 ## File-converter inventory boundary
 
