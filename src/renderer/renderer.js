@@ -835,17 +835,22 @@ function renderManagement() {
 }
 
 function buildToolsInput() {
+  const pullRequest = $('#buildtools-pull-request').value.trim();
+  const revision = $('#buildtools-revision').value;
   return {
-    revision: $('#buildtools-revision').value,
-    target: $('#buildtools-target').value,
+    revision,
     workspace: $('#buildtools-workspace').value.trim(),
-    output: $('#buildtools-output').value.trim(),
-    compile: $('#buildtools-compile').checked,
-    reuse: $('#buildtools-reuse').checked,
-    update: $('#buildtools-update').checked,
-    pullRequest: undefined,
-    rawFallback: $('#buildtools-expert-tokens').value.trim(),
-    riskAcknowledgements: {}
+    outputDirectoryName: $('#buildtools-output-name').value.trim(),
+    finalName: $('#buildtools-final-name').value.trim() || `spigot-${revision}`,
+    compileSelection: $('#buildtools-target').value,
+    compileIfChanged: $('#buildtools-compile-if-changed').checked,
+    dontUpdate: $('#buildtools-dont-update').checked,
+    remapped: $('#buildtools-remapped').checked,
+    generateSource: $('#buildtools-source').checked,
+    generateDocs: $('#buildtools-docs').checked,
+    experimental: $('#buildtools-experimental').checked,
+    developmentBuild: $('#buildtools-dev').checked,
+    pullRequest: pullRequest || null
   };
 }
 
@@ -870,18 +875,73 @@ function renderBuildToolsMetadata(metadata = state.buildToolsMetadata) {
   }
   select.value = [...select.options].some((option) => option.value === current) ? current : (selectedServer()?.minecraftVersion || select.value);
   $('#buildtools-java-state').textContent = metadata?.fetchedAt
-    ? `Official metadata refreshed ${new Date(metadata.fetchedAt).toLocaleString()}. BuildTools preflight remains the final compatibility authority.`
-    : 'The BuildTools preflight makes the final Java compatibility decision.';
+    ? `Official metadata refreshed ${new Date(metadata.fetchedAt).toLocaleString()}. The plan-only controller uses its documented Java matrix and existing Java/Git inspection before showing a direct-argument preview.`
+    : 'Prepare a plan to read the documented Java matrix and current Java/Git readiness.';
+}
+
+function renderBuildToolsRequirementMatrix(matrix = []) {
+  const container = $('#buildtools-requirement-matrix');
+  if (!container) return;
+  const rows = matrix.length ? matrix : [
+    { range: 'Before 1.17', feature: 8, state: 'supported' },
+    { range: '1.17 and 1.17.1', feature: 16, state: 'supported' },
+    { range: '1.17.2 through 1.20.5', feature: 17, state: 'supported' },
+    { range: '1.20.6 through 1.21.11', feature: 21, state: 'supported' },
+    { range: 'Newer or non-1.x revisions', feature: null, state: 'unknown' }
+  ];
+  container.replaceChildren();
+  rows.forEach((row) => {
+    const stateLabel = row.state === 'supported' ? `Java ${row.feature}` : 'No bundled Java decision';
+    const detail = row.state === 'supported'
+      ? 'Git is also required for every future BuildTools run. Existing dependency controls expose detection and installation.'
+      : 'The plan intentionally does not guess a Java feature or enable automatic execution for this range.';
+    container.append(statusRecord(`${row.range} — ${stateLabel}`, detail, row.state === 'supported' ? 'idle' : 'blocked'));
+  });
 }
 
 function renderBuildToolsPlan(plan = state.buildToolsPlan) {
   const executeButton = $('#execute-buildtools-button');
-  if (!plan) {
-    if (executeButton) executeButton.disabled = true;
+  if (executeButton) executeButton.disabled = true;
+  const activePlan = plan?.server?.id === selectedServer()?.id ? plan : null;
+  const stateRecord = $('#buildtools-plan-state')?.closest('.status-record');
+  const stateTitle = $('#buildtools-plan-state');
+  const stateDetail = $('#buildtools-plan-detail');
+  const preview = $('#buildtools-argv-preview');
+  if (!activePlan) {
+    if (stateRecord) stateRecord.dataset.state = 'idle';
+    if (stateTitle) stateTitle.textContent = 'No BuildTools plan has been prepared for the selected server.';
+    if (stateDetail) stateDetail.textContent = 'Use typed controls to preview a separate workspace, output directory, Java/Git readiness, and direct arguments. No process will start.';
+    if (preview) preview.textContent = 'Prepare a typed plan to preview executable, working directory, and one direct argument per line. Shell text is never accepted.';
+    renderBuildToolsRequirementMatrix();
     return;
   }
-  if (executeButton) executeButton.disabled = false;
-  $('#buildtools-java-state').textContent = `Prepared a non-executing ${plan.revision} plan. Requires Java ${plan.jdk?.feature || plan.jdk?.minimumFeature || 'as reported by BuildTools'} and explicit confirmation before execution.`;
+  $('#buildtools-output').value = activePlan.workspace?.outputDirectory || '';
+  if ($('#buildtools-final-name') && document.activeElement !== $('#buildtools-final-name')) {
+    $('#buildtools-final-name').value = activePlan.flags?.finalName || '';
+  }
+  const blockers = activePlan.readiness?.blockers || [];
+  if (stateRecord) stateRecord.dataset.state = activePlan.readiness?.state === 'blocked' ? 'blocked' : 'complete';
+  if (stateTitle) stateTitle.textContent = activePlan.readiness?.state === 'blocked' ? 'Plan preview has dependency blockers.' : 'Plan-only BuildTools preview is ready.';
+  if (stateDetail) stateDetail.textContent = blockers.length
+    ? blockers.join(' ')
+    : `${activePlan.execution?.reason || 'No BuildTools process is registered.'} Java and Git are currently detected, but no execution route is enabled.`;
+  $('#buildtools-java-state').textContent = activePlan.javaRequirement?.status === 'known'
+    ? `BuildTools ${activePlan.revision} requires Java ${activePlan.javaRequirement.feature}. The direct-argument preview is plan-only; no process was started.`
+    : (activePlan.javaRequirement?.message || 'The Java requirement is not documented for this revision.');
+  if (preview) {
+    const direct = activePlan.directArgv || {};
+    const lines = [
+      'execution: unavailable (plan-only)',
+      `executable: ${direct.executable || '<compatible Java runtime unavailable>'}`,
+      `working directory: ${direct.cwd || '<unavailable>'}`,
+      `shell: ${direct.shell === false ? 'false' : 'unavailable'}`,
+      `BuildTools source: ${activePlan.boundaries?.buildToolsSource || 'not selected'}`,
+      'arguments:'
+    ];
+    (direct.args || []).forEach((argument, index) => lines.push(`argv[${index}]: ${argument}`));
+    preview.textContent = lines.join('\n');
+  }
+  renderBuildToolsRequirementMatrix(activePlan.javaRequirementMatrix || []);
 }
 
 function statusRecord(title, detail, state = 'idle') {
@@ -1280,6 +1340,7 @@ function renderAll() {
   renderServers();
   renderDependencies();
   renderEditor();
+  renderBuildToolsPlan();
   renderConsole();
   renderLocalStatus();
   renderBackupLifecycle();
@@ -1548,27 +1609,15 @@ async function prepareBuildToolsPlan() {
   const server = selectedServer();
   if (!server) return;
   if (server.software !== 'spigot') return toast('BuildTools plans apply only to the selected Spigot server.', 'error');
-  const plan = await safely(() => window.studio.buildToolsPreflight(server.id, buildToolsInput()));
+  const plan = await safely(() => window.studio.planBuildTools(server.id, buildToolsInput()));
   if (plan) {
     state.buildToolsPlan = plan;
     $('#buildtools-output').value = plan.workspace?.outputDirectory || '';
     renderBuildToolsPlan(plan);
-    toast('Non-executing BuildTools preflight prepared. It still requires explicit confirmation before a build can start.', 'success');
+    toast(plan.readiness?.state === 'blocked'
+      ? 'BuildTools plan preview prepared with Java or Git blockers. No process started.'
+      : 'Typed BuildTools argument preview prepared. This surface remains plan-only and did not start a process.', plan.readiness?.state === 'blocked' ? 'error' : 'success');
   }
-}
-
-async function executeBuildToolsPlan() {
-  const server = selectedServer();
-  const plan = state.buildToolsPlan;
-  if (!server || !plan) return toast('Prepare a BuildTools plan before starting a build.', 'error');
-  const approved = window.confirm(`Build Spigot ${plan.revision} in the isolated workspace and then promote only the staged JAR? The plan retains the prior server JAR as a rollback record when one exists.`);
-  if (!approved) return;
-  const result = await safely(() => window.studio.executeBuildToolsPlan(server.id, {
-    confirmed: true,
-    digest: plan.authority?.digest,
-    confirmedAt: new Date().toISOString()
-  }), 'BuildTools completed and the staged JAR was promoted with a rollback record.');
-  if (result) await refreshServers();
 }
 
 function updateRuntimeRequirement() {
@@ -2126,7 +2175,6 @@ function bindEvents() {
   $('#refresh-spigot-versions-button').addEventListener('click', refreshSpigotVersions);
   $('#browse-buildtools-workspace').addEventListener('click', async () => { const folder = await safely(() => window.studio.pickFolder()); if (folder) $('#buildtools-workspace').value = folder; });
   $('#plan-buildtools-button').addEventListener('click', prepareBuildToolsPlan);
-  $('#execute-buildtools-button').addEventListener('click', executeBuildToolsPlan);
   $('#backup-refresh-button').addEventListener('click', refreshBackupOverview);
   $('#backup-preflight-button').addEventListener('click', prepareBackup);
   $('#backup-create-button').addEventListener('click', createBackup);
@@ -2161,7 +2209,7 @@ function bindEvents() {
   $('#refresh-command-center-button').addEventListener('click', collectCommandDiscovery);
   $('#open-folder-button').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
   $('#edit-open-folder').addEventListener('click', () => { const server = selectedServer(); if (server) safely(() => window.studio.openFolder(server.serverPath)); });
-  $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (server.software === 'spigot') { setActiveTab('buildtools'); return toast('Spigot setup requires the isolated BuildTools plan and its explicit execution action.', 'error'); } await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });
+  $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (server.software === 'spigot') { setActiveTab('buildtools'); return toast('Spigot setup is unavailable in this build. Review the typed BuildTools plan-only preview; no executor is registered.', 'error'); } await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });
   $('#start-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.start(server.id), 'Server start requested.'); });
   $('#stop-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.stop(server.id), 'Graceful server stop requested.'); });
   $('#browse-plugin-button').addEventListener('click', async () => {

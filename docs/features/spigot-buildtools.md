@@ -42,6 +42,11 @@ BuildTools source, structured arguments, shell-free command data, and a
 stage/swap/rollback plan. Its digest must match the explicit confirmation
 before an executor can receive an authorized request.
 
+The separate [BuildTools plan-only orchestration](buildtools-orchestration.md)
+surface intentionally does not use this execution path. It provides only typed
+arguments, controlled workspace/output planning, and Java/Git readiness, with
+its execution state explicitly unavailable.
+
 Generated JARs are first validated in the isolated workspace, copied to a
 server-local stage, validated again, moved into a rollback location if a live
 JAR exists, and then atomically renamed into place. A failed promotion restores

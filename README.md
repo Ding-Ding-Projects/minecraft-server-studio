@@ -7,7 +7,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Create Paper or Spigot servers in a folder selected through the app.
 - Select a Minecraft version, memory allocation, server ports, and EULA acceptance before setup.
 - Download official Paper builds with publisher-provided SHA-256 validation.
-- Build Spigot from the official BuildTools process for the selected revision.
+- Preview a typed official BuildTools invocation for a selected Spigot revision, including Java/Git readiness, a controlled workspace/output layout, and direct arguments. The current desktop BuildTools surface is plan-only and does not execute or distribute a server JAR.
 - Detect Java and Git, select the Java feature required by the chosen Paper or Spigot/BuildTools revision, install missing tools from Windows package managers, and fall back to an app-private portable toolchain when no package manager is available.
 - Configure gameplay, world generation, network/RCON, Java runtime, resource-pack, plugin, and server-property settings with switches, sliders, number steppers, selects, type-ahead version input, file pickers, and browse controls.
 - Start and stop a local Java process safely without a shell, read live output, and send console commands.
@@ -23,7 +23,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 1. Open **Create server** and choose Paper or Spigot, a version, a root folder, capacity, and initial network port.
 2. Read and accept the Minecraft EULA for that server.
 3. Use **Install missing tools** if the Java runtime required by the selected version or Git is not detected. The app uses Winget or Chocolatey where available, then downloads a user-scoped portable Java/Git fallback itself. The app never requires a manual prerequisite installation before setup can continue.
-4. Select **Set up server**. Paper is downloaded from the Paper API; Spigot is built through BuildTools with the selected revision.
+4. Select **Set up server**. Paper is downloaded from the Paper API. For Spigot, use the BuildTools tab to prepare a typed plan-only argument preview; no desktop BuildTools executor is currently enabled.
 5. Edit the structured controls on the General, World, Gameplay, Network, Runtime, BuildTools, Live management, Command Center, Plugins, Console, and Local status tabs.
 6. Start the server and use the local console. Enable RCON and save its protected password in the desktop app only when the external CLI must issue commands to a running server.
 
@@ -70,7 +70,7 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 - Server Java commands use direct executable arguments with `shell: false`; the app does not compose user settings into shell commands.
 - The app keeps its own server registry and portable toolchain in the per-user application-data directory. It does not write a `.git` directory into server folders.
 - Paper downloads are selected from official project metadata and validated when the upstream API provides a SHA-256 value.
-- Spigot setup uses a dedicated BuildTools workspace and a preflight-driven stage/swap/rollback plan. Java and Git are automatically detected and installable from the app.
+- Spigot BuildTools planning uses a dedicated workspace and controlled output directory outside the server home and source repository. Java and Git are detected through the existing app controls; the current desktop plan-only surface does not download, execute, or promote a JAR.
 - The management protocol is TLS-first and stores any bearer credential reference through protected storage. The generic WebSocket transport does not invent a provider-specific bearer handshake; it never enables methods before `rpc.discover` advertises them and is not a Paper HTTP API.
 - Command discovery never scrapes or invents commands. It runs only selected-JAR `--help`/`--version` probes with direct Java arguments, or user-selected fixed `help`, `plugins`, and Paper `paper` queries against an already-running local console or protected loopback RCON route. Every bounded response keeps source, route, timestamp, truncation, and failure state; plugin descriptor metadata remains non-executable until live runtime evidence confirms the command name.
 - RCON passwords and management bearer credentials are stored through the operating system protected-storage boundary and omitted from the local registry, exports, and console logs. Minecraft still requires its active RCON password in its local configuration; treat the server folder as sensitive.
@@ -88,6 +88,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Automatic dependency installation](docs/features/dependency-bootstrap.md)
 - [Version-aware Java runtime and launch profiles](docs/features/java-runtime-and-launch.md)
 - [Spigot BuildTools planning](docs/features/spigot-buildtools.md)
+- [BuildTools plan-only orchestration](docs/features/buildtools-orchestration.md)
 - [Command Center](docs/features/command-center.md)
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)

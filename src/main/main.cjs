@@ -7,6 +7,7 @@ const { StudioSettingsService } = require('./studio-settings.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { UpdateController } = require('./update-controller.cjs');
+const { BuildToolsOrchestrationController } = require('./buildtools-orchestration.cjs');
 let CredentialVault;
 let SharedStatusHubClient;
 try {
@@ -33,6 +34,7 @@ const MAX_RCON_PACKET_BYTES = 256 * 1024;
 const MAX_RCON_BUFFER_BYTES = MAX_RCON_PACKET_BYTES + 64;
 let statusHubBridge;
 let updateController;
+let buildToolsController;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -339,6 +341,10 @@ app.whenReady().then(async () => {
     },
     onEvent: sendToRenderer
   });
+  buildToolsController = new BuildToolsOrchestrationController({
+    serverManager,
+    repositoryRoots: [app.getAppPath()]
+  });
   updateController = new UpdateController({
     app,
     autoUpdater,
@@ -372,6 +378,11 @@ function requireManager() {
 function requireUpdater() {
   if (!updateController) throw new Error('Minecraft Server Studio update controls are still starting.');
   return updateController;
+}
+
+function requireBuildToolsController() {
+  if (!buildToolsController) throw new Error('BuildTools planning controls are still starting.');
+  return buildToolsController;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -497,8 +508,7 @@ ipcMain.handle('studio:sync-status-hub-bridge', async () => {
   return localStatusWithBridge();
 });
 ipcMain.handle('studio:refresh-spigot-versions', () => requireManager().refreshSpigotVersionMetadata());
-ipcMain.handle('studio:buildtools-preflight', (_event, id, input) => requireManager().buildToolsPreflight(id, input));
-ipcMain.handle('studio:execute-buildtools-plan', (_event, id, confirmation) => requireManager().executeBuildToolsPlan(id, confirmation));
+ipcMain.handle('studio:plan-buildtools', (_event, id, input) => requireBuildToolsController().createPlan(id, input));
 ipcMain.handle('studio:pick-java', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
