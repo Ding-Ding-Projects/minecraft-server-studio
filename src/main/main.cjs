@@ -6,6 +6,7 @@ const { MinecraftManagementProtocolClient } = require('./minecraft-management-pr
 const { StudioSettingsService } = require('./studio-settings.cjs');
 const { NarrationScheduleSettingsService } = require('./narration-schedule-settings.cjs');
 const { LocalHistoryService } = require('./local-history-service.cjs');
+const { NotificationCenterService } = require('./notification-center-service.cjs');
 const { createSafeRconResponse, safeRconErrorMessage } = require('../renderer/rcon-response-safety.js');
 const { createLocalStatusSnapshot } = require('./desktop-status-model.cjs');
 const { FileConverter } = require('./file-converter.cjs');
@@ -55,6 +56,7 @@ let credentialVault;
 let studioSettings;
 let narrationScheduleSettings;
 let localHistory;
+let notificationCenter;
 let schoolModeVault;
 let schoolModeCredentialKey;
 
@@ -383,6 +385,11 @@ app.whenReady().then(async () => {
     onChange: (history) => sendToRenderer({ type: 'local-history', history })
   });
   localHistory.initialize();
+  notificationCenter = new NotificationCenterService({
+    dataDir: path.join(app.getPath('userData'), 'notification-center'),
+    onChange: (snapshot) => sendToRenderer({ type: 'notification-center', notificationCenter: snapshot })
+  });
+  notificationCenter.initialize();
   narrationScheduleSettings = new NarrationScheduleSettingsService({
     dataDir: path.join(app.getPath('userData'), 'settings'),
     onChange: publishExperienceSettings
@@ -545,6 +552,11 @@ function requireNarrationScheduleSettings() {
 function requireLocalHistory() {
   if (!localHistory) throw new Error('Local history is still starting.');
   return localHistory;
+}
+
+function requireNotificationCenter() {
+  if (!notificationCenter) throw new Error('Notification history is still starting.');
+  return notificationCenter;
 }
 
 function recordLocalHistory(record) {
@@ -856,6 +868,20 @@ ipcMain.handle('studio:local-history-status', () => requireLocalHistory().status
 ipcMain.handle('studio:list-local-history', (_event, filters) => requireLocalHistory().list(filters || {}));
 ipcMain.handle('studio:export-local-history', (_event, request) => requireLocalHistory().export(request || {}));
 ipcMain.handle('studio:open-local-history-export-in-vscode', (_event, exportId) => requireLocalHistory().openInVsCode(exportId));
+ipcMain.handle('studio:notification-center', () => requireNotificationCenter().list());
+ipcMain.handle('studio:record-notification', (_event, input) => requireNotificationCenter().record(input));
+ipcMain.handle('studio:dismiss-notifications', (_event, ids) => requireNotificationCenter().dismiss(ids));
+ipcMain.handle('studio:restore-notifications', (_event, ids) => requireNotificationCenter().restore(ids));
+ipcMain.handle('studio:notification-clear-preview', (_event, ids) => requireNotificationCenter().clearPreview(ids));
+ipcMain.handle('studio:clear-notifications', (_event, request) => {
+  if (!request || typeof request !== 'object' || Array.isArray(request)
+    || Object.keys(request).length !== 2
+    || !Object.prototype.hasOwnProperty.call(request, 'ids')
+    || !Object.prototype.hasOwnProperty.call(request, 'confirmation')) {
+    throw new Error('Notification clear request is invalid.');
+  }
+  return requireNotificationCenter().clear(request.ids, request.confirmation);
+});
 ipcMain.handle('studio:offline-docs', () => requireOfflineDocumentation().list());
 ipcMain.handle('studio:offline-doc', (_event, id) => requireOfflineDocumentation().read(id));
 ipcMain.handle('studio:offline-changelog', () => requireOfflineChangelog().list());

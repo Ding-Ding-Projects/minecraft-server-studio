@@ -703,3 +703,35 @@ evidence pending until independently recorded.
   real capture evidence.
 - Keep editor discovery limited to the documented local executable routes and
   preserve the direct non-shell launch boundary.
+
+## Desktop notification center and destructive confirmation
+
+`src/main/notification-center-service.cjs` now owns a bounded atomic
+app-private JSON notification record. It accepts only fixed safe severity/title/detail
+summaries, rejects credential-related text, server output, command content,
+paths, URLs, and secret material, and retains at most 500 records with a
+100-record action selection. `src/main/main.cjs` exposes narrow snapshot,
+record, dismiss, restore, reviewed-clear-preview, and clear IPC routes;
+`src/main/preload.cjs` exposes the matching safe renderer facade.
+
+The renderer now records a fixed safe summary for each toast without passing its
+dynamic message to persistence. Info/success toasts close after five seconds,
+progress after eight seconds, and warning/error toasts remain until a user
+dismisses them. The Notification center destination has plain-text-first
+search with a local regex builder, individual dismiss/restore/clear controls,
+and bounded selected dismiss/restore/clear actions. Clearing is a real local
+record removal, guarded by the reusable two-control/full-slider confirmation;
+the main process rejects a stale selection digest.
+
+The existing confirmation dialog now retains focus-return information,
+supports Escape/Emergency exit, shows slider progress and a short completion
+state, and gates callback execution until both controls and 100% slider are
+complete. Existing backup, restore, Paper update/rollback, and command callers
+continue through that same surface. This source lane does not claim that every
+destructive action in the product is covered.
+
+No tests, linting, review, build/package work, runtime interaction, or captures
+ran under the fast-delivery boundary. Follow-up work must add localization,
+complete notification export/history behavior, exhaustive destructive-action
+coverage, focused verification, packaged interaction, accessibility proof, and
+real captures before treating the feature as complete evidence.

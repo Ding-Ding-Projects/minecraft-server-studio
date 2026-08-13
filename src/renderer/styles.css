@@ -310,6 +310,10 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 .dialog-emoji { display: inline-grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--outline-variant); border-radius: 14px; background: var(--surface-container); font-size: 1.2rem; }
 .dialog-emoji[hidden] { display: none; }
 .confirmation-target { padding: 12px; border: 1px solid var(--outline-variant); border-radius: 12px; color: var(--primary); background: #151922; overflow-wrap: anywhere; }
+.confirmation-progress { height: 10px; overflow: hidden; border: 1px solid var(--outline-variant); border-radius: 999px; background: var(--surface-container); }
+.confirmation-progress-fill { display: block; width: 0%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), #ffb4ab); transition: width 180ms ease, filter 180ms ease; }
+.confirmation-dialog[data-complete="true"] .confirmation-progress-fill { filter: brightness(1.25); }
+.confirmation-progress-status { margin: 0; color: var(--on-surface-variant); line-height: 1.45; }
 .dialog-heading, .dialog-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .software-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0; border: 0; }
 .software-picker legend { margin-bottom: 8px; color: var(--on-surface-variant); font-weight: 700; font-size: .82rem; }
@@ -319,11 +323,14 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 .software-picker small { margin-top: 4px; }
 
 .toast-region { position: fixed; right: 24px; bottom: 24px; display: grid; gap: 10px; z-index: 10; max-width: min(420px, calc(100vw - 48px)); }
-.toast { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 9px; padding: 14px 16px; border: 1px solid var(--outline); border-radius: 16px; color: var(--on-surface); background: var(--surface-container-highest); box-shadow: 0 8px 24px #0007; line-height: 1.4; }
+.toast { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 9px; padding: 14px 16px; border: 1px solid var(--outline); border-radius: 16px; color: var(--on-surface); background: var(--surface-container-highest); box-shadow: 0 8px 24px #0007; line-height: 1.4; }
 .toast.error { border-color: var(--error); color: var(--error); }
+.toast.warning { border-color: var(--warning); color: var(--warning); }
 .toast.success { border-color: #4f9d75; color: var(--success); }
+.toast.progress { border-color: var(--primary); color: var(--primary); }
 .toast-emoji { font-size: 1rem; line-height: 1.4; }
 .toast-copy { min-width: 0; white-space: pre-line; }
+.toast-dismiss { display: inline-grid; width: 34px; min-width: 34px; height: 34px; place-items: center; border: 1px solid currentColor; border-radius: 999px; color: inherit; background: transparent; font-size: 1.2rem; line-height: 1; }
 
 .experience-settings-form { width: min(900px, calc(100vw - 32px)); }
 .settings-search-shell { display: grid; gap: 10px; position: relative; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: var(--surface-container); }
@@ -367,6 +374,7 @@ body.school-mode-active [data-school-hidden] { display: none !important; }
 
 .authenticator-destination { display: grid; gap: 18px; }
 .support-tickets-destination { display: grid; gap: 18px; }
+.notification-center-destination { display: grid; gap: 18px; }
 .authenticator-heading { align-items: start; }
 .authenticator-heading > div { display: grid; gap: 7px; }
 .authenticator-heading .muted { max-width: 760px; }
@@ -388,6 +396,24 @@ body.school-mode-active [data-school-hidden] { display: none !important; }
 .regex-builder [data-state="active"] { color: var(--success); }
 .authenticator-entry-list, .toy-lock-list { display: grid; gap: 12px; }
 .support-ticket-list { display: grid; gap: 12px; }
+.notification-record-list { display: grid; gap: 12px; }
+.notification-record-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
+.notification-record-card[data-state="active"] { border-color: color-mix(in srgb, var(--primary) 52%, var(--outline-variant)); }
+.notification-record-card[data-severity="error"] { border-color: var(--error); }
+.notification-record-card[data-severity="warning"] { border-color: var(--warning); }
+.notification-record-card[data-state="dismissed"] { opacity: .74; }
+.notification-select { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--primary); }
+.notification-record-content { display: grid; gap: 9px; min-width: 0; }
+.notification-record-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.notification-record-header strong { color: var(--on-surface); }
+.notification-record-header span, .notification-record-content p, .notification-record-content small { color: var(--on-surface-variant); overflow-wrap: anywhere; }
+.notification-record-content p { margin: 0; line-height: 1.45; }
+.notification-record-actions, .notification-bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.notification-record-actions { align-items: center; }
+.notification-record-severity { width: max-content; padding: 4px 8px; border: 1px solid var(--outline-variant); border-radius: 999px; color: var(--primary); background: var(--surface-container-high); font-size: .76rem; font-weight: 700; text-transform: capitalize; }
+.notification-record-severity[data-severity="error"] { border-color: var(--error); color: var(--error); }
+.notification-record-severity[data-severity="warning"] { border-color: var(--warning); color: var(--warning); }
+.notification-record-severity[data-severity="success"] { border-color: #4f9d75; color: var(--success); }
 .authenticator-entry-card, .toy-lock-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
 .support-ticket-card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
 .support-ticket-card > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
@@ -431,6 +457,12 @@ body.school-mode-active [data-school-hidden] { display: none !important; }
   .regex-builder-actions, .narrator-actions { align-items: stretch; flex-direction: column; }
   .weekday-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scheduled-setting { grid-template-columns: 1fr; }
+  .notification-record-card { grid-template-columns: 1fr; }
+  .notification-select { margin: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirmation-progress-fill { transition: none; }
 }
 
 @media (max-width: 850px) {

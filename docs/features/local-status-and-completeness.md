@@ -60,6 +60,7 @@ The template includes these desktop surface rows:
 | `ollama` | Local Ollama service health plus bounded installed/running inventory; complete Model Store, pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
 | `docs-history-and-notifications` | Offline documentation, history, and notifications |
+| `notifications-and-destructive-confirmation` | App-private notification history and reusable irreversible-action confirmation |
 | `changelog-viewer` | Offline bundled version records, local filtering, copy/export, and validated commit handoff |
 | `local-history-and-safe-exports` | Redacted append-only local history metadata and safe structured exports |
 | `export` | Export |
@@ -146,10 +147,29 @@ documentation-browser foundation. Its implementation is limited to a
 hand-written, app-bundled feature-article inventory; a safe main-process
 loader; narrow renderer IPC; escaped Markdown rendering; internal article-link
 resolution; and a local documentation search with its own regex-builder route.
-It does not prove local history, a notification center, full localization,
-runtime interaction, or a built-artifact capture. See [Offline documentation
-browser](offline-documentation-browser.md) for the package and source-boundary
-details.
+It does not prove local history, full localization, runtime interaction, or a
+built-artifact capture. Notification-center implementation and evidence are
+tracked in their own row. See [Offline documentation browser](offline-documentation-browser.md)
+for the package and source-boundary details.
+
+## Notification and destructive-confirmation inventory boundary
+
+The `notifications-and-destructive-confirmation` row covers the bounded
+app-private notification metadata service, narrow IPC, corner-toast stack,
+reviewable notification-center destination, and shared two-control/full-slider
+decision surface. Notification records retain only fixed safe summaries and
+never persist server output, command text, credentials, current codes, paths,
+or raw error payloads. Clearing selected local notification history is the
+currently wired irreversible local action: it requests a reviewed selection
+digest and the reusable renderer confirmation before the main process removes
+the selected records.
+
+This is source-level evidence only. The row does not claim localization,
+screen-reader behavior, reduced-motion behavior, focused checks, packaged-app
+interaction, capture evidence, a complete destructive-action inventory, or a
+successful server mutation. See [Desktop notifications and destructive
+confirmation](desktop-notifications-and-destructive-confirmation.md) for the
+behavior and recovery boundary.
 
 ## Changelog-viewer inventory boundary
 
