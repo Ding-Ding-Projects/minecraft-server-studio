@@ -8,7 +8,7 @@ window.MinecraftServerStudioContract
 
 The file is deliberately framework-free. It has no fetch calls, WebSocket calls, analytics, remote fonts, remote assets, workers, hidden browser automation, shell access, installer access, or server-process controls. It uses the browser's `localStorage` only, under the key `minecraft-server-studio.site.contract.v2`.
 
-The companion site is a planning and host-integration surface. It must not claim that browser-local state created a Minecraft server, installed Java, downloaded Paper or Spigot, executed a command, started a process, transferred a plugin, or reached an Ollama endpoint. Those are host-owned operations that need a connected desktop application or another explicitly implemented local bridge.
+The companion site is a planning and host-integration surface. The contract layer must not claim that browser-local state created a Minecraft server, installed Java, downloaded Paper or Spigot, executed a command, started a process, or transferred a plugin. The public page has one separately documented exception: a visitor-triggered, read-only Ollama observer may issue only three fixed `GET` requests to `http://127.0.0.1:11434`. That observer is not a desktop bridge, server-control channel, configurable endpoint, or general local-network capability.
 
 ## Host connection
 
@@ -154,11 +154,13 @@ The payload must be at most 64 KiB measured as UTF-8 bytes; contain no duplicate
 
 `getActiveScheduleValues(date)` resolves matching local rules deterministically: highest numeric priority first, then stable id. For one setting, the first result wins. Same start and end time means no active time window. Cross-midnight windows are supported. The host must label the local timezone and daylight-saving behavior in its schedule UI.
 
-## Local Ollama operation handoff
+## Browser-local Ollama observation boundary
 
-The stored Ollama endpoint defaults to `http://127.0.0.1:11434`. `prepareOllamaOperation({ confirmed: true, action, endpoint })` permits only loopback HTTP or HTTPS endpoints and a known local API action: health, version, models, tags, pull, delete, copy, generate, or chat. Preparation records an in-progress local intent but makes no network request.
+The companion page's browser-local observer is deliberately smaller than the generic host-handoff model. It remains idle until the visitor selects **Refresh local Ollama**, then uses only `GET /api/version`, `GET /api/tags`, and `GET /api/ps` at the literal `http://127.0.0.1:11434` origin. It has no configurable endpoint, host, port, path, proxy, redirect, token, account, cloud fallback, request body, automatic refresh, or background polling.
 
-`handOffOllamaOperation(hostExecutor)` calls a host-provided executor only after a previously confirmed operation exists. The host executor receives the bounded operation descriptor and returns a bounded `ready`, `offline`, or `unhealthy` status. The contract layer never invents models, fetches a catalog, calls a cloud service, or executes a local request on its own.
+The observer applies bounded abort-timeout and response validation before it derives a displayable version, installed-model, and running-model snapshot. It reports `healthy`, `unavailable`, `blocked` (browser or CORS), `unsupported`, or `rejected` states without treating one as another. A blocked state can include CORS, mixed-content, privacy, or other browser refusal and is not misreported as a diagnosed local-service failure. It retains only a bounded normalized non-secret last-success snapshot in `sessionStorage` for the current browser session and labels that snapshot stale until a later accepted refresh. The snapshot contains the service version and observation time plus only safe model name, size, VRAM size, modification or expiry timestamp, family, parameter-size label, and quantization label; it excludes raw payloads, digests, endpoint configuration, credentials, prompts, and local paths.
+
+The existing handoff helpers do not themselves make the browser-local request and do not authorize the page to expand this allowlist. In particular, they do not enable a Model Store catalog, pull, chat, delete, copy, hardware-fit, or harness action. Those remain visible unavailable browser-only boundaries until a complete independently implemented surface exists.
 
 ## Browser-local status model
 
