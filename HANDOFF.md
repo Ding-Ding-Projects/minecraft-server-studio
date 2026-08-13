@@ -6,8 +6,8 @@ The application source provides a Windows Electron control center, shared CLI, s
 
 ## Desktop registered-target toy-lock coverage candidate
 
-The desktop toy-lock foundation now has a fixed catalog of 20
-application-owned targets. It covers the authenticator destination, 15 server
+The desktop toy-lock foundation now has a fixed catalog of 21
+application-owned targets. It covers the authenticator destination, 16 server
 settings tabs, three appearance targets, and the authenticator-entry form.
 `src/main/main.cjs` owns this catalog, while `src/main/toy-lock-service.cjs`
 accepts only a registered target and its exact canonical label when creating a
@@ -49,6 +49,7 @@ for this fast-delivery candidate. Documentation records source-level scope
 only; it does not establish a successful credential-vault operation, a
 completed lock/unlock/removal interaction, every-element enforcement, or a
 packaged desktop result.
+
 ## App-owned bounded file-converter candidate
 
 The desktop converter now implements only verified in-process, local routes:
@@ -81,7 +82,6 @@ tools, or external adapter discovery.
 - `docs/features/file-converter.md`
 - `docs/features/local-status-and-completeness.md`
 - `src/main/offline-docs.cjs`
-- `README.md`, `ROADMAP.md`, `CHANGELOG.md`, and `HANDOFF.md`
 
 ### Verification boundary
 
@@ -91,6 +91,34 @@ this source-only speed-delivery candidate. The new source must receive focused
 format/error tests and installed-artifact interaction/capture evidence before
 it is treated as verified. Localization, full universal converter coverage,
 and all disabled semantic format adapters remain incomplete.
+
+## Local server access-record candidate
+
+The desktop source now has a bounded Access records tab for an already registered controlled local server root. It reads and writes only `ops.json`, `whitelist.json`, `banned-players.json`, and `banned-ips.json` through fixed typed models and same-directory atomic writes. Missing files remain an explicit empty default until a user deliberately adds a record. Invalid, oversized, duplicate, symbolic-link, or unsupported files are preserved instead of replaced.
+
+Player-oriented records require an exact user-supplied player UUID and name. IP bans require an IPv4 or IPv6 literal. The source does not derive a player identity, query a directory, run a shell, use RCON, start a process, send a server command, or claim that a running server applied a changed local file. A reviewed operator/allowlist removal or local unban uses a two-acknowledgement/full-slider confirmation bound to the current selected record digest. Local history records only generic redacted action metadata and omits names, UUIDs, IP addresses, reasons, expiry values, paths, and raw JSON.
+
+### Directly related paths
+
+- `src/main/server-access-records.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/main/appearance-navigation-settings.cjs`
+- `src/main/desktop-status-model.cjs`
+- `src/main/server-manager.cjs`
+- `src/main/offline-docs.cjs`
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/server-access-records.md`
+- `docs/features/server-orchestration.md`
+- `docs/features/local-status-and-completeness.md`
+- `docs/features/README.md`
+- `README.md`, `ROADMAP.md`, `CHANGELOG.md`, and `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, server-process interaction, runtime validation, release, application-network route, or screen capture ran in this source-only fast-delivery lane. The source has not established that an installed server accepts, reloads, or applies a local access-list record. Localization breadth, accessibility validation, packaged interaction, and real capture evidence remain pending.
 
 ## Browser-local history and safe-export documentation candidate
 
