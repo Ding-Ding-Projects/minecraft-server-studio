@@ -4,7 +4,7 @@
 
 - Windows Electron control center for Paper and Spigot creation, setup, configuration, version-aware Java selection, typed Paper post-JAR CLI planning, capability-first live management, command composition, console operation, plugins, CLI, and automatic dependency installation.
 - Persisted optional event narration and bounded local-time scheduled language rules, with platform-only voice enumeration and disabled external source choices until validated adapters exist.
-- Pages-ready public marketing surface with browser-local controls, a user-triggered fixed-loopback Ollama read observer, a bounded browser-local converter, and a truthful desktop-execution boundary.
+- Pages-ready public marketing surface with browser-local controls, a user-triggered fixed-loopback Ollama read observer, a bounded browser-local converter, a bounded origin-scoped authenticator/toy-lock companion, and a truthful desktop-execution boundary.
 - Bounded browser-local companion-site conversion for UTF-8 text, validated JSON/CSV/TSV, a limited YAML-style text target, and Base64/hex encodings, with explicitly unavailable PDF/media/archive/native-workbook adapters.
 - Fictional local Support Tickets recovery desk that can disclose and open the current application-data folder for user-directed toy-lock recovery without sending a ticket or deleting data.
 - Browser-local public-site appearance and tab-navigation foundation with persisted visual preferences, docked tabs, local overflow, local searches, and bounded appearance-target controls; broad universal behavior and evidence remain incomplete.
@@ -24,3 +24,4 @@
 - Extend the public companion site's appearance and tab foundation into complete per-element editing, full editor import/export, all search-surface builders, complete keyboard and assistive-technology evidence, localization, interaction evidence, and real captures without representing those outcomes early.
 - Extend the external-editor handoff foundation with complete export coverage, localized recovery states, focused verification, packaged interaction, and capture evidence before treating it as a complete application-wide editor/export workflow.
 - Produce release packaging and runtime verification evidence after the speed-delivery boundary is lifted.
+- Complete the companion site's operation-level localization, QR import/decoder and camera boundaries, all-element toy-lock coverage, synchronized accessibility evidence, automated tests, built-site interaction, and captures before treating its authenticator or lock surface as complete.

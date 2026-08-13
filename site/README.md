@@ -12,11 +12,11 @@ The landing page describes:
 
 ## Truthful static boundary
 
-This public page is static. It has no account system, backend, analytics, installer service, server process, remote control channel, network file upload, or credential storage. It presents one static direct link to the verified `Minecraft.Server.Studio-0.1.0-x64-Setup.exe` asset from release `v0.1.0-build.72.1`; after a visitor activates that link, the browser handles the transfer. The page does not monitor, pause, resume, confirm, or install that download.
+This public page is static. It has no account system, backend, analytics, installer service, server process, remote control channel, or network file upload. It presents one static direct link to the verified `Minecraft.Server.Studio-0.1.0-x64-Setup.exe` asset from release `v0.1.0-build.72.1`; after a visitor activates that link, the browser handles the transfer. The page does not monitor, pause, resume, confirm, or install that download.
 
 The published installer is for Windows x64 version 0.1.0 and is unsigned. Windows may show an unknown-publisher or SmartScreen warning. The page links to the asset and release status without claiming that a download or installation completed.
 
-The page does not install prerequisites, download a Paper or Spigot distribution, create server files, start a Minecraft server, or send a console command. It does not retain a selected source file, source path, raw source/output bytes, browser file handle, download location, or a secret. Its deliberately bounded browser-local exceptions are the optional personal-vocabulary JSON control, the file converter, and the Ollama observer. The converter can inspect up to 12 user-selected files, each no larger than 1 MiB, and perform only its explicitly enabled local text/structured-data/encoding transformations. Its browser-local history retains at most 100 sanitized metadata records; it is not a source-file store. PDF, media, archive, and native-workbook conversions remain unavailable. The observer makes three fixed loopback reads only after a visitor explicitly selects **Refresh local Ollama**. It has no editable host, port, path, token, proxy, redirect, or cloud route, and it cannot create, change, remove, copy, pull, or run a model.
+The page does not install prerequisites, download a Paper or Spigot distribution, create server files, start a Minecraft server, or send a console command. It does not retain a selected source file, source path, raw source/output bytes, browser file handle, or browser download location. Its deliberately bounded browser-local exceptions are the optional personal-vocabulary JSON control, the file converter, the Ollama observer, and the separate authenticator/toy-lock module documented below. The converter can inspect up to 12 user-selected files, each no larger than 1 MiB, and perform only its explicitly enabled local text/structured-data/encoding transformations. Its browser-local history retains at most 100 sanitized metadata records; it is not a source-file store. PDF, media, archive, and native-workbook conversions remain unavailable. The observer makes three fixed loopback reads only after a visitor explicitly selects **Refresh local Ollama**. It has no editable host, port, path, token, proxy, redirect, or cloud route, and it cannot create, change, remove, copy, pull, or run a model. The authenticator/toy-lock module uses a separate bounded origin-scoped record, makes no network request, and is excluded from ordinary export, history, and status data.
 
 All server operation and every Ollama capability beyond that read-only browser observer belong exclusively to the installed desktop application, where local paths, prerequisite checks, process status, data handling, and outcomes can be verified.
 
@@ -40,7 +40,7 @@ The visible destinations are:
 
 ## Browser-local engine wiring
 
-`index.html` loads `contract.js` before the module `app.js` at the end of the document. The module imports `vocabulary-loader.js`, which is a browser-safe, DOM-free strict validator. The interaction engine hydrates visible settings, notifications, audit history, browser-local status, and completeness state from the contract's version-3 `minecraft-server-studio.site.contract.v2` local-storage record, then persists changes through the contract's documented public methods. It does not maintain a parallel session-storage settings model. Other than the explicit fixed-loopback Ollama observer described below, the engines do not establish a chat bridge, backend connection, desktop command channel, server connection, installer service, or credential store. The static installer anchors remain ordinary browser links and are not transformed into an in-page transfer flow.
+`index.html` loads `contract.js` before the module `app.js` at the end of the document. The module imports `vocabulary-loader.js`, which is a browser-safe, DOM-free strict validator. The interaction engine hydrates visible settings, notifications, audit history, browser-local status, and completeness state from the contract's version-3 `minecraft-server-studio.site.contract.v2` local-storage record, then persists changes through the contract's documented public methods. It does not maintain a parallel session-storage settings model. Other than the explicit fixed-loopback Ollama observer described below, the general contract engine does not establish a chat bridge, backend connection, desktop command channel, server connection, installer service, or credential store. The static installer anchors remain ordinary browser links and are not transformed into an in-page transfer flow. `authenticator-locks.js` is a deliberately separate module with its own bounded origin-scoped record; it is not included in the general contract export or audit-history model.
 
 The settings preview uses the same contract state that it renders: language mode, English and Cantonese funny levels, theme, density, and dialog emoji preference. The language mode, both tone sliders, and the emoji switch are real persisted browser-local controls on this page; they do not delegate to the desktop app. The command palette registers browser-local destinations through the contract and teleports to the associated preview panel. The personal-vocabulary control accepts only the exact version-1 schema below; malformed, duplicate-key, unsafe, oversized, unsupported, or partial JSON is rejected as a whole before it is cached or applied.
 
@@ -83,6 +83,59 @@ for the full behavior, failure, privacy, and verification boundary.
 ```
 
 The JSON payload is limited to 64 KiB in UTF-8, three structural levels, 250 records, nonempty 128-code-point `from` strings, and 512-code-point `to` strings. It is not uploaded or shared. The loader rejects malformed UTF-8, duplicate object keys (including escaped equivalents), unknown fields, unsafe keys, unsupported versions, invalid Unicode, and incomplete cache envelopes. The contract revalidates its browser-local cache on startup and the page revalidates the payload again before display or text replacement. Clearing the visible control clears only this browser-local payload.
+
+## Browser-local authenticator, pairing QR, and toy locks
+
+`authenticator-locks.js` implements a separate, bounded local record at
+`minecraft-server-studio.site.authenticator-locks.v1`. It exists because a
+static page has no operating-system credential vault. The record belongs only
+to this origin in this browser profile; it is not synchronized to another
+browser, device, account, server, chat, or installed application. Browser
+storage is not a security boundary.
+
+The visible authenticator accepts either bounded manual Base32 fields or a
+bounded standard `otpauth://totp/` URI. It calculates RFC 4226/HOTP and RFC
+6238/TOTP codes through browser Web Crypto using SHA-1, SHA-256, or SHA-512,
+six through eight digits, and the explicitly offered 15, 30, 45, 60, or
+90-second periods. The list shows the current code, next code, and a readable
+countdown, and its local search defaults to plain text with an anchored regular
+expression builder.
+
+An explicit **Reveal pairing QR** action renders a QR code entirely in the
+browser for the standard TOTP URI. It also makes the same Base32 secret visible
+for 60 seconds as a manual alternative, then removes it from the rendered
+surface. The QR module uses no service, CDN, image fetch, camera, clipboard
+import, or QR-image decoder. Pairing URIs longer than the bundled QR Version
+10-L byte capacity are reported honestly; the entry remains usable and the
+manual route remains available. Before the browser marks a revealed pairing
+confirmed, the visitor must type the current code from the paired authenticator
+back into the local confirmation field. A mismatch leaves the pairing marked
+unconfirmed.
+
+Toy locks are opt-in, per registered target, and independently credentialed.
+Each lock can use a local PBKDF2 password verifier or a local SHA-1/30-second
+TOTP secret. Unlock state remains in memory and returns to locked after a page
+reload. The registered targets currently cover the authenticator tab, entry
+list, and pairing reveal; this is not a claim that every rendered element on
+the entire site is locked. These controls are a for-fun user-experience speed
+bump, not encryption, access control, or protection from anyone who can access
+the same browser profile.
+
+The local **Support Tickets** desk records only a ticket number, category, and
+local status. Any optional note is discarded before the ticket is saved. It
+states directly that nothing is sent, no ticket exists outside the browser, no
+network request is made, no data is collected, and nobody is reading it. The
+recovery route is to clear this site's storage in browser settings. A visible
+two-key/full-slider control can erase only this module's local record; it does
+not alter the installed app, a server, downloads, or another site.
+
+No authenticator or toy-lock secret, password, OTP, URI, QR payload, or manual
+reveal enters the page's ordinary exports, the general contract audit/history
+record, status model, telemetry, source repository, or a network request.
+This implementation has no QR image import, QR clipboard import, camera scan,
+cross-device synchronization, secret export, every-element lock coverage,
+localized operational copy, automated test result, built-site interaction, or
+capture evidence yet.
 
 ## Browser-local language and renamed presentation mode
 
@@ -148,7 +201,7 @@ This is a public-source inventory, not a claim that the installed application ha
 | Tab navigation and appearance editor | Browser-local dock, active/order/pin/group state, overflow, current/group/master searches, anchored regex builders, and bounded target editor | This README, `CONTRACT.md`, and `docs/features/appearance-and-tabs.md` | Missing | Not run in fast-delivery lane | Missing |
 | Offline documentation | Static source hook | This README | Missing | Missing | Missing |
 | File converter | Browser-local bounded text/structured-data/encoding conversion; PDF/media/archive/native-workbook routes remain unavailable | This README, `CONTRACT.md`, and `../docs/features/browser-local-file-converter.md` | Missing | Missing | Missing |
-| Authenticator and locks | Static credential-free boundary | This README and `CONTRACT.md` | Missing | Missing | Missing |
+| Authenticator and locks | Browser-local TOTP, QR pairing reveal, toy-lock, and local Support Tickets source | This README, `CONTRACT.md`, and `../docs/features/browser-local-authenticator-and-toy-locks.md` | English-first; incomplete | Not run in fast-delivery lane | Missing |
 | Browser-local Ollama observer | Explicit fixed-loopback `GET` observer with a local last-success snapshot; catalog, pull, chat, delete, copy, hardware fit, and harness remain unavailable | This README, `CONTRACT.md`, and the [feature article](../docs/features/browser-local-ollama-observer.md) | Missing | Not run in fast-delivery lane | Missing |
 | Local version history | Browser-local audit preview only | This README and `CONTRACT.md` | Missing | Missing | Missing |
 | Notification center | Browser-local notification preview | This README and `CONTRACT.md` | Missing | Missing | Missing |

@@ -100,8 +100,8 @@
         </section>
 
         <section class="preview-intro" id="feature-destinations" data-contract-surface="browser-local-feature-shell">
-          <div><p class="eyebrow">Browser-local feature previews</p><h2>Explore the product architecture without connecting to a server.</h2><p>Every destination below is a static, browser-local preview and a source hook for the product contract engine. The public page does not submit forms, keep credentials, call a backend, or perform desktop actions.</p></div>
-          <aside class="local-boundary-card"><strong>Static local-only page</strong><span>No account, analytics, page-initiated network operation, installer service, server process, or file upload happens here. The verified installer link hands off to the browser.</span></aside>
+          <div><p class="eyebrow">Browser-local feature previews</p><h2>Explore the product architecture without connecting to a server.</h2><p>Every destination below is browser-local and a source hook for the product contract engine. The authenticator destination can persist user-created entries and toy locks only in this browser origin; it does not call a backend, create an account, or perform desktop actions.</p></div>
+          <aside class="local-boundary-card"><strong>Static local-only page</strong><span>No account, analytics, page-initiated network operation, installer service, server process, or file upload happens here. The optional browser-local authenticator never sends a credential; the verified installer link hands off to the browser.</span></aside>
         </section>
 
         <section class="tabbed-preview-workspace" data-mss-tab-workspace="true">
@@ -128,7 +128,7 @@
             </div>
             <div class="auth-layout">
               <div class="auth-card" data-contract-hook="status-local-evidence"><strong>Local evidence</strong><span>Marketing copy, static feature previews, and a verified direct installer link are visible in this page source.</span></div>
-              <div class="auth-card" data-contract-hook="status-active-interactions"><strong>Active local interactions</strong><span>No browser-local interaction is currently active. The public page does not run desktop actions.</span></div>
+              <div class="auth-card" data-contract-hook="status-active-interactions"><strong>Active local interactions</strong><span>Browser-local preferences and, when a visitor chooses it, a separate local authenticator and toy-lock record can be active. The public page does not run desktop actions.</span></div>
             </div>
             <div class="local-boundary-card" data-contract-hook="status-next-steps"><strong>Next step</strong><span>Download the verified Windows x64 installer using the direct link below. Installation and server management remain desktop-app tasks.</span></div>
           </article>
@@ -201,13 +201,10 @@
           </article>
 
           <article class="preview-panel" id="authenticator-preview" data-contract-surface="authenticator" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Authenticator and toy locks</p><h2>Keep secret handling in the installed app</h2></div><span class="preview-status">No credential storage</span></div>
-            <p>Authenticator entries, TOTP setup, element locks, and recovery are implemented locally in the desktop app. This site never asks for, stores, or exposes a secret.</p>
-            <div class="auth-layout">
-              <div class="auth-card" data-contract-hook="authenticator-import"><strong>Add an authenticator entry</strong><span>URI, QR, camera, and manual entry routes belong to the installed app.</span><button type="button" disabled>Open authenticator in desktop app</button></div>
-              <div class="auth-card" data-contract-hook="toy-locks"><strong>Element and tab locks</strong><span>Per-element password or TOTP controls remain local to the desktop app.</span><button type="button" disabled>Open lock manager in desktop app</button></div>
-            </div>
-            <p class="annotation">There is no user account or browser-based recovery route on this static page.</p>
+            <div class="panel-heading"><div><p class="eyebrow">Authenticator and toy locks</p><h2>Browser-local codes and recovery controls</h2></div><span class="preview-status">Local browser state</span></div>
+            <p>This public page can calculate RFC 6238 codes and hold user-created TOTP entries and toy-lock credentials in a bounded browser-local record for this origin. It makes no network request, no account, no telemetry event, and no ordinary export or history record containing a secret.</p>
+            <div data-authenticator-local-app aria-live="polite"><p>Loading the browser-local authenticator and toy-lock controls…</p></div>
+            <noscript><p class="annotation">JavaScript is required for local TOTP calculation and toy-lock controls. This page does not send any entry to a server.</p></noscript>
           </article>
 
           <article class="preview-panel" id="ollama-preview" data-contract-surface="ollama-manager" tabindex="-1">

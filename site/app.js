@@ -1,4 +1,5 @@
 import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
+import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
 
 (function () {
   "use strict";
@@ -7,11 +8,13 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
    * Browser-local marketing interactions plus two narrow exceptions: one
    * visitor-triggered fixed-loopback Ollama observer and explicitly selected,
    * bounded browser-local file conversions. No server control, installer action,
-   * credential storage, proxy, cloud fallback, model mutation, chat, upload, or
-   * remote conversion occurs here. The converter never persists source/output
-   * bytes or learns a browser download destination. A user-selected
-   * personal-vocabulary JSON file is also read locally only so the contract can
-   * validate and store its bounded payload in this browser's local storage.
+   * proxy, cloud fallback, model mutation, chat, upload, or remote conversion
+   * occurs here. The converter never persists source/output bytes or learns a
+   * browser download destination. The dedicated authenticator module owns its
+   * separate bounded browser-local credential record and does not expose it to
+   * this general page export or history model. A user-selected personal-
+   * vocabulary JSON file is also read locally only so the contract can validate
+   * and store its bounded payload in this browser's local storage.
    */
 
   var root = document.documentElement;
@@ -2970,29 +2973,13 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
 
   function installAuthenticatorEducation() {
     var surface = one('[data-contract-surface="authenticator"]');
-    if (!surface || one("[data-mss-auth-education]", surface)) return;
-    var area = made("section");
-    area.setAttribute("data-mss-auth-education", "true");
-    var heading = made("h3");
-    heading.textContent = "Educational browser-local preview";
-    var copy = made("p");
-    copy.textContent = "This page deliberately has no secret, password, code, QR, or recovery form. Those sensitive local-only flows belong to the installed desktop app.";
-    area.append(heading, copy);
-    area.appendChild(button("Read authenticator boundary", function () {
-      showDialog("Authenticator boundary", function (content) {
-        var paragraph = made("p");
-        paragraph.textContent = "This public page does not accept, generate, scan, store, reveal, or export authenticator secrets. It only explains that the installed desktop app manages local authenticator entries.";
-        content.appendChild(paragraph);
-      });
-    }));
-    area.appendChild(button("Read toy-lock boundary", function () {
-      showDialog("Toy-lock boundary", function (content) {
-        var paragraph = made("p");
-        paragraph.textContent = "Element and tab locks are a local desktop-app feature. This page does not ask for a password or one-time code, and it cannot lock or unlock content.";
-        content.appendChild(paragraph);
-      });
-    }));
-    surface.appendChild(area);
+    if (!surface) return;
+    initializeAuthenticatorAndToyLocks({
+      surface: surface,
+      contract: contract,
+      notify: notify,
+      addHistory: addHistory
+    });
   }
 
   function installDestructiveDemo() {
@@ -3335,6 +3322,24 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
       capture: "missing",
       captureDetail: "No real built-artifact capture is recorded."
     };
+    var browserAuthenticator = {
+      implementation: "in-progress",
+      implementationReference: "site/authenticator-locks.js and site/index.html",
+      implementationDetail: "Browser-local RFC 4226/6238 codes, pairing QR reveal/confirmation, registered-target toy locks, and local Support Tickets controls are wired without a network route.",
+      documentation: "in-progress",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/browser-local-authenticator-and-toy-locks.md",
+      localization: "missing",
+      localizationDetail: "This operational surface is English-first in the current delivery lane.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.authenticator-locks.v1",
+      persistenceDetail: "Bounded origin-scoped browser storage is used because the static page has no operating-system credential vault; it is not a security boundary.",
+      test: "missing",
+      testDetail: "No automated test was run in this fast-delivery lane.",
+      interaction: "missing",
+      interactionDetail: "No built-site interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-site capture is recorded."
+    };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
         inventoryFeature("marketing-copy", "Marketing content and direct installer boundary", "in-progress", "The page exposes a static verified installer anchor and must not simulate a transfer.", staticHook),
@@ -3348,7 +3353,7 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
       ] },
       { id: "documentation", label: "Offline documentation preview", route: "#docs-preview", features: [inventoryFeature("documentation-preview", "Static documentation and search preview", "in-progress", "The page links static content but does not prove a packaged offline documentation browser.", staticHook)] },
       { id: "converter", label: "Browser-local file converter", route: "#converter-preview", features: [inventoryFeature("converter-local-routes", "Bounded browser-local text, structured-data, and encoding conversions", "in-progress", "The page byte-sniffs selected bounded files, enables only bundled browser-local adapters, and never persists source/output bytes or claims a browser download completed.", localContract)] },
-      { id: "authenticator", label: "Authenticator and toy-lock preview", route: "#authenticator-preview", features: [inventoryFeature("authenticator-boundary", "Credential-free public preview", "in-progress", "No secret, password, QR, or recovery data is accepted by the public page.", staticHook)] },
+      { id: "authenticator", label: "Browser-local authenticator and toy locks", route: "#authenticator-preview", features: [inventoryFeature("browser-local-authenticator-and-toy-locks", "Browser-local TOTP, pairing QR, toy-lock, and Support Tickets foundation", "in-progress", "The independently stored browser-local record excludes ordinary export/history/status data and remains incomplete for QR import, every-element locks, localization, testing, interaction, and capture evidence.", browserAuthenticator)] },
       { id: "ollama", label: "Local Ollama suite preview", route: "#ollama-preview", features: [
         inventoryFeature("ollama-local-observer", "User-triggered fixed-loopback Ollama observer", "in-progress", "The browser reads only the documented local version, installed-model, and running-model endpoints after explicit Refresh, with no proxy, redirect, token, cloud fallback, or background request.", ollamaBrowserObserver),
         inventoryFeature("ollama-privileged-boundary", "Unavailable browser-only Ollama actions", "in-progress", "Model Store, pull, chat, delete, copy, hardware-fit, and harness actions remain visibly unavailable because this static browser surface cannot safely implement them.", ollamaBrowserObserver)

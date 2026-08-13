@@ -162,6 +162,37 @@ PDF, image, audio, video, and archive entries remain disabled because no safe br
 
 `createTotpShell()` and `markTotpEnrollment()` are metadata-only helpers. The shell rejects secrets, codes, tokens, URIs, passwords, and credentials. It stores a label, issuer, account label, algorithm, digits, period, enrollment result, and timestamp—never a TOTP secret or current code. A real authenticator must be implemented behind an operating-system credential vault or another dedicated safe storage boundary; this static engine does not substitute for one.
 
+## Separate browser-local authenticator and toy-lock module
+
+`site/authenticator-locks.js` is deliberately separate from this general
+contract record. It owns the actual companion-site authenticator, QR pairing
+reveal, per-target toy locks, and local Support Tickets surface. The module uses
+the origin-scoped `minecraft-server-studio.site.authenticator-locks.v1` record
+because a static site has no operating-system credential vault. Its bounded
+state is never included in `getState()`, `redactStateForExport()`,
+`createExport()`, audit history, the status model, or personal-vocabulary
+state.
+
+The module validates manual Base32 and standard `otpauth://totp/` registration,
+uses browser Web Crypto for RFC 4226/HOTP and RFC 6238/TOTP (SHA-1, SHA-256, or
+SHA-512; 6–8 digits; offered 15/30/45/60/90-second periods), and calculates
+only current/next code snapshots in the rendered list. Its pure local QR
+renderer emits a standard TOTP URI after an explicit reveal and clears the QR
+canvas and manual secret from the DOM after 60 seconds. The user must type a
+current code from the paired authenticator before the entry is marked pairing
+confirmed. It has no fetch, CDN,
+camera, QR decoder, QR image import, clipboard import, backend, telemetry, or
+sync path.
+
+Toy locks in that module are local user-experience locks, not security
+protection. Password locks retain an independently salted PBKDF2 verifier;
+TOTP locks retain their separate local Base32 secret. Both are excluded from
+ordinary export and the general contract record. Registered lock targets are
+the authenticator tab, entry list, and pairing reveal. Unlock duration remains
+in memory and reload returns the target to locked. The local Support Tickets
+surface persists only non-sensitive ticket number/category/status; it discards
+free-text notes and directs recovery to clearing this site's storage.
+
 ## Local schedules
 
 `createSchedule()` accepts local-only schedule rules. Each rule has a stable id, label, setting id, scalar string/number/boolean value, enabled state, optional date and time bounds, selected weekdays, and a priority. It supports `source: "local"` only. API and home-automation sources are not registered here and must remain visibly unavailable until a host implements their validation and secure credential handling.
@@ -227,7 +258,7 @@ The following capabilities are intentionally unavailable from this file:
 - Server creation, configuration writes, EULA acceptance, dependency installation, Paper downloads, Spigot BuildTools execution, process control, RCON, plugin installation, filesystem browsing, and terminal commands.
 - Network requests, remote configuration, remote fonts, analytics, telemetry, cloud model services, non-loopback Ollama access, and a chat/status delivery bridge.
 - PDF, image, audio, video, archive, and native-workbook conversion. The bounded browser-local text/structured-data/encoding routes above are the only exception; they do not create a general document, media, archive, or spreadsheet converter.
-- Raw password, token, TOTP secret, current TOTP code, or credential storage and display.
+- Raw password, token, TOTP secret, current TOTP code, or credential storage and display **through this general contract record**. The separately documented browser-local authenticator module owns its own bounded storage boundary.
 - Browser-local data synchronization across browsers, accounts, devices, or desktop applications.
 
 A host can add a separate, reviewed local bridge for a capability, but it must retain explicit user initiation, provide truthful availability and failure states, validate inputs at the privileged boundary, and update this model only after real evidence exists.
