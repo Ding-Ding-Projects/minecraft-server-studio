@@ -41,6 +41,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('experience-settings', 'experience-settings.md', 'Presentation settings and shared School mode', 'Set presentation preferences and the shared mode boundary.'),
   entry('personal-vocabulary-upload', 'personal-vocabulary-upload.md', 'Personal vocabulary upload', 'Load or clear a bounded validated local replacement-data cache without exposing private entries.'),
   entry('app-logo-customization', 'app-logo-customization.md', 'App-logo customization', 'Choose a shipped mark or a bounded private local image without changing installed identity.'),
+  entry('dim-sum-surprise', 'dim-sum-surprise.md', 'Dim sum startup surprise', 'Understand the non-blocking cached public-catalog surprise and its no-vendoring boundary.'),
   entry('narrator-and-scheduled-settings', 'narrator-and-scheduled-settings.md', 'Event narrator and scheduled language settings', 'Configure local platform narration and bounded local-time language schedules.'),
   entry('cli-rcon-gateway', 'cli-rcon-gateway.md', 'CLI RCON gateway', 'Use the protected one-shot CLI route for RCON commands.'),
   entry('local-ollama-suite', 'local-ollama-suite.md', 'Local Ollama suite foundation', 'Inspect the bounded fixed-loopback local service inventory.'),

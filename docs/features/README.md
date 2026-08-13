@@ -14,6 +14,7 @@
 - [Presentation settings and shared School mode](experience-settings.md)
 - [Personal vocabulary upload](personal-vocabulary-upload.md)
 - [App-logo customization](app-logo-customization.md)
+- [Dim sum startup surprise](dim-sum-surprise.md)
 - [Browser-local companion-site logo customization](site-logo-customization.md)
 - [Appearance and tab-navigation foundations (desktop and public companion site)](appearance-and-tabs.md)
 - [Desktop command palette foundation](desktop-command-palette.md)

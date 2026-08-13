@@ -16,6 +16,7 @@ function rconResponseEnvelope(value) {
 
 contextBridge.exposeInMainWorld('studio', {
   experienceSettings: () => ipcRenderer.invoke('studio:experience-settings'),
+  startupDimSumSurprise: () => ipcRenderer.invoke('studio:startup-dim-sum-surprise'),
   updateExperienceSettings: (patch) => ipcRenderer.invoke('studio:update-experience-settings', patch),
   updateAppearanceNavigation: (patch) => ipcRenderer.invoke('studio:update-appearance-navigation', patch),
   logoSettings: () => ipcRenderer.invoke('studio:logo-settings'),
