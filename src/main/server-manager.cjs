@@ -23,9 +23,17 @@ const {
 } = require('./command-center-registry.cjs');
 const { discoverySnapshotStatus } = require('./minecraft-management-protocol.cjs');
 const javaRuntime = require('./java-runtime-manager.cjs');
+const {
+  probeSelectedJar,
+  queryLoopbackRconEvidence
+} = require('./command-runtime-discovery.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
 const SPIGOT_BUILDTOOLS_URL = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
+const MAX_COMMAND_DISCOVERY_RESPONSES = 24;
+const MAX_COMMAND_DISCOVERY_RESPONSE_BYTES = 64 * 1024;
+const COMMAND_DISCOVERY_SETTLE_MS = 900;
+const COMMAND_DISCOVERY_QUIET_MS = 160;
 const DEFAULT_PROPERTIES = Object.freeze({
   'accepts-transfers': 'false',
   'allow-flight': 'false',
@@ -105,7 +113,7 @@ const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'spigot-buildtools': { implementationPath: ['src/main/buildtools-adapter.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/spigot-buildtools.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'BuildTools preflight and rich-control source is registered; verification remains pending.' } },
   'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, direct probes, and launch preflight source are registered; verification remains pending.' } },
   'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Endpoint-bound, time-limited discovery metadata and the provider-authentication boundary are registered; verification remains pending.' } },
-  'command-center': { implementationPath: ['src/main/command-center-registry.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/command-center.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Registry and renderer integration are being completed.' } },
+  'command-center': { implementationPath: ['src/main/command-center-registry.cjs', 'src/main/command-runtime-discovery.cjs', 'src/main/server-manager.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/command-center.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Bounded selected-JAR and explicitly requested live local-console or loopback-RCON discovery sources are wired; runtime interaction and verification remain pending.' } },
   'plugins': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Plugin staging is present; manifest inspection is being integrated.' } },
   'configuration': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'verified', detail: 'Rich server, world, gameplay, network, and advanced property controls are registered.' } },
   'console-and-rcon': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Local console is available; vault-backed RCON integration is in progress.' } },
@@ -270,6 +278,92 @@ function parseMemoryGb(value) {
 
 function redactOutput(value) {
   return stringValue(value).replace(/(password|token|secret)=\S+/gi, '$1=[redacted]');
+}
+
+function boundedCommandDiscoveryText(lines = []) {
+  let result = '';
+  let truncated = false;
+  for (const line of lines) {
+    const next = `${result}${result ? '\n' : ''}${String(line ?? '')}`;
+    if (Buffer.byteLength(next, 'utf8') > MAX_COMMAND_DISCOVERY_RESPONSE_BYTES) {
+      truncated = true;
+      break;
+    }
+    result = next;
+  }
+  return { text: result, truncated };
+}
+
+function commandDiscoveryPause(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function boundedDiscoveryLabel(value, maximum) {
+  return stringValue(value).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, maximum);
+}
+
+function normalizeCommandDiscoveryProvenance(entry) {
+  const raw = entry?.provenance || entry?.metadata?.provenance || (typeof entry?.request === 'object' ? entry.request : null);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const argv = Array.isArray(raw.argv)
+    ? raw.argv.slice(0, 8).map((value) => boundedDiscoveryLabel(value, 2048)).filter(Boolean)
+    : [];
+  const result = {
+    adapter: boundedDiscoveryLabel(raw.adapter || '', 128) || null,
+    transport: boundedDiscoveryLabel(raw.transport || '', 64) || null,
+    javaExecutable: boundedDiscoveryLabel(raw.javaExecutable || '', 2048) || null,
+    jarPath: boundedDiscoveryLabel(raw.jarPath || '', 2048) || null,
+    host: boundedDiscoveryLabel(raw.host || '', 128) || null,
+    port: Number.isInteger(raw.port) && raw.port >= 1 && raw.port <= 65535 ? raw.port : null,
+    argv
+  };
+  return Object.values(result).some((value) => Array.isArray(value) ? value.length : Boolean(value)) ? result : null;
+}
+
+function normalizeCommandDiscoveryEntry(entry, allowedRequests) {
+  if (!entry || typeof entry !== 'object') return null;
+  const requestSource = typeof entry.request === 'string' ? entry.request : entry.probe;
+  const request = stringValue(requestSource).trim().replace(/^\//, '').toLowerCase();
+  if (!allowedRequests.includes(request)) return null;
+  const output = boundedCommandDiscoveryText([redactOutput(entry.text || entry.response || entry.output || entry.metadata?.error || '')]);
+  const flags = Array.isArray(entry.flags)
+    ? entry.flags.map((flag) => stringValue(flag).trim()).filter((flag) => /^--[A-Za-z0-9][A-Za-z0-9-]{0,127}$/.test(flag)).slice(0, 128)
+    : [];
+  return {
+    source: boundedDiscoveryLabel(entry.source || 'local-runtime', 128) || 'local-runtime',
+    route: boundedDiscoveryLabel(entry.route || '', 64) || null,
+    request,
+    capturedAt: boundedDiscoveryLabel(entry.capturedAt || entry.finishedAt || entry.at || '', 64) || null,
+    state: ['captured', 'failed', 'skipped'].includes(entry.state) ? entry.state : 'captured',
+    exitCode: Number.isInteger(entry.exitCode) ? entry.exitCode : null,
+    timedOut: Boolean(entry.timedOut),
+    truncated: Boolean(entry.truncated || output.truncated),
+    text: output.text,
+    flags,
+    provenance: normalizeCommandDiscoveryProvenance(entry)
+  };
+}
+
+function normalizeCommandDiscoveryState(value = {}) {
+  const input = value && typeof value === 'object' ? value : {};
+  const normalizeEntries = (entries, allowedRequests) => (Array.isArray(entries) ? entries : [])
+    .slice(0, MAX_COMMAND_DISCOVERY_RESPONSES)
+    .map((entry) => normalizeCommandDiscoveryEntry(entry, allowedRequests))
+    .filter(Boolean);
+  return {
+    jarProbes: normalizeEntries(input.jarProbes, ['--help', '--version', 'help', 'version']),
+    liveResponses: normalizeEntries(input.liveResponses, ['help', 'plugins', 'paper']),
+    updatedAt: boundedDiscoveryLabel(input.updatedAt || '', 64) || null
+  };
+}
+
+function commandDiscoverySummary(value = {}) {
+  const normalized = normalizeCommandDiscoveryState(value);
+  return {
+    jarProbeCount: normalized.jarProbes.length,
+    liveResponseCount: normalized.liveResponses.length,
+    updatedAt: normalized.updatedAt
+  };
 }
 
 async function pathExists(candidate) {
@@ -524,6 +618,7 @@ function copyPublicServer(server) {
     eulaAccepted: Boolean(server.eulaAccepted),
     gameRules: { ...normalizeGameRules(server.gameRules) },
     management: copyPublicManagement(server),
+    commandDiscovery: commandDiscoverySummary(server.commandDiscovery),
     createdAt: server.createdAt,
     updatedAt: server.updatedAt,
     settings: { ...server.settings }
@@ -769,6 +864,223 @@ class ServerManager {
     return descriptors;
   }
 
+  commandDiscoveryRequests(server, input = {}) {
+    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    const requestedSources = Array.isArray(source.sources) ? source.sources : [];
+    const sources = new Set(requestedSources.filter((source) => ['selected-jar', 'local-console', 'rcon'].includes(source)));
+    const allowedQueries = server.software === 'paper' ? ['help', 'plugins', 'paper'] : ['help', 'plugins'];
+    const suppliedQueries = Array.isArray(source.queries) ? source.queries : [];
+    const queries = [...new Set(suppliedQueries.map((query) => stringValue(query).trim().replace(/^\//, '').toLowerCase()).filter((query) => allowedQueries.includes(query)))];
+    return {
+      sources,
+      queries
+    };
+  }
+
+  async persistCommandDiscovery(id, discovery) {
+    const registry = await this.registry();
+    const index = registry.servers.findIndex((server) => server.id === id);
+    if (index < 0) throw new Error('The selected server no longer exists in the local registry.');
+    registry.servers[index].commandDiscovery = normalizeCommandDiscoveryState(discovery);
+    registry.servers[index].updatedAt = new Date().toISOString();
+    await this.saveRegistry(registry);
+    return registry.servers[index];
+  }
+
+  recordCommandDiscoveryOutput(serverId, channel, message) {
+    const active = this.commandDiscovery.get(serverId);
+    if (!active) return;
+    active.lastOutputAt = Date.now();
+    const normalized = redactOutput(message);
+    const current = boundedCommandDiscoveryText(active.lines);
+    const candidate = boundedCommandDiscoveryText([...active.lines, normalized]);
+    if (candidate.truncated || current.truncated) {
+      active.truncated = true;
+      return;
+    }
+    active.lines.push(normalized);
+    if (channel === 'stderr') active.stderrLines += 1;
+  }
+
+  async captureLocalConsoleResponse(id, request) {
+    const running = this.processes.get(id);
+    if (!running) {
+      return {
+        source: 'live-local-console',
+        route: ROUTES.LOCAL_CONSOLE,
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'skipped',
+        text: 'The local server process is not running in Minecraft Server Studio.'
+      };
+    }
+    if (this.commandDiscovery.has(id)) throw new Error('Another runtime command discovery capture is already in progress for this server.');
+    const capture = {
+      request,
+      lines: [],
+      truncated: false,
+      stderrLines: 0,
+      lastOutputAt: Date.now(),
+      startedAt: new Date().toISOString()
+    };
+    this.commandDiscovery.set(id, capture);
+    try {
+      running.child.stdin.write(`${request}\n`);
+      await commandDiscoveryPause(COMMAND_DISCOVERY_SETTLE_MS);
+      while (capture.lines.length && Date.now() - capture.lastOutputAt < COMMAND_DISCOVERY_QUIET_MS) {
+        await commandDiscoveryPause(COMMAND_DISCOVERY_QUIET_MS);
+      }
+      const output = boundedCommandDiscoveryText(capture.lines);
+      return {
+        source: 'live-local-console',
+        route: ROUTES.LOCAL_CONSOLE,
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'captured',
+        truncated: Boolean(capture.truncated || output.truncated),
+        text: output.text,
+        note: capture.stderrLines ? 'The bounded capture includes local stderr output after the explicit request.' : 'The bounded capture contains output observed after the explicit local-console request.'
+      };
+    } catch (error) {
+      return {
+        source: 'live-local-console',
+        route: ROUTES.LOCAL_CONSOLE,
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'failed',
+        text: redactOutput(error.message).slice(0, 1024)
+      };
+    } finally {
+      this.commandDiscovery.delete(id);
+    }
+  }
+
+  async collectSelectedJarDiscovery(server) {
+    if (this.processes.has(server.id)) {
+      return ['--help', '--version'].map((request) => ({
+        source: 'local-jar-probe',
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'skipped',
+        text: 'Stop the local server before probing its selected JAR with non-starting help/version arguments.'
+      }));
+    }
+    const jarPath = path.join(server.serverPath, 'server.jar');
+    if (!(await pathExists(jarPath))) {
+      return ['--help', '--version'].map((request) => ({
+        source: 'local-jar-probe',
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'skipped',
+        text: 'No selected server.jar exists yet. Provision the selected Paper or Spigot server before requesting JAR evidence.'
+      }));
+    }
+    try {
+      const javaPath = await this.resolveJava(server);
+      const result = await probeSelectedJar({ javaPath, jarPath });
+      return Array.isArray(result?.probes) ? result.probes : [];
+    } catch (error) {
+      return ['--help', '--version'].map((request) => ({
+        source: 'local-jar-probe',
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'failed',
+        text: redactOutput(error.message).slice(0, 1024)
+      }));
+    }
+  }
+
+  async collectRconDiscovery(server, queries) {
+    if (!toBoolean(server.settings?.['enable-rcon']) || !server.rconSecretConfigured) {
+      return queries.map((request) => ({
+        source: 'live-rcon',
+        route: ROUTES.RCON,
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'skipped',
+        text: 'RCON is not enabled with a protected local credential for this server.'
+      }));
+    }
+    if (!this.credentialSecretProvider) {
+      return queries.map((request) => ({
+        source: 'live-rcon',
+        route: ROUTES.RCON,
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'skipped',
+        text: 'The protected RCON credential provider is unavailable in this app build.'
+      }));
+    }
+    const password = await this.credentialSecretProvider('rcon', server.id);
+    if (!password) {
+      return queries.map((request) => ({
+        source: 'live-rcon',
+        route: ROUTES.RCON,
+        request,
+        capturedAt: new Date().toISOString(),
+        state: 'skipped',
+        text: 'No protected local RCON credential is available for this server.'
+      }));
+    }
+    const results = [];
+    for (const request of queries) {
+      try {
+        results.push(await queryLoopbackRconEvidence({
+          port: Number(server.settings['rcon.port']),
+          password,
+          command: request
+        }));
+      } catch (error) {
+        results.push({
+          source: 'live-rcon',
+          route: ROUTES.RCON,
+          request,
+          capturedAt: new Date().toISOString(),
+          state: 'failed',
+          text: redactOutput(error.message).slice(0, 1024)
+        });
+      }
+    }
+    return results;
+  }
+
+  async refreshCommandDiscovery(id, input = {}) {
+    const server = await this.getServer(id);
+    const selection = this.commandDiscoveryRequests(server, input);
+    if (!selection.sources.size) throw new Error('Select at least one explicit discovery source before collecting command evidence.');
+    if ((selection.sources.has('local-console') || selection.sources.has('rcon')) && !selection.queries.length) {
+      throw new Error('Select at least one fixed help, plugins, or Paper query before collecting local-console or RCON evidence.');
+    }
+    const existing = normalizeCommandDiscoveryState(server.commandDiscovery);
+    const next = {
+      jarProbes: [...existing.jarProbes],
+      liveResponses: [...existing.liveResponses],
+      updatedAt: new Date().toISOString()
+    };
+    if (selection.sources.has('selected-jar')) {
+      next.jarProbes.push(...await this.collectSelectedJarDiscovery(server));
+    }
+    if (selection.sources.has('local-console')) {
+      for (const request of selection.queries) next.liveResponses.push(await this.captureLocalConsoleResponse(server.id, request));
+    }
+    if (selection.sources.has('rcon')) {
+      next.liveResponses.push(...await this.collectRconDiscovery(server, selection.queries));
+    }
+    next.jarProbes = next.jarProbes.slice(-MAX_COMMAND_DISCOVERY_RESPONSES);
+    next.liveResponses = next.liveResponses.slice(-MAX_COMMAND_DISCOVERY_RESPONSES);
+    const saved = await this.persistCommandDiscovery(id, next);
+    this.emit({
+      type: 'command-discovery-refreshed',
+      serverId: id,
+      message: `Captured ${selection.sources.size} explicit command discovery source(s) for ${saved.name}.`
+    });
+    return {
+      server: copyPublicServer(saved),
+      discovery: commandDiscoverySummary(saved.commandDiscovery),
+      catalog: await this.commandCatalog(id)
+    };
+  }
+
   async buildCommandRegistry(server) {
     const runtime = {
       flavor: server.software,
@@ -783,7 +1095,14 @@ class ServerManager {
       ? { methods: discoveryStatus.snapshot.methods }
       : undefined;
     const plugins = await this.pluginDescriptors(server);
-    return createCommandCenterRegistry({ runtime, rpcDiscover, plugins });
+    const commandDiscovery = normalizeCommandDiscoveryState(server.commandDiscovery);
+    return createCommandCenterRegistry({
+      runtime,
+      rpcDiscover,
+      plugins,
+      jarProbes: commandDiscovery.jarProbes,
+      liveResponses: commandDiscovery.liveResponses
+    });
   }
 
   async commandCatalog(id) {
@@ -811,15 +1130,37 @@ class ServerManager {
     const values = request.values && typeof request.values === 'object' && !Array.isArray(request.values) ? request.values : {};
     const plan = rawCommand
       ? (() => {
+        if (route === ROUTES.PROTOCOL || route === ROUTES.HOST_LIFECYCLE) {
+          throw new Error('The raw composer is not a management-protocol or host-lifecycle route. Choose the local console or RCON route.');
+        }
+        const routeAvailable = route === ROUTES.LOCAL_CONSOLE
+          ? this.processes.has(server.id)
+          : route === ROUTES.RCON
+            ? toBoolean(server.settings?.['enable-rcon']) && Boolean(server.rconSecretConfigured)
+            : false;
+        if (!routeAvailable) {
+          throw new Error(route === ROUTES.LOCAL_CONSOLE
+            ? 'Start the selected local server before sending a raw tokenized Minecraft command.'
+            : 'Enable RCON and save its protected local credential before using the raw RCON route.');
+        }
         const raw = composeRawTokenizedCommand(rawCommand);
         return {
           actionId,
           title: 'Tokenized raw Minecraft command',
           form: 'raw-fallback',
+          origin: {
+            source: 'raw-tokenized-fallback',
+            label: 'User-supplied Minecraft command tokens; command existence is not asserted by the registry.'
+          },
           risk: 'operational',
           backupRequirement: 'recommended',
           confirmationRequirement: 'review',
-          execution: { selected: { route }, protocol: { method: null, executable: false } },
+          execution: {
+            canExecute: true,
+            selected: { route, executable: true, state: 'available' },
+            protocol: { method: null, executable: false, state: 'not-applicable' },
+            fallback: 'The raw composer does not verify command existence or permissions. It sends bounded Minecraft tokens only to the selected available route.'
+          },
           ...raw
         };
       })()
@@ -903,6 +1244,7 @@ class ServerManager {
         capabilities: [],
         discovery: null
       },
+      commandDiscovery: normalizeCommandDiscoveryState(),
       createdAt: now,
       updatedAt: now
     };
@@ -1242,7 +1584,10 @@ class ServerManager {
     this.processes.set(id, processEntry);
     const forward = (stream, channel) => stream.on('data', (chunk) => {
       for (const line of chunk.toString().split(/\r?\n/)) {
-        if (line.trim()) this.emit({ type: 'server-output', serverId: id, channel, message: redactOutput(line) });
+        if (line.trim()) {
+          this.recordCommandDiscoveryOutput(id, channel, line);
+          this.emit({ type: 'server-output', serverId: id, channel, message: redactOutput(line) });
+        }
       }
     });
     forward(child.stdout, 'stdout');

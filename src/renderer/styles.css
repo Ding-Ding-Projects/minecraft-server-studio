@@ -124,9 +124,23 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .live-resource-grid article { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 16px; background: #151922; }
 .live-resource-grid p { color: var(--on-surface-variant); font-size: .83rem; line-height: 1.45; }
 .command-center-grid { align-items: end; }
+.command-discovery-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 14px; border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; }
+.command-discovery-sources legend { padding: 0 6px; color: var(--on-surface); font-weight: 700; }
+.command-discovery-sources > small { grid-column: 1 / -1; color: var(--on-surface-variant); }
+.command-discovery-query-list { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 12px; border: 1px solid var(--outline-variant); border-radius: 14px; }
+.command-discovery-query-list legend { color: var(--on-surface-variant); font-size: .85rem; }
+.command-evidence-log { border: 1px solid var(--outline-variant); border-radius: 18px; background: #151922; padding: 12px 14px; }
+.command-evidence-log summary { cursor: pointer; color: var(--on-surface); font-weight: 700; }
+.command-evidence-log[open] summary { margin-bottom: 12px; }
+.command-evidence-entry { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--outline-variant); }
+.command-evidence-entry:first-child { border-top: 0; padding-top: 0; }
+.command-evidence-entry strong { color: var(--primary); }
+.command-evidence-entry small { color: var(--on-surface-variant); }
+.command-evidence-entry pre { max-height: 240px; overflow: auto; margin: 0; padding: 10px; border-radius: 12px; background: #0f1218; color: var(--on-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
 .command-source-card { min-height: 84px; display: grid; align-content: center; justify-content: start; padding: 12px 14px; }
 .command-source-card span, .command-source-card small { color: var(--on-surface-variant); font-size: .76rem; }
 .command-source-card strong { color: var(--primary); }
+@media (max-width: 980px) { .command-discovery-sources, .command-discovery-query-list { grid-template-columns: 1fr; } }
 .command-field-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .command-preview { min-height: 80px; margin: 0; padding: 16px; overflow: auto; border: 1px solid #313847; border-radius: 14px; color: #d9f5e3; background: #090c11; font-family: "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; }
 .command-action-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }

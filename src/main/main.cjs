@@ -277,4 +277,5 @@ ipcMain.handle('studio:invoke-management', async (_event, id, method, params) =>
   return client.invokeDiscovered(method, params || {});
 });
 ipcMain.handle('studio:command-catalog', async (_event, id) => requireManager().commandCatalog(id));
+ipcMain.handle('studio:refresh-command-discovery', async (_event, id, input) => requireManager().refreshCommandDiscovery(id, input));
 ipcMain.handle('studio:command-plan', async (_event, id, request) => requireManager().commandPlan(id, request));
