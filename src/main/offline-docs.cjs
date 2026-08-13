@@ -41,6 +41,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('unsigned-automatic-updates', 'unsigned-automatic-updates.md', 'Unsigned automatic updates', 'Understand the fixed Squirrel update feed and restart choice.'),
   entry('file-converter', 'file-converter.md', 'Local file-converter foundation', 'Inspect a local file and browse the honest disabled adapter catalog.'),
   entry('authenticator-and-toy-locks', 'authenticator-and-toy-locks.md', 'Local authenticator and toy-lock foundation', 'Manage local RFC 6238 codes and independently credentialed toy-lock records.'),
+  entry('appearance-and-tabs', 'appearance-and-tabs.md', 'Appearance and tab-navigation foundation', 'Minecraft Server Studio now has a bounded, local desktop appearance and tab-navigation foundation.'),
   entry('local-status-and-completeness', 'local-status-and-completeness.md', 'Local status and desktop completeness', 'Read the local status surface and evidence inventory.'),
   entry('shared-status-hub-bridge', 'shared-status-hub-bridge.md', 'Shared Status Hub bridge', 'Understand the optional external bridge and local fallback.'),
   entry('offline-documentation-browser', 'offline-documentation-browser.md', 'Offline documentation browser', 'Browse bundled feature documentation without a network request.')
