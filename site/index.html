@@ -268,10 +268,10 @@
           </article>
 
           <article class="preview-panel" id="history-preview" data-contract-surface="local-history" tabindex="-1">
-            <div class="panel-heading"><div><p class="eyebrow">Local version history</p><h2>Revisions belong beside local app data</h2></div><span class="preview-status">Empty static preview</span></div>
-            <p>The installed app records local configuration and user-managed data changes in its own history. The public page cannot view, create, restore, or export those records.</p>
-            <div class="history-controls" data-contract-hook="history-filters"><label><span>Date range</span><input type="date" /></label><label><span>Action</span><select><option>All actions</option><option>Created</option><option>Updated</option><option>Restored</option></select></label><label><span>Search history</span><input type="search" placeholder="Search local history" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
-            <div class="empty-state">No browser-local history exists on this public page.</div>
+            <div class="panel-heading"><div><p class="eyebrow">Browser-local action history</p><h2>Review bounded local metadata on this public page</h2></div><span class="preview-status">Browser-local only</span></div>
+            <p>This destination independently records bounded non-secret actions performed by this page. It is not desktop Git history, a server log, browser history, a file store, or a record of an installer or download outcome.</p>
+            <div class="history-controls" data-contract-hook="history-filters"><label><span>Date</span><input type="date" aria-describedby="history-filter-help" /></label><label><span>Action</span><select aria-describedby="history-filter-help"><option>All actions</option></select></label><label><span>Search browser-local history</span><input type="search" placeholder="Search action, target, or detail" aria-describedby="history-filter-help" /></label><button type="button" disabled aria-label="Open regular expression builder for browser-local history">.*</button></div>
+            <p id="history-filter-help" class="history-filter-help">Plain text is the default. The adjacent regular-expression builder filters only this page’s bounded action metadata and evaluates locally.</p>
           </article>
 
           <article class="preview-panel" id="notifications-preview" data-contract-surface="notification-center" tabindex="-1">

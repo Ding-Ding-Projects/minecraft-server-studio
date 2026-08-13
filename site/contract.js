@@ -74,6 +74,12 @@
   const LOGO_FORMATS = Object.freeze(["png", "jpeg"]);
   const LOGO_FITS = Object.freeze(["contain", "cover", "fill"]);
   const LOGO_BACKGROUND_MODES = Object.freeze(["transparent", "color"]);
+  const HISTORY_EXPORT_OMISSIONS = Object.freeze([
+    "Personal-vocabulary values and source-file metadata",
+    "Authenticator, TOTP, toy-lock, QR, password, verifier, URI, and current-code data",
+    "Raw converter source/output bytes, file handles, paths, and browser download destinations",
+    "Server, runtime, installer, desktop-application, and remote-service state"
+  ]);
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const SAFE_COLOR = /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/;
   const BASE64_SALT = /^[A-Za-z0-9+/]{22}==$/;
@@ -131,6 +137,13 @@
       return fallback;
     }
     return value.slice(0, maximum);
+  }
+
+  function sanitizeAuditText(value, maximum, fallback) {
+    const text = boundedText(value, maximum, fallback).replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+    if (!text) return fallback;
+    const sensitiveValue = /(?:otpauth:\/\/|(?:password|secret|token|credential|verifier|current\s+code)\s*(?:=|:)\s*\S+|(?:^|[^A-Za-z0-9])[A-Z2-7]{24,}(?:[^A-Za-z0-9]|$)|(?:[A-Za-z]:[\\/]|\\\\[^\\\s]+\\))/i;
+    return sensitiveValue.test(text) ? "Sensitive or path-shaped local detail omitted." : text;
   }
 
   function boundedInteger(value, minimum, maximum, fallback) {
@@ -327,16 +340,28 @@
       return null;
     }
     const id = safeId(raw.id, "");
-    const action = trimString(raw.action, 120, "");
+    const action = sanitizeAuditText(raw.action, 120, "");
     if (!id || !action) {
       return null;
     }
     return {
       id,
       action,
-      target: trimString(raw.target, 160, ""),
-      detail: boundedText(raw.detail, 600, ""),
+      target: sanitizeAuditText(raw.target, 160, ""),
+      detail: sanitizeAuditText(raw.detail, 600, ""),
       createdAt: trimString(raw.createdAt, 48, now())
+    };
+  }
+
+  function safeAuditRecord(raw) {
+    const normalized = normalizeAudit(raw);
+    if (!normalized) return null;
+    return {
+      id: normalized.id,
+      action: normalized.action,
+      target: normalized.target,
+      detail: normalized.detail,
+      createdAt: normalized.createdAt
     };
   }
 
@@ -1023,9 +1048,9 @@
   function writeAudit(action, target, detail) {
     state.audit.unshift({
       id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      action: trimString(action, 120, "Local action"),
-      target: trimString(target, 160, ""),
-      detail: boundedText(detail, 600, ""),
+      action: sanitizeAuditText(action, 120, "Local action"),
+      target: sanitizeAuditText(target, 160, ""),
+      detail: sanitizeAuditText(detail, 600, ""),
       createdAt: now()
     });
     state.audit = state.audit.slice(0, LIMITS.auditRecords);
@@ -1292,6 +1317,40 @@
     writeAudit(action, target, detail);
     persist({ type: "audit" });
     return clone(state.audit[0]);
+  }
+
+  function getAuditRecords() {
+    return state.audit.map(safeAuditRecord).filter(Boolean);
+  }
+
+  function removeAuditRecords(ids, options) {
+    const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
+    if (request.confirmed !== true) {
+      return { ok: false, error: "Removing browser-local history records requires a completed confirmation." };
+    }
+    const selected = new Set((Array.isArray(ids) ? ids : []).map((id) => safeId(id, "")).filter(Boolean).slice(0, LIMITS.auditRecords));
+    if (!selected.size) {
+      return { ok: false, error: "Select one or more browser-local history records to remove." };
+    }
+    const previous = state.audit.length;
+    state.audit = state.audit.filter((record) => !selected.has(record.id));
+    const removed = previous - state.audit.length;
+    if (!removed) {
+      return { ok: false, error: "The selected browser-local history records were not found." };
+    }
+    persist({ type: "audit-records-removed", removed });
+    return { ok: true, removed };
+  }
+
+  function clearAuditRecords(options) {
+    const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
+    if (request.confirmed !== true) {
+      return { ok: false, error: "Clearing browser-local history requires a completed confirmation." };
+    }
+    const removed = state.audit.length;
+    state.audit = [];
+    persist({ type: "audit-cleared", removed });
+    return { ok: true, removed };
   }
 
   function getStatusModel() {
@@ -2204,14 +2263,80 @@
     return lines.join("\r\n");
   }
 
+  function exportAuditRecords(records) {
+    const source = Array.isArray(records) ? records : state.audit;
+    const seen = new Set();
+    const safe = [];
+    source.some((record) => {
+      const normalized = safeAuditRecord(record);
+      if (normalized && !seen.has(normalized.id)) {
+        safe.push(normalized);
+        seen.add(normalized.id);
+      }
+      return safe.length >= LIMITS.auditRecords;
+    });
+    return safe;
+  }
+
+  function historyExportManifest(records) {
+    const safeRecords = exportAuditRecords(records);
+    return {
+      formatVersion: 1,
+      kind: "Minecraft Server Studio browser-local history export",
+      generatedAt: now(),
+      scope: "Bounded browser-local audit metadata only.",
+      omissions: HISTORY_EXPORT_OMISSIONS.slice(),
+      recordCount: safeRecords.length,
+      records: safeRecords
+    };
+  }
+
+  function historyDelimitedExport(manifest, delimiter) {
+    const rows = [["recordType", "id", "action", "target", "detail", "createdAt", "omissions"]];
+    rows.push(["boundary", "", "", "", manifest.scope, manifest.generatedAt, manifest.omissions.join("; ")]);
+    manifest.records.forEach((record) => rows.push(["audit", record.id, record.action, record.target, record.detail, record.createdAt, ""]));
+    return rows.map((row) => row.map(csvEscape).join(delimiter)).join("\r\n");
+  }
+
+  function historyMarkdownExport(manifest) {
+    const lines = [
+      "# Minecraft Server Studio browser-local history export",
+      "",
+      `- Generated: ${manifest.generatedAt}`,
+      `- Scope: ${manifest.scope}`,
+      `- Record count: ${manifest.recordCount}`,
+      "",
+      "## Omitted by design",
+      "",
+      ...manifest.omissions.map((item) => `- ${item}`),
+      "",
+      "## Audit records",
+      ""
+    ];
+    if (!manifest.records.length) {
+      lines.push("- No selected browser-local audit records.");
+    } else {
+      manifest.records.forEach((record) => {
+        lines.push(`- **${record.action}** · target: ${record.target || "not recorded"} · ${record.createdAt}`);
+        if (record.detail) lines.push(`  - ${record.detail}`);
+      });
+    }
+    return lines.join("\n") + "\n";
+  }
+
   function createExport(format, records) {
     const mode = enumValue(format, ["json", "jsonl", "csv", "tsv", "markdown"], "json");
-    const safeRecords = Array.isArray(records) ? records.slice(0, LIMITS.collectionRecords).map((record) => isPlainObject(record) ? clone(record) : { value: String(record) }) : [redactStateForExport()];
-    if (mode === "json") return { format: mode, mime: "application/json;charset=utf-8", text: JSON.stringify(safeRecords, null, 2) };
-    if (mode === "jsonl") return { format: mode, mime: "application/x-ndjson;charset=utf-8", text: safeRecords.map((record) => JSON.stringify(record)).join("\n") };
-    if (mode === "csv") return { format: mode, mime: "text/csv;charset=utf-8", text: recordsToDelimited(safeRecords, ",") };
-    if (mode === "tsv") return { format: mode, mime: "text/tab-separated-values;charset=utf-8", text: recordsToDelimited(safeRecords, "\t") };
-    return { format: mode, mime: "text/markdown;charset=utf-8", text: safeRecords.map((record) => `- ${Object.entries(record).map(([key, value]) => `**${key}:** ${String(value)}`).join(" · ")}`).join("\n") };
+    const manifest = historyExportManifest(records);
+    if (mode === "json") return { format: mode, mime: "application/json;charset=utf-8", text: JSON.stringify(manifest, null, 2), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    if (mode === "jsonl") {
+      const descriptor = Object.assign({}, manifest);
+      delete descriptor.records;
+      const lines = [JSON.stringify(Object.assign({ recordType: "manifest" }, descriptor))].concat(manifest.records.map((record) => JSON.stringify(Object.assign({ recordType: "audit" }, record))));
+      return { format: mode, mime: "application/x-ndjson;charset=utf-8", text: lines.join("\n") + "\n", recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    }
+    if (mode === "csv") return { format: mode, mime: "text/csv;charset=utf-8", text: historyDelimitedExport(manifest, ","), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    if (mode === "tsv") return { format: mode, mime: "text/tab-separated-values;charset=utf-8", text: historyDelimitedExport(manifest, "\t"), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
+    return { format: mode, mime: "text/markdown;charset=utf-8", text: historyMarkdownExport(manifest), recordCount: manifest.recordCount, omissions: manifest.omissions.slice() };
   }
 
   global.addEventListener("storage", (event) => {
@@ -2246,6 +2371,9 @@
     dismissNotification,
     clearNotifications,
     recordAudit,
+    getAuditRecords,
+    removeAuditRecords,
+    clearAuditRecords,
     getStatusModel,
     updateStatusModel,
     upsertStatusEvidence,
