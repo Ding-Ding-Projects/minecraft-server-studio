@@ -69,6 +69,7 @@ const state = {
   converterRegexBuilderOpen: false,
   narrationSchedule: null,
   narratorRuntime: null,
+  externalScheduleSourceDraft: { sourceType: '', dirty: false },
   workspaceDestination: 'servers',
   authenticator: null,
   authenticatorStatus: null,
@@ -1363,7 +1364,7 @@ function updateScheduleWeekdayControls() {
 
 function scheduleSearchText(schedule) {
   const window = schedule.window || {};
-  return [schedule.label, schedule.value?.language, schedule.priority, window.dateStart, window.dateEnd, window.startTime, window.endTime, ...(window.weekdays || [])].filter((value) => value !== null && value !== undefined).join(' ');
+  return [schedule.label, schedule.value?.language, schedule.source?.type, schedule.priority, window.dateStart, window.dateEnd, window.startTime, window.endTime, ...(window.weekdays || [])].filter((value) => value !== null && value !== undefined).join(' ');
 }
 
 function regexForSearch(search) {
@@ -1436,6 +1437,7 @@ function renderScheduleSourceOptions() {
   const sources = currentNarrationSchedule().scheduleSources || [];
   if (!select || !detail || !sources.length) return;
   select.replaceChildren();
+  const previous = select.value || 'local';
   for (const source of sources) {
     const option = document.createElement('option');
     option.value = source.id;
@@ -1443,9 +1445,74 @@ function renderScheduleSourceOptions() {
     option.disabled = source.enabled !== true;
     select.append(option);
   }
-  select.value = 'local';
+  select.value = [...select.options].some((option) => option.value === previous) ? previous : 'local';
   const current = sources.find((source) => source.id === select.value) || sources[0];
   detail.textContent = current?.detail || 'No schedule source is available.';
+  renderExternalScheduleSourceControls();
+}
+
+function selectedScheduleSource() {
+  return $('#schedule-source')?.value || 'local';
+}
+
+function scheduleSourceById(sourceType = selectedScheduleSource()) {
+  return (currentNarrationSchedule().scheduleSources || []).find((item) => item.id === sourceType) || null;
+}
+
+function renderExternalScheduleSourceControls() {
+  const sourceType = selectedScheduleSource();
+  const card = $('#external-schedule-source-card');
+  const entityField = $('#external-schedule-source-entity-field');
+  const sources = currentNarrationSchedule().scheduleSources || [];
+  const source = scheduleSourceById(sourceType);
+  if (!card || !entityField) return;
+  const external = sourceType === 'https-api' || sourceType === 'home-assistant';
+  card.hidden = !external;
+  if (!external) return;
+  entityField.hidden = sourceType !== 'home-assistant';
+  const writable = currentNarrationSchedule().state === 'ready' && source?.enabled === true;
+  const endpoint = $('#external-schedule-source-endpoint');
+  const loopback = $('#external-schedule-source-loopback');
+  const refreshSeconds = $('#external-schedule-source-refresh-seconds');
+  const entity = $('#external-schedule-source-entity');
+  const token = $('#external-schedule-source-token');
+  const status = $('#external-schedule-source-status');
+  const description = $('#external-schedule-source-description');
+  const draft = state.externalScheduleSourceDraft;
+  const hydrate = draft.sourceType !== sourceType || draft.dirty !== true;
+  if (hydrate) {
+    endpoint.value = source?.endpoint || '';
+    loopback.checked = source?.allowInsecureLoopback === true;
+    refreshSeconds.value = String(source?.refreshSeconds || 300);
+    entity.value = sourceType === 'home-assistant' ? (source?.entityId || '') : '';
+    state.externalScheduleSourceDraft = { sourceType, dirty: false };
+  }
+  [endpoint, loopback, refreshSeconds, entity].forEach((control) => { if (control) control.disabled = !writable; });
+  ['save-external-schedule-source-button', 'clear-external-schedule-source-token-button'].forEach((id) => {
+    const control = $(`#${id}`);
+    if (control) control.disabled = !writable;
+  });
+  const configurationReady = source?.configured === true;
+  token.disabled = !writable || !configurationReady;
+  token.title = configurationReady ? '' : 'Save a complete non-secret source configuration before entering a protected token.';
+  const saveToken = $('#save-external-schedule-source-token-button');
+  if (saveToken) {
+    saveToken.disabled = !writable || !configurationReady;
+    saveToken.title = configurationReady ? '' : 'Save a complete non-secret source configuration before saving a protected token.';
+  }
+  const refresh = $('#refresh-external-schedule-sources-button');
+  const hasRefreshableSource = sources.some((item) => (item.id === 'https-api' || item.id === 'home-assistant') && item.configured === true && item.credentialState === 'ready');
+  if (refresh) {
+    refresh.disabled = !writable || !hasRefreshableSource;
+    refresh.title = hasRefreshableSource ? '' : 'Save a complete source configuration and protected token before refreshing external schedule sources.';
+  }
+  const credential = source?.credentialState || 'not-configured';
+  const sourceState = source?.state || 'not-configured';
+  status.dataset.state = sourceState === 'ready' || sourceState === 'inactive' || sourceState === 'idle' ? 'ready' : sourceState;
+  status.textContent = `${source?.detail || 'This source is not configured.'} Protected token: ${credential === 'ready' ? 'configured' : credential === 'missing' ? 'required' : credential === 'unavailable' ? 'unavailable' : 'not configured'}.`;
+  description.textContent = sourceType === 'https-api'
+    ? 'The HTTPS API may return only a versioned allowed language value. That value applies only when a matching saved HTTPS API rule is active; it never overwrites your base language.'
+    : 'The Home Assistant boolean source accepts only the configured input_boolean or binary_sensor on/off state. On activates the saved rule language; off leaves local base or another matching rule active.';
 }
 
 function renderScheduledSettings() {
@@ -1453,10 +1520,10 @@ function renderScheduledSettings() {
   const effective = settings.effective || {};
   const status = $('#schedule-effective-status');
   if (!status) return;
-  const active = effective.source === 'local-schedule';
+  const active = effective.source !== 'local-base';
   status.textContent = active
-    ? `${effective.scheduleLabel || 'A local language rule'} is active in ${effective.timezone || 'the local timezone'} and applies ${effective.language || 'English'} now.`
-    : `No local schedule currently matches. The saved base language (${effective.language || 'English'}) remains active in ${effective.timezone || 'the local timezone'}.`;
+    ? `${effective.scheduleLabel || 'A scheduled language rule'} is active through ${effective.source === 'local-schedule' ? 'the local source' : effective.source === 'https-api' ? 'the validated HTTPS API source' : 'the Home Assistant boolean source'} in ${effective.timezone || 'the local timezone'} and applies ${effective.language || 'English'} now.`
+    : `No scheduled source currently matches. The saved local base language (${effective.language || 'English'}) remains active in ${effective.timezone || 'the local timezone'}.`;
   status.dataset.state = settings.state === 'ready' ? (active ? 'active' : 'ready') : settings.state || 'unavailable';
   $('#add-scheduled-setting-button').disabled = settings.state !== 'ready';
   const list = $('#scheduled-settings-list');
@@ -1467,7 +1534,7 @@ function renderScheduledSettings() {
   if (!visible.length) {
     const empty = document.createElement('p');
     empty.className = 'scheduled-setting-empty';
-    empty.textContent = schedules.length ? 'No saved local language rules match the active search.' : 'No local language schedule is saved yet. Add one above to create a bounded rule.';
+    empty.textContent = schedules.length ? 'No saved language rules match the active search.' : 'No language schedule is saved yet. Add one above to create a bounded rule.';
     list.append(empty);
   }
   for (const schedule of visible) {
@@ -1477,7 +1544,7 @@ function renderScheduledSettings() {
     item.setAttribute('role', 'listitem');
     const copy = document.createElement('div');
     const title = document.createElement('strong');
-    title.textContent = `${schedule.label} · ${schedule.value?.language || 'english'} · priority ${schedule.priority}`;
+    title.textContent = `${schedule.label} · ${schedule.value?.language || 'english'} · ${schedule.source?.type || 'local'} · priority ${schedule.priority}`;
     const detail = document.createElement('small');
     detail.textContent = formatScheduleWindow(schedule);
     copy.append(title, detail);
@@ -1492,7 +1559,7 @@ function renderScheduledSettings() {
     const labelTitle = document.createElement('strong');
     labelTitle.textContent = 'Enable rule';
     const labelDetail = document.createElement('small');
-    labelDetail.textContent = schedule.enabled ? 'This rule can apply when its local window matches.' : 'This rule is retained but inactive.';
+    labelDetail.textContent = schedule.enabled ? 'This rule can apply when its local window and selected source state match.' : 'This rule is retained but inactive.';
     label.append(labelTitle, labelDetail);
     toggle.append(control, label);
     item.append(copy, toggle);
@@ -1500,7 +1567,7 @@ function renderScheduledSettings() {
   }
   const search = regexSearches.schedules;
   const searchStatus = $('#schedule-search-status');
-  if (searchStatus) searchStatus.textContent = `${visible.length} of ${schedules.length} saved local rule${schedules.length === 1 ? '' : 's'} ${search.mode === 'regex' ? 'match the active regex.' : 'match the plain-text search.'}`;
+  if (searchStatus) searchStatus.textContent = `${visible.length} of ${schedules.length} saved language rule${schedules.length === 1 ? '' : 's'} ${search.mode === 'regex' ? 'match the active regex.' : 'match the plain-text search.'}`;
   setRegexStatus('schedules');
 }
 
@@ -1522,14 +1589,66 @@ async function addScheduledSetting() {
       startTime: $('#schedule-time-start').value,
       endTime: $('#schedule-time-end').value,
       weekdays: selectedScheduleWeekdays()
-    }
-  }), 'Local language schedule saved.');
+    },
+    source: { type: selectedScheduleSource() }
+  }), 'Scheduled language rule saved.');
   if (result) applyExperienceSnapshot(result);
 }
 
 function updateScheduleSourceDetail() {
-  const source = (currentNarrationSchedule().scheduleSources || []).find((item) => item.id === $('#schedule-source').value);
+  state.externalScheduleSourceDraft = { sourceType: '', dirty: false };
+  $('#external-schedule-source-token').value = '';
+  const source = scheduleSourceById();
   $('#schedule-source-detail').textContent = source?.detail || 'This schedule source is unavailable.';
+  renderExternalScheduleSourceControls();
+}
+
+function externalScheduleSourceInput() {
+  return {
+    sourceType: selectedScheduleSource(),
+    endpoint: $('#external-schedule-source-endpoint').value,
+    allowInsecureLoopback: $('#external-schedule-source-loopback').checked,
+    entityId: $('#external-schedule-source-entity').value,
+    refreshSeconds: Number($('#external-schedule-source-refresh-seconds').value)
+  };
+}
+
+async function saveExternalScheduleSourceConfiguration() {
+  const sourceType = selectedScheduleSource();
+  const priorCredentialState = scheduleSourceById(sourceType)?.credentialState || 'not-configured';
+  const snapshot = await safely(() => window.studio.updateScheduleSourceConfiguration(externalScheduleSourceInput()));
+  if (snapshot) {
+    state.externalScheduleSourceDraft = { sourceType, dirty: false };
+    applyExperienceSnapshot(snapshot);
+    const nextCredentialState = scheduleSourceById(sourceType)?.credentialState || 'not-configured';
+    toast(priorCredentialState === 'ready' && nextCredentialState !== 'ready'
+      ? 'External schedule source configuration saved. The prior protected token was removed because its destination identity changed.'
+      : 'External schedule source configuration saved.', 'success');
+  }
+}
+
+async function saveExternalScheduleSourceToken() {
+  const token = $('#external-schedule-source-token').value;
+  if (!token) return toast('Enter a protected bearer token before saving it.', 'error');
+  const snapshot = await safely(() => window.studio.saveScheduleSourceCredential({ sourceType: selectedScheduleSource(), token }), 'Protected schedule-source token saved.');
+  if (snapshot) {
+    $('#external-schedule-source-token').value = '';
+    applyExperienceSnapshot(snapshot);
+  }
+}
+
+async function clearExternalScheduleSourceToken() {
+  const snapshot = await safely(() => window.studio.clearScheduleSourceCredential(selectedScheduleSource()), 'Protected schedule-source token removed.');
+  if (snapshot) applyExperienceSnapshot(snapshot);
+}
+
+async function refreshExternalScheduleSources() {
+  const snapshot = await safely(() => window.studio.refreshScheduleSources());
+  if (snapshot) {
+    applyExperienceSnapshot(snapshot);
+    const source = scheduleSourceById();
+    toast(source?.state === 'ready' || source?.state === 'inactive' ? 'Configured schedule sources were refreshed.' : source?.detail || 'Schedule-source refresh finished without an external value.', source?.state === 'ready' || source?.state === 'inactive' ? 'success' : 'info');
+  }
 }
 
 function attachRegexSearch(key) {
@@ -8746,6 +8865,15 @@ function bindEvents() {
   $('#schedule-every-day').addEventListener('change', updateScheduleWeekdayControls);
   $('#schedule-source').addEventListener('change', updateScheduleSourceDetail);
   $('#add-scheduled-setting-button').addEventListener('click', addScheduledSetting);
+  ['external-schedule-source-endpoint', 'external-schedule-source-loopback', 'external-schedule-source-refresh-seconds', 'external-schedule-source-entity'].forEach((id) => {
+    $(`#${id}`).addEventListener(id === 'external-schedule-source-loopback' ? 'change' : 'input', () => {
+      state.externalScheduleSourceDraft = { sourceType: selectedScheduleSource(), dirty: true };
+    });
+  });
+  $('#save-external-schedule-source-button').addEventListener('click', saveExternalScheduleSourceConfiguration);
+  $('#save-external-schedule-source-token-button').addEventListener('click', saveExternalScheduleSourceToken);
+  $('#clear-external-schedule-source-token-button').addEventListener('click', clearExternalScheduleSourceToken);
+  $('#refresh-external-schedule-sources-button').addEventListener('click', refreshExternalScheduleSources);
   $('#scheduled-settings-list').addEventListener('change', async (event) => {
     const control = event.target;
     const scheduleId = control?.dataset?.scheduleId;

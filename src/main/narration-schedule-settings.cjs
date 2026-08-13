@@ -3,8 +3,16 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  ExternalScheduleSourceAdapter,
+  SOURCE_TYPES,
+  defaultExternalSourceConfigurations,
+  normalizeExternalSourceConfigurations,
+  normalizeSourceConfigurationInput,
+  updateExternalSourceConfigurations
+} = require('./external-schedule-source-adapter.cjs');
 
-const NARRATION_SCHEDULE_SCHEMA_VERSION = 1;
+const NARRATION_SCHEDULE_SCHEMA_VERSION = 2;
 const MAX_FILE_BYTES = 128 * 1024;
 const MAX_SCHEDULES = 32;
 const MAX_LABEL_LENGTH = 80;
@@ -12,27 +20,6 @@ const MAX_VOICE_ID_LENGTH = 384;
 const LANGUAGE_MODES = Object.freeze(['english', 'cantonese', 'bilingual']);
 const NARRATOR_LANGUAGES = Object.freeze(['english', 'cantonese', 'both']);
 const LOCAL_WEEKDAYS = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
-const SCHEDULE_SOURCE_CATALOG = Object.freeze([
-  Object.freeze({
-    id: 'local',
-    label: 'Local schedule',
-    enabled: true,
-    detail: 'Runs from this app’s validated local settings only. No network request is made.'
-  }),
-  Object.freeze({
-    id: 'https-api',
-    label: 'Validated HTTPS API',
-    enabled: false,
-    detail: 'Disabled: this build does not include a validated main-process HTTPS schedule-source adapter.'
-  }),
-  Object.freeze({
-    id: 'home-assistant',
-    label: 'Home Assistant boolean entity',
-    enabled: false,
-    detail: 'Disabled: this build does not include a validated Home Assistant adapter or protected token route.'
-  })
-]);
-
 function settingsError(code, message) {
   const error = new Error(message);
   error.code = code;
@@ -173,7 +160,7 @@ function normalizeSchedule(value) {
   assertExactKeys(value.value, ['language'], 'Scheduled setting value is invalid.');
   assertExactKeys(value.window, ['dateStart', 'dateEnd', 'startTime', 'endTime', 'weekdays'], 'Scheduled setting window is invalid.');
   assertExactKeys(value.source, ['type'], 'Scheduled setting source is invalid.');
-  if (value.source.type !== 'local') throw settingsError('NARRATION_SCHEDULE_UNSUPPORTED_SOURCE', 'Only the local scheduled-settings source is available in this build.');
+  if (!SOURCE_TYPES.includes(value.source.type)) throw settingsError('NARRATION_SCHEDULE_UNSUPPORTED_SOURCE', 'Choose a supported local, HTTPS API, or Home Assistant scheduled-settings source.');
   const dateStart = normalizeDate(value.window.dateStart, 'Schedule start date');
   const dateEnd = normalizeDate(value.window.dateEnd, 'Schedule end date');
   if (dateStart && dateEnd && dateStart > dateEnd) throw settingsError('NARRATION_SCHEDULE_INVALID_VALUE', 'Schedule end date must be on or after its start date.');
@@ -193,7 +180,7 @@ function normalizeSchedule(value) {
       endTime,
       weekdays: normalizeWeekdays(value.window.weekdays)
     },
-    source: { type: 'local' }
+    source: { type: value.source.type }
   };
 }
 
@@ -211,13 +198,23 @@ function defaultSettings() {
   return {
     version: NARRATION_SCHEDULE_SCHEMA_VERSION,
     narrator: defaultNarrator(),
-    schedules: []
+    schedules: [],
+    sources: defaultExternalSourceConfigurations()
   };
 }
 
 function normalizeSettings(value) {
-  assertExactKeys(value, ['version', 'narrator', 'schedules'], 'Narration and scheduled settings are invalid.');
-  if (value.version !== NARRATION_SCHEDULE_SCHEMA_VERSION) throw settingsError('NARRATION_SCHEDULE_UNSUPPORTED_VERSION', 'Narration and scheduled settings use an unsupported version.');
+  if (!isPlainRecord(value)) throw settingsError('NARRATION_SCHEDULE_INVALID_RECORD', 'Narration and scheduled settings are invalid.');
+  let sources;
+  if (value.version === 1) {
+    assertExactKeys(value, ['version', 'narrator', 'schedules'], 'Narration and scheduled settings are invalid.');
+    sources = defaultExternalSourceConfigurations();
+  } else if (value.version === NARRATION_SCHEDULE_SCHEMA_VERSION) {
+    assertExactKeys(value, ['version', 'narrator', 'schedules', 'sources'], 'Narration and scheduled settings are invalid.');
+    sources = normalizeExternalSourceConfigurations(value.sources);
+  } else {
+    throw settingsError('NARRATION_SCHEDULE_UNSUPPORTED_VERSION', 'Narration and scheduled settings use an unsupported version.');
+  }
   if (!Array.isArray(value.schedules) || value.schedules.length > MAX_SCHEDULES) throw settingsError('NARRATION_SCHEDULE_INVALID_RECORD', `No more than ${MAX_SCHEDULES} scheduled settings are supported.`);
   const schedules = value.schedules.map(normalizeSchedule);
   const ids = new Set();
@@ -228,12 +225,23 @@ function normalizeSettings(value) {
   return {
     version: NARRATION_SCHEDULE_SCHEMA_VERSION,
     narrator: normalizeNarrator(value.narrator),
-    schedules
+    schedules,
+    sources
   };
 }
 
 function copy(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function sourceConfigurationKey(type) {
+  return type === 'https-api' ? 'httpsApi' : type === 'home-assistant' ? 'homeAssistant' : null;
+}
+
+function sourceIdentityChanged(previous, next, type) {
+  if (!previous || !next) return true;
+  if (previous.endpoint !== next.endpoint || previous.allowInsecureLoopback !== next.allowInsecureLoopback) return true;
+  return type === 'home-assistant' && previous.entityId !== next.entityId;
 }
 
 function localCalendar(now) {
@@ -253,8 +261,8 @@ function priorCalendarDay(calendar) {
   return localCalendar(previous);
 }
 
-function ruleMatches(schedule, calendar) {
-  if (!schedule.enabled || schedule.source?.type !== 'local') return false;
+function ruleMatchesWindow(schedule, calendar) {
+  if (!schedule.enabled) return false;
   const start = minutesFor(schedule.window.startTime);
   const end = minutesFor(schedule.window.endTime);
   let owner = calendar;
@@ -273,19 +281,42 @@ function ruleMatches(schedule, calendar) {
   return true;
 }
 
-function resolveScheduledLanguage(schedules, baseLanguage, now = new Date()) {
+function sourceDecision(schedule, sourceStates = {}) {
+  const type = schedule.source?.type || 'local';
+  if (type === 'local') {
+    return { active: true, source: 'local-schedule', language: schedule.value.language };
+  }
+  const state = sourceStates[type] || {};
+  if (type === 'https-api') {
+    if (state.state !== 'ready' || !LANGUAGE_MODES.includes(state.language)) return { active: false, source: type };
+    return { active: true, source: type, language: state.language };
+  }
+  if (type === 'home-assistant') {
+    if (state.state !== 'ready' || state.active !== true) return { active: false, source: type };
+    return { active: true, source: type, language: schedule.value.language };
+  }
+  return { active: false, source: type };
+}
+
+function resolveScheduledLanguage(schedules, baseLanguage, now = new Date(), sourceStates = {}) {
   const calendar = localCalendar(now);
-  const matching = schedules.filter((schedule) => ruleMatches(schedule, calendar))
+  const matching = schedules
+    .map((schedule) => ({ schedule, decision: sourceDecision(schedule, sourceStates) }))
+    .filter(({ schedule, decision }) => ruleMatchesWindow(schedule, calendar) && decision.active)
     .sort((left, right) => {
-      if (right.priority !== left.priority) return right.priority - left.priority;
-      return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+      if (right.schedule.priority !== left.schedule.priority) return right.schedule.priority - left.schedule.priority;
+      return left.schedule.id < right.schedule.id ? -1 : left.schedule.id > right.schedule.id ? 1 : 0;
     });
   const winner = matching[0] || null;
+  const fallbackLanguage = normalizeLanguage(baseLanguage, 'Base language');
   return {
-    language: winner ? winner.value.language : normalizeLanguage(baseLanguage, 'Base language'),
-    source: winner ? 'local-schedule' : 'local-base',
-    scheduleId: winner?.id || null,
-    scheduleLabel: winner?.label || null,
+    language: winner ? winner.decision.language : fallbackLanguage,
+    source: winner ? winner.decision.source : 'local-base',
+    scheduleId: winner?.schedule.id || null,
+    scheduleLabel: winner?.schedule.label || null,
+    detail: winner
+      ? `${winner.schedule.label} is active through ${winner.decision.source === 'local-schedule' ? 'the local schedule source' : winner.decision.source === 'https-api' ? 'the validated HTTPS API source' : 'the Home Assistant boolean source'}.`
+      : `No active scheduled source matches. The saved local base language (${fallbackLanguage}) remains active.`,
     evaluatedAt: calendar.value.toISOString(),
     timezone: calendar.timezone
   };
@@ -294,13 +325,17 @@ function resolveScheduledLanguage(schedules, baseLanguage, now = new Date()) {
 class NarrationScheduleSettingsService {
   constructor(options = {}) {
     if (!isPlainRecord(options)) throw settingsError('NARRATION_SCHEDULE_INVALID_OPTIONS', 'Narration and schedule options are invalid.');
-    const allowed = new Set(['dataDir', 'onChange']);
+    const allowed = new Set(['dataDir', 'credentialVault', 'onChange']);
     for (const key of Object.keys(options)) {
       if (!allowed.has(key)) throw settingsError('NARRATION_SCHEDULE_INVALID_OPTIONS', 'Narration and schedule options are invalid.');
     }
     this.dataDir = normalizeDirectory(options.dataDir);
     this.filePath = path.join(this.dataDir, 'narration-schedule-settings.json');
     this.onChange = typeof options.onChange === 'function' ? options.onChange : null;
+    this.externalSources = new ExternalScheduleSourceAdapter({
+      credentialVault: options.credentialVault || null,
+      onChange: () => this._publishChange()
+    });
     this.settings = defaultSettings();
     this.state = 'not-loaded';
     this.detail = 'Narration and scheduled settings have not been loaded.';
@@ -310,8 +345,18 @@ class NarrationScheduleSettingsService {
     const result = this._read();
     if (result.state === 'ready') {
       this.settings = result.value;
+      this.externalSources.setConfigurations(this.settings.sources);
       this.state = 'ready';
-      this.detail = 'Narrator and local language schedules are available.';
+      this.detail = 'Narrator, local language schedules, and validated external-source configuration are available.';
+      if (result.migrated) {
+        try {
+          this._write(this.settings);
+          this.detail = 'Narrator and scheduled settings migrated to the current validated external-source schema.';
+        } catch {
+          this.state = 'unavailable';
+          this.detail = 'Narrator and scheduled settings could not be migrated safely. The narrator stays off and local base language remains active.';
+        }
+      }
       return this.snapshot();
     }
     this.settings = defaultSettings();
@@ -324,8 +369,9 @@ class NarrationScheduleSettingsService {
     if (result.state === 'missing') {
       try {
         this._write(this.settings);
+        this.externalSources.setConfigurations(this.settings.sources);
         this.state = 'ready';
-        this.detail = 'Narrator and local language schedules are available.';
+        this.detail = 'Narrator, local language schedules, and validated external-source configuration are available.';
       } catch {
         this.state = 'unavailable';
         this.detail = 'Narrator and scheduled settings could not be created. The narrator stays off and local base language remains active.';
@@ -338,16 +384,17 @@ class NarrationScheduleSettingsService {
     const source = isPlainRecord(options) ? options : {};
     const baseLanguage = LANGUAGE_MODES.includes(source.baseLanguage) ? source.baseLanguage : 'english';
     const active = this.state === 'ready' ? this.settings : defaultSettings();
-    const effective = resolveScheduledLanguage(active.schedules, baseLanguage, source.now instanceof Date ? source.now : new Date());
+    const external = this.externalSources.snapshot();
+    const effective = resolveScheduledLanguage(active.schedules, baseLanguage, source.now instanceof Date ? source.now : new Date(), external.states);
     return Object.freeze({
       schemaVersion: NARRATION_SCHEDULE_SCHEMA_VERSION,
       state: this.state,
       detail: this.detail,
       narrator: Object.freeze(copy(active.narrator)),
       schedules: Object.freeze(copy(active.schedules)),
-      scheduleSources: Object.freeze(copy(SCHEDULE_SOURCE_CATALOG)),
+      scheduleSources: Object.freeze(copy(external.sources)),
       effective: Object.freeze(effective),
-      boundary: 'Only validated local language schedules are active in this build. HTTPS API and Home Assistant options remain visible but disabled; no schedule-source network request is made.'
+      boundary: 'Local language remains the fallback. External language sources are configured and refreshed only by bounded main-process adapters with protected tokens; the renderer receives no token or raw external response.'
     });
   }
 
@@ -372,7 +419,7 @@ class NarrationScheduleSettingsService {
   addSchedule(draft) {
     this._assertReady();
     if (!isPlainRecord(draft)) throw settingsError('NARRATION_SCHEDULE_INVALID_PATCH', 'Scheduled setting is invalid.');
-    const allowed = new Set(['label', 'enabled', 'priority', 'value', 'window']);
+    const allowed = new Set(['label', 'enabled', 'priority', 'value', 'window', 'source']);
     for (const key of Object.keys(draft)) {
       if (!allowed.has(key)) throw settingsError('NARRATION_SCHEDULE_INVALID_PATCH', 'Scheduled setting contains an unsupported field.');
     }
@@ -384,7 +431,7 @@ class NarrationScheduleSettingsService {
       priority: draft.priority,
       value: draft.value,
       window: draft.window,
-      source: { type: 'local' }
+      source: draft.source || { type: 'local' }
     });
     this._save({ ...this.settings, schedules: [...this.settings.schedules, schedule] });
     return this.snapshot();
@@ -397,6 +444,50 @@ class NarrationScheduleSettingsService {
     if (next.every((schedule) => schedule.id !== normalizedId)) throw settingsError('NARRATION_SCHEDULE_NOT_FOUND', 'The scheduled setting no longer exists.');
     this._save({ ...this.settings, schedules: next });
     return this.snapshot();
+  }
+
+  updateExternalSourceConfiguration(input) {
+    this._assertReady();
+    const normalizedInput = normalizeSourceConfigurationInput(input);
+    const key = sourceConfigurationKey(normalizedInput.sourceType);
+    const current = this.settings.sources[key];
+    const sources = updateExternalSourceConfigurations(this.settings.sources, normalizedInput);
+    const next = sources[key];
+    if (sourceIdentityChanged(current, next, normalizedInput.sourceType) && this.externalSources.credentialState(normalizedInput.sourceType) === 'ready') {
+      // An old bearer token must never follow a changed endpoint or HA entity.
+      // It is deliberately cleared before the new non-secret configuration is saved.
+      this.externalSources.clearCredential(normalizedInput.sourceType);
+    }
+    this._save({ ...this.settings, sources });
+    return this.snapshot();
+  }
+
+  saveExternalSourceCredential(input) {
+    this._assertReady();
+    this.externalSources.saveCredential(input);
+    return this.snapshot();
+  }
+
+  clearExternalSourceCredential(sourceType) {
+    this._assertReady();
+    this.externalSources.clearCredential(sourceType);
+    return this.snapshot();
+  }
+
+  async refreshExternalSources() {
+    this._assertReady();
+    await this.externalSources.refresh();
+    return this.snapshot();
+  }
+
+  async refreshDueExternalSources(now = Date.now()) {
+    if (this.state !== 'ready') return this.snapshot();
+    await this.externalSources.refreshDue(now);
+    return this.snapshot();
+  }
+
+  stop() {
+    this.externalSources.stop();
   }
 
   _nextScheduleId() {
@@ -416,8 +507,13 @@ class NarrationScheduleSettingsService {
     const normalized = normalizeSettings(next);
     this._write(normalized);
     this.settings = normalized;
+    this.externalSources.setConfigurations(this.settings.sources);
     this.state = 'ready';
-    this.detail = 'Narrator and local language schedules are available.';
+    this.detail = 'Narrator, local language schedules, and validated external-source configuration are available.';
+    this._publishChange();
+  }
+
+  _publishChange() {
     if (this.onChange) this.onChange(this.snapshot());
   }
 
@@ -432,7 +528,8 @@ class NarrationScheduleSettingsService {
       return { state: 'unavailable' };
     }
     try {
-      return { state: 'ready', value: normalizeSettings(JSON.parse(text)) };
+      const parsed = JSON.parse(text);
+      return { state: 'ready', value: normalizeSettings(parsed), migrated: parsed.version === 1 };
     } catch {
       return { state: 'invalid' };
     }
@@ -463,7 +560,6 @@ module.exports = {
   NARRATION_SCHEDULE_SCHEMA_VERSION,
   NARRATOR_LANGUAGES,
   NarrationScheduleSettingsService,
-  SCHEDULE_SOURCE_CATALOG,
   defaultNarrator,
   defaultSettings,
   normalizeSchedule,
