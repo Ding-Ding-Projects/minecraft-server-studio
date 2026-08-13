@@ -215,25 +215,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Unable to finalize the release notes for $tag."
           }
-          function Get-SetupAssetEquivalenceKey {
+          function Get-SetupAssetIdentity {
             param([Parameter(Mandatory)][string] $Name)
 
             $baseName = [IO.Path]::GetFileName($Name)
             if (-not [string]::Equals($baseName, $Name, [StringComparison]::Ordinal)) {
               return $null
             }
-            $extension = [IO.Path]::GetExtension($baseName)
-            if (-not [string]::Equals($extension, '.exe', [StringComparison]::OrdinalIgnoreCase)) {
+            $match = [regex]::Match(
+              $baseName,
+              '^(?<product>.+)-(?<version>[0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?)-(?<arch>x64|ia32|arm64)-(?<suffix>Setup)(?<extension>\.exe)$',
+              [Text.RegularExpressions.RegexOptions]::IgnoreCase
+            )
+            if (-not $match.Success) {
               return $null
             }
-            $stem = [IO.Path]::GetFileNameWithoutExtension($baseName)
-            if ([string]::IsNullOrWhiteSpace($stem)) {
-              return $null
+            return [pscustomobject]@{
+              Name = $baseName
+              Product = $match.Groups['product'].Value
+              Version = $match.Groups['version'].Value
+              Architecture = $match.Groups['arch'].Value
+              Suffix = $match.Groups['suffix'].Value
+              Extension = $match.Groups['extension'].Value
             }
-
-            # GitHub may replace literal space runs in release asset names with dots.
-            # The whole basename stem is compared; this is not a substring or wildcard match.
-            return ($stem -replace '[ .]+', '.')
           }
 
           function Test-SetupAssetNameEquivalent {
@@ -242,16 +246,21 @@ jobs:
               [Parameter(Mandatory)][string] $PublishedName
             )
 
-            $expectedExtension = [IO.Path]::GetExtension($ExpectedName)
-            $publishedExtension = [IO.Path]::GetExtension($PublishedName)
-            if (-not [string]::Equals($expectedExtension, '.exe', [StringComparison]::OrdinalIgnoreCase) -or
-                -not [string]::Equals($expectedExtension, $publishedExtension, [StringComparison]::OrdinalIgnoreCase)) {
+            $expected = Get-SetupAssetIdentity -Name $ExpectedName
+            $published = Get-SetupAssetIdentity -Name $PublishedName
+            if ($null -eq $expected -or $null -eq $published) {
               return $false
             }
-            $expectedKey = Get-SetupAssetEquivalenceKey -Name $ExpectedName
-            $publishedKey = Get-SetupAssetEquivalenceKey -Name $PublishedName
-            return $null -ne $expectedKey -and $null -ne $publishedKey -and
-              [string]::Equals($expectedKey, $publishedKey, [StringComparison]::OrdinalIgnoreCase)
+            $expectedProduct = $expected.Product -replace '[ .]+', '.'
+            $publishedProduct = $published.Product -replace '[ .]+', '.'
+
+            # GitHub may replace literal space runs in the product segment with dots.
+            # Version, architecture, Squirrel suffix, and extension remain exact checks.
+            return [string]::Equals($expectedProduct, $publishedProduct, [StringComparison]::OrdinalIgnoreCase) -and
+              [string]::Equals($expected.Version, $published.Version, [StringComparison]::Ordinal) -and
+              [string]::Equals($expected.Architecture, $published.Architecture, [StringComparison]::Ordinal) -and
+              [string]::Equals($expected.Suffix, $published.Suffix, [StringComparison]::Ordinal) -and
+              [string]::Equals($expected.Extension, $published.Extension, [StringComparison]::Ordinal)
           }
 
           $expectedLocalAssets = @($assets | ForEach-Object {
@@ -259,10 +268,10 @@ jobs:
             [pscustomobject]@{
               Path = $_
               Name = $assetName
-              SetupKey = Get-SetupAssetEquivalenceKey -Name $assetName
+              SetupIdentity = Get-SetupAssetIdentity -Name $assetName
             }
           })
-          $expectedSetupAssets = @($expectedLocalAssets | Where-Object { $null -ne $_.SetupKey })
+          $expectedSetupAssets = @($expectedLocalAssets | Where-Object { $null -ne $_.SetupIdentity })
           if ($expectedSetupAssets.Count -ne 1) {
             throw "Expected exactly one local Setup.exe asset, found $($expectedSetupAssets.Count)."
           }
@@ -300,8 +309,8 @@ jobs:
               if (([int64]$asset.size) -le 0) {
                 $unresolved.Add("$($asset.name) (published size is $($asset.size))")
               }
-              if ([string]::IsNullOrWhiteSpace([string]$asset.downloadUrl)) {
-                $unresolved.Add("$($asset.name) (download URL is unavailable)")
+              if ([string]::IsNullOrWhiteSpace([string]$asset.url)) {
+                $unresolved.Add("$($asset.name) (release URL is unavailable)")
               }
             }
 
@@ -313,30 +322,39 @@ jobs:
           }
 
           $assetPollIntervalSeconds = 5
-          $assetAvailabilityDeadline = [DateTimeOffset]::UtcNow.AddSeconds(90)
+          $assetPollStartedAt = [DateTimeOffset]::UtcNow
+          $assetAvailabilityDeadline = $assetPollStartedAt.AddSeconds(90)
           $verified = $null
           $assetResolution = $null
           $lastUnresolvedAssets = @()
           do {
-            $verified = (& gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,isDraft,url,assets) | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0 -or $null -eq $verified) {
-              throw "Unable to read release $tag while waiting for published assets."
+            $releaseJson = & gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,isDraft,url,assets 2>$null
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseJson)) {
+              $assetResolution = [pscustomobject]@{
+                Complete = $false
+                Unresolved = @("release metadata unavailable; expected assets: $($expectedLocalAssets.Name -join ', ')")
+              }
+            } else {
+              $verified = $releaseJson | ConvertFrom-Json
+              if ($verified.isDraft -or $verified.targetCommitish -ne $env:GITHUB_SHA) {
+                throw "Release verification failed for $tag."
+              }
+              $assetResolution = Resolve-ExpectedReleaseAssets -PublishedAssets $verified.assets
             }
-            if ($verified.isDraft -or $verified.targetCommitish -ne $env:GITHUB_SHA) {
-              throw "Release verification failed for $tag."
-            }
-
-            $assetResolution = Resolve-ExpectedReleaseAssets -PublishedAssets $verified.assets
             $lastUnresolvedAssets = @($assetResolution.Unresolved)
             if ($assetResolution.Complete) {
               break
             }
             if ([DateTimeOffset]::UtcNow -ge $assetAvailabilityDeadline) {
-              $unresolvedText = if ($lastUnresolvedAssets.Count -gt 0) { $lastUnresolvedAssets -join '; ' } else { 'no asset details were returned' }
-              throw "Release $tag assets did not become available within 90 seconds: $unresolvedText"
+              break
             }
             Start-Sleep -Seconds $assetPollIntervalSeconds
           } while ($true)
+          if (-not $assetResolution.Complete) {
+            $elapsedSeconds = [math]::Round(([DateTimeOffset]::UtcNow - $assetPollStartedAt).TotalSeconds)
+            $unresolvedText = if ($lastUnresolvedAssets.Count -gt 0) { $lastUnresolvedAssets -join '; ' } else { 'no asset details were returned' }
+            throw "Release $tag asset verification timed out after $elapsedSeconds seconds. Unresolved assets: $unresolvedText"
+          }
           @(
             '## Windows package release',
             '',
