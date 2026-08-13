@@ -6,7 +6,7 @@
   }
 
   const STORAGE_KEY = "minecraft-server-studio.site.contract.v2";
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
   const LIMITS = Object.freeze({
     stateBytes: 1024 * 1024,
     notifications: 200,
@@ -33,7 +33,10 @@
     vocabularyNestingDepth: 3,
     vocabularyEntries: 250,
     vocabularyKeyCharacters: 128,
-    vocabularyValueCharacters: 512
+    vocabularyValueCharacters: 512,
+    schoolModeCodeMinimum: 4,
+    schoolModeCodeMaximum: 64,
+    schoolModeCredentialSaltBytes: 16
   });
 
   const LANGUAGE_MODES = Object.freeze(["english", "cantonese", "bilingual"]);
@@ -45,6 +48,8 @@
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const SAFE_COLOR = /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/;
+  const BASE64_SALT = /^[A-Za-z0-9+/]{22}==$/;
+  const BASE64_SHA256 = /^[A-Za-z0-9+/]{43}=$/;
 
   const FILE_ADAPTERS = Object.freeze([
     { id: "documents-pdf", category: "Documents/PDF", label: "PDF tools", sourceFormats: ["application/pdf"], targetFormats: ["application/pdf"], bundled: false, enabled: false, reason: "No bundled offline PDF adapter is available in the static site." },
@@ -154,6 +159,7 @@
       tabs: { orientation: "vertical", activeId: null, groups: [], items: [] },
       collections: [],
       personalVocabulary: { status: "empty", payload: null },
+      schoolModeCredential: { algorithm: "", salt: "", verifier: "", configuredAt: null },
       locks: [],
       totp: [],
       schedules: [],
@@ -187,6 +193,9 @@
     if (version < 2 && isPlainObject(migrated.settings) && typeof migrated.settings.funnyLevel === "number") {
       const level = boundedInteger(migrated.settings.funnyLevel, 1, 5, 2);
       migrated.settings.funnyLevel = { english: level, cantonese: level };
+    }
+    if (version < 3) {
+      migrated.schoolModeCredential = { algorithm: "", salt: "", verifier: "", configuredAt: null };
     }
     migrated.version = SCHEMA_VERSION;
     return migrated;
@@ -415,6 +424,21 @@
     const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
     const payload = normalizeVocabularyPayload(value.payload);
     return payload ? { status: "loaded", payload } : { status: "empty", payload: null };
+  }
+
+  function isConfiguredSchoolModeCredential(value) {
+    return Boolean(value && value.algorithm === "SHA-256" && BASE64_SALT.test(value.salt) && BASE64_SHA256.test(value.verifier));
+  }
+
+  function normalizeSchoolModeCredential(raw) {
+    const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
+    const candidate = {
+      algorithm: value.algorithm === "SHA-256" ? "SHA-256" : "",
+      salt: trimString(value.salt, 32, ""),
+      verifier: trimString(value.verifier, 64, ""),
+      configuredAt: trimString(value.configuredAt, 48, "") || null
+    };
+    return isConfiguredSchoolModeCredential(candidate) ? candidate : { algorithm: "", salt: "", verifier: "", configuredAt: null };
   }
 
   function normalizeLock(raw) {
@@ -756,6 +780,7 @@
       tabs: normalizeTabs(migrated.tabs, defaults.tabs),
       collections: [],
       personalVocabulary: normalizePersonalVocabulary(migrated.personalVocabulary),
+      schoolModeCredential: normalizeSchoolModeCredential(migrated.schoolModeCredential),
       locks: [],
       totp: [],
       schedules: [],
@@ -891,11 +916,14 @@
   }
 
   function getState() {
-    return clone(state);
+    const snapshot = clone(state);
+    snapshot.schoolModeCredential = getSchoolModeCredentialState();
+    return snapshot;
   }
 
   function getEffectiveSettings() {
     const settings = clone(state.settings);
+    settings.schoolMode.credentialConfigured = isConfiguredSchoolModeCredential(state.schoolModeCredential);
     if (settings.schoolMode.enabled) {
       settings.languageMode = "english";
       settings.personalVocabularyActive = false;
@@ -949,16 +977,71 @@
     const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
     const enabled = Boolean(request.enabled);
     const current = state.settings.schoolMode.enabled;
+    if (!current && enabled && !isConfiguredSchoolModeCredential(state.schoolModeCredential)) {
+      return { ok: false, error: "Set a browser-local unlock code before enabling this presentation mode." };
+    }
     if (current && !enabled && request.credentialAccepted !== true) {
-      return { ok: false, error: "Turning off School mode requires the host application's local credential check." };
+      return { ok: false, error: "Turning off this presentation mode requires a successful browser-local unlock-code check." };
     }
     state.settings.schoolMode.enabled = enabled;
     if (typeof request.name === "string") {
       state.settings.schoolMode.name = trimString(request.name, 80, "School mode") || "School mode";
     }
     state.settings = normalizeSettings(state.settings, createDefaultState().settings);
-    writeAudit(enabled ? "School mode enabled" : "School mode disabled", "School mode", "The site changed its local presentation state.");
+    writeAudit(enabled ? "Presentation mode enabled" : "Presentation mode disabled", state.settings.schoolMode.name, "The site changed its browser-local presentation state.");
     persist({ type: "school-mode" });
+    return { ok: true, settings: getEffectiveSettings() };
+  }
+
+  function setSchoolModeCredential(record) {
+    const candidate = normalizeSchoolModeCredential(record);
+    if (!isConfiguredSchoolModeCredential(candidate)) {
+      return { ok: false, error: "The browser-local unlock-code verifier is incomplete or unsupported." };
+    }
+    state.schoolModeCredential = Object.assign({}, candidate, { configuredAt: now() });
+    writeAudit("Presentation-mode unlock code configured", state.settings.schoolMode.name, "A local one-way verifier was stored without the unlock code.");
+    persist({ type: "school-mode-credential" });
+    return { ok: true, credential: getSchoolModeCredentialState() };
+  }
+
+  function getSchoolModeCredentialState() {
+    const credential = state.schoolModeCredential;
+    return {
+      configured: isConfiguredSchoolModeCredential(credential),
+      algorithm: isConfiguredSchoolModeCredential(credential) ? credential.algorithm : "",
+      configuredAt: isConfiguredSchoolModeCredential(credential) ? credential.configuredAt : null
+    };
+  }
+
+  function getSchoolModeCredentialSalt() {
+    return isConfiguredSchoolModeCredential(state.schoolModeCredential) ? state.schoolModeCredential.salt : "";
+  }
+
+  function timingSafeVerifierMatch(candidate) {
+    const expected = state.schoolModeCredential.verifier;
+    if (typeof candidate !== "string" || !BASE64_SHA256.test(candidate) || !isConfiguredSchoolModeCredential(state.schoolModeCredential) || candidate.length !== expected.length) {
+      return false;
+    }
+    let difference = 0;
+    for (let index = 0; index < expected.length; index += 1) {
+      difference |= expected.charCodeAt(index) ^ candidate.charCodeAt(index);
+    }
+    return difference === 0;
+  }
+
+  function verifySchoolModeCredential(verifier) {
+    return { ok: timingSafeVerifierMatch(verifier) };
+  }
+
+  function clearSchoolModeCredential(options) {
+    const request = isPlainObject(options) && !hasUnsafeKeys(options) ? options : {};
+    if (request.credentialAccepted !== true) {
+      return { ok: false, error: "Verify the current browser-local unlock code before resetting it." };
+    }
+    state.settings.schoolMode.enabled = false;
+    state.schoolModeCredential = { algorithm: "", salt: "", verifier: "", configuredAt: null };
+    writeAudit("Presentation-mode unlock code reset", state.settings.schoolMode.name, "The browser-local mode and its one-way verifier were reset.");
+    persist({ type: "school-mode-credential-reset" });
     return { ok: true, settings: getEffectiveSettings() };
   }
 
@@ -966,7 +1049,7 @@
     return {
       storage: "browser local storage",
       key: STORAGE_KEY,
-      message: "This site keeps School mode only in this browser's local storage. Clearing this site's local storage resets the local setting and its local lock metadata; it does not change a desktop application's data."
+      message: "This site keeps its renamed presentation mode and one-way unlock-code verifier only in this browser's local storage. Clearing this site's local storage resets the local preferences, vocabulary cache, local lock metadata, and unlock-code verifier; it does not change desktop-application or server data."
     };
   }
 
@@ -1750,6 +1833,7 @@
   function redactStateForExport() {
     const exported = getState();
     exported.personalVocabulary = { status: exported.personalVocabulary.status, omitted: true };
+    exported.schoolModeCredential = { configured: isConfiguredSchoolModeCredential(state.schoolModeCredential), omitted: true };
     exported.locks = exported.locks.map((lock) => ({ id: lock.id, target: lock.target, label: lock.label, method: lock.method, duration: lock.duration, minutes: lock.minutes, locked: lock.locked, createdAt: lock.createdAt, updatedAt: lock.updatedAt }));
     exported.totp = exported.totp.map((entry) => ({ id: entry.id, label: entry.label, issuer: entry.issuer, account: entry.account, algorithm: entry.algorithm, digits: entry.digits, period: entry.period, enrolled: entry.enrolled, updatedAt: entry.updatedAt }));
     return exported;
@@ -1802,6 +1886,11 @@
     isStorageAvailable: () => storageAvailable,
     updateSettings,
     setSchoolMode,
+    setSchoolModeCredential,
+    getSchoolModeCredentialState,
+    getSchoolModeCredentialSalt,
+    verifySchoolModeCredential,
+    clearSchoolModeCredential,
     getSchoolModeResetBoundary,
     resetLocalState,
     notify,

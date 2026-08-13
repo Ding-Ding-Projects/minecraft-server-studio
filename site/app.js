@@ -1,3 +1,5 @@
+import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
+
 (function () {
   "use strict";
 
@@ -21,6 +23,62 @@
     history: [],
     settings: defaultSettings()
   };
+
+  var LOCALIZED_COPY = Object.freeze({
+    "settings-eyebrow": { english: "Settings and appearance", cantonese: "設定與外觀" },
+    "settings-title": { english: "Personalize this public page", cantonese: "自訂呢個公開頁面" },
+    "settings-status": { english: "Browser-local preferences", cantonese: "瀏覽器本機設定" },
+    "settings-description": { english: "These visible controls persist bounded preferences for this public page in this browser only. They are not sent to a server or desktop application, and they do not change an installed app.", cantonese: "呢啲控制只會喺而家瀏覽器儲存呢個公開頁面嘅受限設定。佢哋唔會傳送去伺服器或者桌面程式，亦唔會改變已安裝程式。" },
+    "language-label": { english: "Language mode", cantonese: "語言模式" },
+    "language-help": { english: "Choose how this public page presents its browser-local controls.", cantonese: "揀選呢個公開頁面點樣顯示佢嘅瀏覽器本機控制。" },
+    "english-funny-label": { english: "English tone", cantonese: "英文語氣" },
+    "english-funny-help": { english: "1 is fully serious; 5 is maximum playfulness. Warnings stay factual at every level.", cantonese: "1 最認真，5 最玩味；無論邊個級別，警告內容都保持準確。" },
+    "cantonese-funny-label": { english: "Cantonese tone", cantonese: "廣東話語氣" },
+    "cantonese-funny-help": { english: "This independent setting changes Cantonese presentation only.", cantonese: "呢個獨立設定只會改變廣東話嘅呈現方式。" },
+    "emoji-label": { english: "Show emojis in browser-local notices", cantonese: "喺瀏覽器本機通知顯示表情符號" },
+    "emoji-help": { english: "Emojis decorate notices only; labels, actions, and factual messages stay unchanged.", cantonese: "表情符號只作裝飾；標籤、動作同事實訊息都唔會改變。" },
+    "vocabulary-label": { english: "Personal vocabulary JSON", cantonese: "個人詞彙 JSON" },
+    "vocabulary-help": { english: "Version 1 JSON is checked locally before a bounded cache can be applied. The source file name and path are not retained.", cantonese: "版本 1 JSON 會先喺本機檢查，通過後先會套用受限快取。來源檔名同路徑唔會保留。" },
+    "school-eyebrow": { english: "Browser-local presentation lock", cantonese: "瀏覽器本機顯示鎖" },
+    "school-name-label": { english: "Mode name", cantonese: "模式名稱" },
+    "school-name-help": { english: "This exact name replaces the shipped name after you save it.", cantonese: "儲存後，呢個名稱會取代原本嘅模式名稱。" },
+    "school-credential-label": { english: "Browser-local unlock code", cantonese: "瀏覽器本機解鎖碼" },
+    "school-credential-help": { english: "A one-way local verifier is stored only in this browser. The code itself is never stored or exported.", cantonese: "只會喺呢個瀏覽器儲存單向本機驗證資料；解鎖碼本身永遠唔會儲存或匯出。" }
+  });
+
+  function funnyCopy(key, language, value) {
+    var level = state.settings && state.settings.funnyLevel ? Number(state.settings.funnyLevel[language]) || 2 : 2;
+    if (level < 4) return value;
+    var playful = {
+      english: {
+        "settings-title": "Tune this public page your way — the creepers can wait.",
+        "settings-description": "These browser-local controls remember this public page's bounded preferences here, not on a server or desktop app. The settings are doing their job without wandering off on an adventure."
+      },
+      cantonese: {
+        "settings-title": "自己調校呢個公開頁面先，苦力怕等一等。",
+        "settings-description": "呢啲瀏覽器本機控制只會記住本頁面嘅受限設定，唔會走去伺服器或者桌面程式搗蛋。設定做返自己份內事，唔會去冒險。"
+      }
+    };
+    return (playful[language] && playful[language][key]) || value;
+  }
+
+  function localizedCopy(key) {
+    var entry = LOCALIZED_COPY[key];
+    if (!entry) return "";
+    var mode = state.settings && state.settings.languageMode || "english";
+    var english = funnyCopy(key, "english", entry.english);
+    var cantonese = funnyCopy(key, "cantonese", entry.cantonese);
+    if (mode === "cantonese") return cantonese;
+    if (mode === "bilingual") return english + " · " + cantonese;
+    return english;
+  }
+
+  function renderLocalizedCopy() {
+    all("[data-mss-copy]").forEach(function (element) {
+      var value = localizedCopy(element.getAttribute("data-mss-copy"));
+      if (value) element.textContent = value;
+    });
+  }
 
   function defaultSettings() {
     return {
@@ -204,8 +262,15 @@
     return { english: "English", cantonese: "Playful Hong Kong-style Cantonese", bilingual: "Bilingual" }[mode] || "English";
   }
 
-  function languageMode(label) {
-    return { "English": "english", "Playful Hong Kong-style Cantonese": "cantonese", "Bilingual": "bilingual" }[label] || "english";
+  function languageMode(value) {
+    return {
+      english: "english",
+      cantonese: "cantonese",
+      bilingual: "bilingual",
+      "English": "english",
+      "Playful Hong Kong-style Cantonese": "cantonese",
+      "Bilingual": "bilingual"
+    }[value] || "english";
   }
 
   function themeLabel(theme) {
@@ -226,7 +291,7 @@
     var theme = one('[data-contract-hook="appearance-theme"] select', scope);
     var density = one('[data-contract-hook="density"] select', scope);
     var emojiToggle = one('[data-contract-hook="emoji-toggle"] input[type="checkbox"]', scope);
-    if (language) language.value = languageLabel(settings.languageMode);
+    if (language) language.value = settings.languageMode;
     if (englishTone) englishTone.value = String(settings.funnyLevel.english);
     if (cantoneseTone) cantoneseTone.value = String(settings.funnyLevel.cantonese);
     if (theme) theme.value = themeLabel(settings.appearance.theme);
@@ -244,7 +309,10 @@
     root.dataset.mssTheme = settings.appearance.theme;
     root.dataset.mssDensity = settings.appearance.density;
     root.dataset.mssEmojis = settings.showDialogEmoji ? "on" : "off";
+    root.dataset.mssSchoolMode = settings.schoolMode && settings.schoolMode.active ? "on" : "off";
     root.lang = settings.languageMode === "cantonese" ? "zh-Hant" : "en";
+    renderLocalizedCopy();
+    renderSchoolModeControls();
     var output = one("[data-mss-settings-status]");
     if (output) output.textContent = "Browser-local preferences are stored in this browser's local storage: " + languageLabel(settings.languageMode) + ", " + themeLabel(settings.appearance.theme) + " theme, " + settings.appearance.density + " density. Nothing is sent to a server or desktop application.";
     emit("settings-changed", settings);
@@ -336,14 +404,15 @@
       grid.appendChild(generatedSetting("Density", density, "density"));
     }
 
-    if (!one('[data-contract-hook="emoji-toggle"]', surface)) {
+    var emojiToggle = one('[data-contract-hook="emoji-toggle"] input[type="checkbox"]', surface);
+    if (!emojiToggle) {
       var emojiToggle = made("input");
       emojiToggle.type = "checkbox";
-      emojiToggle.addEventListener("change", function () {
-        updateSettings({ showDialogEmoji: emojiToggle.checked }, "dialog-emoji", "Emoji decoration updated. The factual status stays the same.");
-      });
       grid.appendChild(generatedSetting("Show emojis in browser-local notices", emojiToggle, "emoji-toggle"));
     }
+    emojiToggle.addEventListener("change", function () {
+      updateSettings({ showDialogEmoji: emojiToggle.checked }, "dialog-emoji", "Emoji decoration updated. The factual status stays the same.");
+    });
 
     var logo = one('[data-contract-hook="app-logo-upload"] input[type="file"]', surface);
     if (logo) logo.addEventListener("change", function () {
@@ -360,14 +429,19 @@
       vocabularyInput.addEventListener("change", function () {
         loadVocabulary(vocabularyInput.files && vocabularyInput.files[0], vocabularyInput);
       });
-      var clearer = button("Clear in-page vocabulary preview", function () {
-        clearVocabulary();
-        vocabularyInput.value = "";
-        notify("info", "The browser-local vocabulary cache was cleared. No source file name or path was retained.");
-      });
       var owner = vocabularyInput.closest("label");
       if (owner) {
-        owner.appendChild(clearer);
+        var clearer = one("[data-mss-vocabulary-clear]", owner);
+        if (!clearer) {
+          clearer = button("Clear in-page vocabulary preview", function () {});
+          clearer.setAttribute("data-mss-vocabulary-clear", "true");
+          owner.appendChild(clearer);
+        }
+        clearer.addEventListener("click", function () {
+          clearVocabulary();
+          vocabularyInput.value = "";
+          notify("info", "The browser-local vocabulary cache was cleared. No source file name or path was retained.");
+        });
         if (!one("[data-mss-vocabulary-status]", owner)) {
           var vocabularyStatus = made("output");
           vocabularyStatus.setAttribute("data-mss-vocabulary-status", "true");
@@ -397,7 +471,13 @@
     if (!hasContractMethod("getState") || state.settings.schoolMode.active) return;
     var snapshot = safely(function () { return contract.getState(); }, null);
     var payload = snapshot && snapshot.personalVocabulary && snapshot.personalVocabulary.payload;
-    var replacements = payload && Array.isArray(payload.replacements) ? payload.replacements : [];
+    var validation = payload ? validatePersonalVocabularyPayload(JSON.stringify(payload)) : null;
+    if (payload && (!validation || validation.ok !== true)) {
+      if (hasContractMethod("clearPersonalVocabulary")) safely(function () { contract.clearPersonalVocabulary(); });
+      hydrateContractState();
+      return;
+    }
+    var replacements = validation && validation.ok ? validation.value.replacements : [];
     if (!replacements.length) return;
     var replacementMap = new Map(replacements.map(function (replacement) { return [replacement.from, replacement.to]; }));
     var keys = Array.from(replacementMap.keys()).sort(function (a, b) { return b.length - a.length; });
@@ -428,11 +508,19 @@
       output.textContent = "No validated vocabulary JSON is loaded in this browser. The selected source file name and path are never stored.";
       return;
     }
-    if (state.settings.schoolMode.active) {
-      output.textContent = "A validated vocabulary cache is stored locally but is inactive while School mode is enabled.";
+    var validation = validatePersonalVocabularyPayload(JSON.stringify(payload));
+    if (!validation || validation.ok !== true) {
+      if (hasContractMethod("clearPersonalVocabulary")) safely(function () { contract.clearPersonalVocabulary(); });
+      hydrateContractState();
+      restoreVocabulary();
+      output.textContent = "The saved vocabulary cache did not pass local validation and was cleared. Nothing was applied.";
       return;
     }
-    output.textContent = payload.replacements.length + " validated replacement entries are stored only in this browser's local storage. Clear removes the local cache immediately.";
+    if (state.settings.schoolMode.active) {
+      output.textContent = "A validated vocabulary cache is stored locally but is inactive while " + schoolModeName() + " is enabled.";
+      return;
+    }
+    output.textContent = validation.value.replacements.length + " validated replacement entries are stored only in this browser's local storage. Clear removes the local cache immediately.";
   }
 
   function clearVocabulary() {
@@ -443,6 +531,232 @@
     renderHistory();
   }
 
+  var schoolUnlockFailures = 0;
+  var nextSchoolUnlockAt = 0;
+
+  function schoolModeName() {
+    var name = state.settings && state.settings.schoolMode && state.settings.schoolMode.name;
+    return typeof name === "string" && name.trim() ? name.trim() : "School mode";
+  }
+
+  function schoolCodeLength(value) {
+    return typeof value === "string" ? Array.from(value).length : 0;
+  }
+
+  function schoolCryptoAvailable() {
+    return Boolean(window.crypto && window.crypto.subtle && typeof window.crypto.getRandomValues === "function" && typeof TextEncoder === "function" && typeof btoa === "function" && typeof atob === "function");
+  }
+
+  function bytesToBase64(bytes) {
+    var value = "";
+    for (var index = 0; index < bytes.length; index += 1) value += String.fromCharCode(bytes[index]);
+    return btoa(value);
+  }
+
+  function base64ToBytes(value) {
+    var binary = atob(value);
+    var bytes = new Uint8Array(binary.length);
+    for (var index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function schoolCodeVerifier(code, salt) {
+    var codeBytes = new TextEncoder().encode(code);
+    var source = new Uint8Array(salt.length + codeBytes.length);
+    source.set(salt, 0);
+    source.set(codeBytes, salt.length);
+    var digest = await window.crypto.subtle.digest("SHA-256", source);
+    return bytesToBase64(new Uint8Array(digest));
+  }
+
+  function schoolModeElements() {
+    var surface = one('[data-contract-surface="settings"]');
+    if (!surface) return {};
+    return {
+      surface: surface,
+      nameInput: one("[data-mss-school-name-input]", surface),
+      setupCode: one("[data-mss-school-credential-setup]", surface),
+      unlockCode: one("[data-mss-school-credential-unlock]", surface),
+      setup: one("[data-mss-school-setup]", surface),
+      saveName: one("[data-mss-school-save-name]", surface),
+      enable: one("[data-mss-school-enable]", surface),
+      unlock: one("[data-mss-school-unlock]", surface),
+      disable: one("[data-mss-school-disable]", surface),
+      reset: one("[data-mss-school-reset]", surface),
+      status: one("[data-mss-school-status]", surface),
+      boundary: one("[data-mss-school-boundary]", surface)
+    };
+  }
+
+  function renderSchoolModeControls() {
+    var elements = schoolModeElements();
+    if (!elements.surface) return;
+    var active = Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active);
+    var name = schoolModeName();
+    all("[data-mss-school-name]").forEach(function (element) { element.textContent = name; });
+    if (elements.nameInput && document.activeElement !== elements.nameInput) elements.nameInput.value = name;
+    if (elements.setup) elements.setup.hidden = active;
+    if (elements.saveName) {
+      elements.saveName.hidden = active;
+      elements.saveName.textContent = "Save " + name + " name";
+    }
+    if (elements.enable) {
+      elements.enable.hidden = active;
+      elements.enable.textContent = "Configure and enable " + name;
+    }
+    if (elements.unlock) elements.unlock.hidden = !active;
+    if (elements.disable) {
+      elements.disable.hidden = !active;
+      elements.disable.textContent = "Turn off " + name;
+    }
+    if (elements.reset) {
+      elements.reset.hidden = !active;
+      elements.reset.textContent = "Reset " + name + " lock";
+    }
+    all("[data-mss-suppressed-by-school]").forEach(function (element) { element.hidden = active; });
+    if (elements.boundary && hasContractMethod("getSchoolModeResetBoundary")) {
+      var boundary = safely(function () { return contract.getSchoolModeResetBoundary(); }, null);
+      if (boundary && boundary.message) elements.boundary.textContent = boundary.message;
+    }
+    if (elements.status) {
+      if (!schoolCryptoAvailable()) {
+        elements.status.textContent = "This browser does not provide the local cryptography needed to configure " + name + ".";
+      } else if (active) {
+        elements.status.textContent = name + " is active in this browser. English is forced and the language, tone, and vocabulary controls are hidden until a local unlock-code check succeeds.";
+      } else if (state.settings && state.settings.schoolMode && state.settings.schoolMode.credentialConfigured) {
+        elements.status.textContent = "A browser-local unlock-code verifier is ready. Configure and enable " + name + " when you are ready.";
+      } else {
+        elements.status.textContent = "Set a browser-local unlock code before enabling " + name + ".";
+      }
+    }
+  }
+
+  function refreshAfterSchoolModeChange() {
+    hydrateContractState();
+    syncSettingsControls();
+    applySettingsPresentation();
+    applyVocabulary();
+    renderVocabularyStatus();
+    renderHistory();
+  }
+
+  function requestedSchoolModeName(input) {
+    var value = input && typeof input.value === "string" ? input.value.trim() : "";
+    return value || schoolModeName();
+  }
+
+  async function configureAndEnableSchoolMode(elements) {
+    var name = requestedSchoolModeName(elements.nameInput);
+    var code = elements.setupCode && elements.setupCode.value || "";
+    if (!schoolCryptoAvailable()) {
+      notify("warning", "This browser cannot create the required local unlock-code verifier.");
+      return;
+    }
+    if (schoolCodeLength(code) < 4 || schoolCodeLength(code) > 64) {
+      notify("warning", "Use an unlock code between 4 and 64 characters. The code was not stored.");
+      return;
+    }
+    try {
+      var saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+      var verifier = await schoolCodeVerifier(code, saltBytes);
+      code = "";
+      if (elements.setupCode) elements.setupCode.value = "";
+      var credential = hasContractMethod("setSchoolModeCredential") ? safely(function () {
+        return contract.setSchoolModeCredential({ algorithm: "SHA-256", salt: bytesToBase64(saltBytes), verifier: verifier });
+      }, null) : null;
+      if (!credential || credential.ok !== true) {
+        notify("warning", (credential && credential.error) || "The browser-local unlock-code verifier could not be saved.");
+        return;
+      }
+      var enabled = hasContractMethod("setSchoolMode") ? safely(function () {
+        return contract.setSchoolMode({ enabled: true, name: name });
+      }, null) : null;
+      if (!enabled || enabled.ok !== true) {
+        notify("warning", (enabled && enabled.error) || "The presentation mode could not be enabled.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("success", name + " is now active in this browser. English is forced until the local unlock code is verified.");
+    } catch (_) {
+      if (elements.setupCode) elements.setupCode.value = "";
+      notify("warning", "The browser-local unlock-code verifier could not be created. Nothing was enabled.");
+    }
+  }
+
+  async function verifySchoolModeUnlock(elements) {
+    var code = elements.unlockCode && elements.unlockCode.value || "";
+    if (!schoolCryptoAvailable() || !hasContractMethod("getSchoolModeCredentialSalt") || !hasContractMethod("verifySchoolModeCredential")) {
+      return { ok: false, error: "This browser cannot verify the local unlock code." };
+    }
+    if (Date.now() < nextSchoolUnlockAt) {
+      return { ok: false, error: "Please wait briefly before another unlock-code attempt." };
+    }
+    try {
+      var salt = base64ToBytes(contract.getSchoolModeCredentialSalt());
+      var verifier = await schoolCodeVerifier(code, salt);
+      code = "";
+      if (elements.unlockCode) elements.unlockCode.value = "";
+      var verdict = contract.verifySchoolModeCredential(verifier);
+      if (!verdict || verdict.ok !== true) {
+        schoolUnlockFailures += 1;
+        nextSchoolUnlockAt = Date.now() + Math.min(30000, schoolUnlockFailures * 1000);
+        return { ok: false, error: "The unlock code did not match. This is a local presentation lock; clearing this site's storage is the recovery route if the code is forgotten." };
+      }
+      schoolUnlockFailures = 0;
+      nextSchoolUnlockAt = 0;
+      return { ok: true };
+    } catch (_) {
+      if (elements.unlockCode) elements.unlockCode.value = "";
+      return { ok: false, error: "The local unlock-code check could not finish." };
+    }
+  }
+
+  function installSchoolMode() {
+    var elements = schoolModeElements();
+    if (!elements.surface) return;
+    if (elements.saveName) elements.saveName.addEventListener("click", function () {
+      var result = hasContractMethod("setSchoolMode") ? safely(function () {
+        return contract.setSchoolMode({ enabled: false, name: requestedSchoolModeName(elements.nameInput) });
+      }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The browser-local mode name could not be saved.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("info", schoolModeName() + " is the browser-local mode name for this page.");
+    });
+    if (elements.enable) elements.enable.addEventListener("click", function () { configureAndEnableSchoolMode(elements); });
+    if (elements.disable) elements.disable.addEventListener("click", async function () {
+      var verification = await verifySchoolModeUnlock(elements);
+      if (!verification.ok) {
+        notify("warning", verification.error);
+        return;
+      }
+      var result = hasContractMethod("setSchoolMode") ? safely(function () { return contract.setSchoolMode({ enabled: false, credentialAccepted: true }); }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The browser-local presentation mode could not be turned off.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("success", schoolModeName() + " is off. Your previous browser-local preferences are available again.");
+    });
+    if (elements.reset) elements.reset.addEventListener("click", async function () {
+      var verification = await verifySchoolModeUnlock(elements);
+      if (!verification.ok) {
+        notify("warning", verification.error);
+        return;
+      }
+      var result = hasContractMethod("clearSchoolModeCredential") ? safely(function () { return contract.clearSchoolModeCredential({ credentialAccepted: true }); }, null) : null;
+      if (!result || result.ok !== true) {
+        notify("warning", (result && result.error) || "The browser-local presentation lock could not be reset.");
+        return;
+      }
+      refreshAfterSchoolModeChange();
+      notify("info", "The browser-local presentation lock and its one-way verifier were reset.");
+    });
+    renderSchoolModeControls();
+  }
+
   function loadVocabulary(file, input) {
     if (!file) return;
     var reader = new FileReader();
@@ -451,8 +765,16 @@
       notify("warning", "The vocabulary file could not be read locally. Nothing was applied.");
     };
     reader.onload = function () {
-      var source = String(reader.result || "");
-      var result = hasContractMethod("loadPersonalVocabulary") ? safely(function () { return contract.loadPersonalVocabulary(source); }, null) : null;
+      var validation = validatePersonalVocabularyPayload(reader.result);
+      if (!validation || validation.ok !== true) {
+        input.value = "";
+        restoreVocabulary();
+        renderVocabularyStatus();
+        notify("warning", "The vocabulary file was invalid or exceeded the local bounds. Nothing was applied.");
+        return;
+      }
+      var canonicalPayload = JSON.stringify(validation.value);
+      var result = hasContractMethod("loadPersonalVocabulary") ? safely(function () { return contract.loadPersonalVocabulary(canonicalPayload); }, null) : null;
       if (!result || result.ok !== true) {
         input.value = "";
         restoreVocabulary();
@@ -467,7 +789,7 @@
       renderHistory();
       notify("success", "A validated personal vocabulary preview is active in this browser. The file was not uploaded and its name or path was not retained.");
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   }
 
   function regexProblem(pattern) {
@@ -494,7 +816,10 @@
   }
 
   function textOf(element) {
-    return (element.textContent || "").replace(/\s+/g, " ").trim();
+    if (!element || element.hidden || element.closest("[hidden]")) return "";
+    var copy = element.cloneNode(true);
+    all("[hidden]", copy).forEach(function (hidden) { hidden.remove(); });
+    return (copy.textContent || "").replace(/\s+/g, " ").trim();
   }
 
   function makeRegexBuilder(input, options) {
@@ -1233,14 +1558,33 @@
       interaction: "missing",
       capture: "missing"
     };
+    var universalControlsCore = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, site/contract.js, and site/vocabulary-loader.js",
+      implementationDetail: "Real browser-local settings controls persist through the page contract; no desktop action is delegated from this core.",
+      documentation: "verified",
+      documentationReference: "site/README.md and site/CONTRACT.md",
+      localization: "in-progress",
+      localizationDetail: "The settings core supplies English, Cantonese, and bilingual copy; page-wide localization remains incomplete.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2",
+      persistenceDetail: "Validated values persist only for this page's origin in this browser.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-artifact interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-artifact capture is recorded."
+    };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
         inventoryFeature("marketing-copy", "Marketing content and direct installer boundary", "in-progress", "The page exposes a static verified installer anchor and must not simulate a transfer.", staticHook),
         inventoryFeature("marketing-status", "Browser-local status model", "in-progress", "The page stores its status model in browser local storage only; no chat or status-service bridge exists.", localContract)
       ] },
       { id: "settings", label: "Settings and appearance preview", route: "#settings-preview", features: [
-        inventoryFeature("settings-controls", "Visible browser-local language, funny-level, theme, density, and emoji controls", "in-progress", "Controls use the local contract but do not alter the installed application.", localContract),
-        inventoryFeature("personal-vocabulary", "Personal vocabulary JSON loader", "in-progress", "Exact bounded version-1 array schema; local cache only; no file name, path, upload, or telemetry.", localContract)
+        inventoryFeature("settings-controls", "Visible browser-local language, independently persisted funny-level, and notice-emoji controls", "in-progress", "These controls operate this public page rather than delegating to the installed application.", universalControlsCore),
+        inventoryFeature("personal-vocabulary", "Personal vocabulary JSON loader", "in-progress", "Strict version-1 parser and revalidation protect the local cache; no file name, path, upload, or telemetry.", universalControlsCore),
+        inventoryFeature("renamed-presentation-mode", "Renamed browser-local presentation mode", "in-progress", "The local one-way verifier controls English-only presentation and suppression; it is a user-experience lock, not security protection.", universalControlsCore)
       ] },
       { id: "documentation", label: "Offline documentation preview", route: "#docs-preview", features: [inventoryFeature("documentation-preview", "Static documentation and search preview", "in-progress", "The page links static content but does not prove a packaged offline documentation browser.", staticHook)] },
       { id: "converter", label: "File converter preview", route: "#converter-preview", features: [inventoryFeature("converter-boundary", "Unavailable browser conversion boundary", "in-progress", "The static page does not read bytes, select an adapter, or write output.", staticHook)] },
@@ -1394,6 +1738,7 @@
     seedStatusModel();
     seedCompletenessInventory();
     installSettings();
+    installSchoolMode();
     installTabsAndArticles();
     installCollapsibleLists();
     installConverterPlanner();
