@@ -20,6 +20,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
 - Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory. An optional main-process Status Hub bridge can be configured separately; it keeps the local destination as the fallback and never reports registration, update, inbox-poll, or reply delivery without an accepted transport response.
 - Browse the bundled in-app feature documentation without a network request. The documentation destination reads a fixed packaged inventory, renders Markdown through an isolated escaped renderer, resolves listed feature links inside the app, and keeps plain-text search plus a bounded local regex-builder route.
+- Browse a dedicated offline changelog destination that parses only the packaged `CHANGELOG.md` and bounded local release metadata. It offers typed local date filtering, plain-text search with an adjacent regex builder, visible missing-date and missing-commit states, filtered copy/Markdown/plain-text export, and a validated user-initiated commit handoff; it never fetches release records at runtime.
 - Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
 - Choose a shipped app-logo preset or a bounded local PNG/JPEG in Studio preferences. The renderer receives only a validated private display asset; the custom mark never changes the package, executable, installer, update, or application-data identity.
 - Configure a local appearance and navigation foundation with persisted system/light/dark theme, density, seed color, bounded typography, direct shell/tab/action targets, and a browser-style server tab strip that docks on any edge, keeps keyboard orientation correct, persists selection, searches locally, and exposes an all-tabs overflow list. Every-element editing, tab pinning/grouping/reordering, and full command-palette coverage remain explicitly unavailable.
@@ -125,6 +126,7 @@ The companion site also independently provides a deliberately bounded local conv
 - [Local history and safe exports](docs/features/local-history-and-safe-exports.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
 - [Offline documentation browser](docs/features/offline-documentation-browser.md)
+- [Offline changelog viewer](docs/features/changelog-viewer.md)
 - [Feature documentation index](docs/features/README.md)
 - [Changelog](CHANGELOG.md)
 - [Handoff](HANDOFF.md)

@@ -12,6 +12,7 @@ const { FileConverter } = require('./file-converter.cjs');
 const { ExternalEditorService } = require('./external-editor-service.cjs');
 const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
 const { LogoManager } = require('./logo-manager.cjs');
+const { CANONICAL_COMMIT_BASE_URL, LocalChangelogLibrary } = require('./changelog-library.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
 const { BuildToolsOrchestrationController } = require('./buildtools-orchestration.cjs');
@@ -67,6 +68,7 @@ let externalEditor;
 let buildToolsController;
 let offlineDocumentation;
 let logoManager;
+let offlineChangelog;
 let scheduleTickTimer;
 let authenticatorService;
 let toyLockService;
@@ -462,6 +464,11 @@ app.whenReady().then(async () => {
     onStateChange: (ollama) => sendToRenderer({ type: 'ollama-suite', ollama })
   });
   offlineDocumentation = new OfflineDocumentationLibrary({ appPath: app.getAppPath() });
+  offlineChangelog = new LocalChangelogLibrary({
+    appPath: app.getAppPath(),
+    dialog,
+    downloadsPath: app.getPath('downloads')
+  });
   await updateController.initialize();
   createWindow();
   ollamaSuite.refresh().catch(() => {});
@@ -523,6 +530,11 @@ function requireBuildToolsController() {
 function requireOfflineDocumentation() {
   if (!offlineDocumentation) throw new Error('Offline documentation is still starting.');
   return offlineDocumentation;
+}
+
+function requireOfflineChangelog() {
+  if (!offlineChangelog) throw new Error('The offline changelog is still starting.');
+  return offlineChangelog;
 }
 
 function requireNarrationScheduleSettings() {
@@ -846,6 +858,14 @@ ipcMain.handle('studio:export-local-history', (_event, request) => requireLocalH
 ipcMain.handle('studio:open-local-history-export-in-vscode', (_event, exportId) => requireLocalHistory().openInVsCode(exportId));
 ipcMain.handle('studio:offline-docs', () => requireOfflineDocumentation().list());
 ipcMain.handle('studio:offline-doc', (_event, id) => requireOfflineDocumentation().read(id));
+ipcMain.handle('studio:offline-changelog', () => requireOfflineChangelog().list());
+ipcMain.handle('studio:export-offline-changelog', (_event, request) => requireOfflineChangelog().export(request || {}));
+ipcMain.handle('studio:open-changelog-commit', async (_event, value) => {
+  const sha = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!/^[a-f0-9]{7,40}$/.test(sha)) throw new Error('Choose a valid recorded changelog commit before opening it.');
+  await shell.openExternal(`${CANONICAL_COMMIT_BASE_URL}${sha}`);
+  return Object.freeze({ state: 'opened', sha });
+});
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
 ipcMain.handle('studio:ollama-status', () => requireOllamaSuite().status());
 ipcMain.handle('studio:refresh-ollama', () => requireOllamaSuite().refresh());

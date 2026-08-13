@@ -28,6 +28,7 @@
         <div class="sidebar-footer">
           <button class="text-action" id="refresh-button" type="button" data-i18n="nav.refresh">Refresh local data</button>
           <button class="text-action" id="open-documentation-button" type="button" aria-controls="documentation-destination">Offline documentation</button>
+          <button class="text-action" id="open-changelog-button" type="button" aria-controls="changelog-destination" data-i18n="nav.changelog">Offline changelog</button>
           <button class="text-action" id="experience-settings-button" type="button" aria-haspopup="dialog" aria-controls="experience-settings-dialog" data-i18n="nav.preferences">Studio preferences</button>
           <p id="data-directory" class="muted">Loading local data location…</p>
         </div>
@@ -249,6 +250,63 @@
               <div id="documentation-markdown" class="documentation-markdown" tabindex="-1" aria-live="polite"><p class="muted">No article is selected.</p></div>
             </article>
           </div>
+        </section>
+
+        <section class="changelog-destination hidden" id="changelog-destination" aria-labelledby="changelog-title">
+          <header class="panel-heading changelog-heading">
+            <div>
+              <p class="eyebrow" data-i18n="changelog.eyebrow">BUNDLED VERSION RECORD</p>
+              <h3 id="changelog-title" data-i18n="changelog.title">Offline changelog</h3>
+              <p class="muted" data-i18n="changelog.description">This destination parses the version records bundled with this installed app. It never fetches release notes, tags, dates, or commit links from a network service.</p>
+            </div>
+            <button class="outlined-action" id="close-changelog-button" type="button" data-i18n="changelog.back">Back to server workspace</button>
+          </header>
+
+          <div class="status-summary-grid" aria-live="polite">
+            <article class="status-summary-card"><span data-i18n="changelog.stateLabel">Record state</span><strong id="changelog-state">Loading</strong></article>
+            <article class="status-summary-card"><span data-i18n="changelog.recordsLabel">Version records</span><strong id="changelog-record-count">Not loaded</strong></article>
+            <article class="status-summary-card"><span data-i18n="changelog.sourceLabel">Source</span><strong id="changelog-source">Bundled file</strong></article>
+          </div>
+
+          <section class="changelog-filter-card" aria-labelledby="changelog-filter-title">
+            <div class="panel-heading">
+              <div>
+                <h4 id="changelog-filter-title" data-i18n="changelog.filterTitle">Find version records</h4>
+                <p class="muted" data-i18n="changelog.filterDescription">Plain-text search is the default. Date fields accept ISO dates and the local numeric date order; records with no recorded date are excluded only while a date filter is active.</p>
+              </div>
+              <span id="changelog-match-count" class="status-chip">0 records</span>
+            </div>
+            <div class="settings-grid">
+              <label class="field"><span data-i18n="changelog.startDate">Start date</span><input id="changelog-from-date" type="text" maxlength="32" inputmode="numeric" autocomplete="off" data-i18n-placeholder="changelog.datePlaceholder" placeholder="YYYY-MM-DD or local date"></label>
+              <label class="field"><span data-i18n="changelog.endDate">End date</span><input id="changelog-to-date" type="text" maxlength="32" inputmode="numeric" autocomplete="off" data-i18n-placeholder="changelog.datePlaceholder" placeholder="YYYY-MM-DD or local date"></label>
+              <label class="field wide changelog-search" for="changelog-search"><span data-i18n="changelog.search">Search changelog</span><span class="documentation-search-row"><input id="changelog-search" type="search" maxlength="256" autocomplete="off" data-i18n-placeholder="changelog.searchPlaceholder" placeholder="Plain text by default"><button id="open-changelog-regex-button" type="button" class="icon-action" data-i18n-aria-label="changelog.openRegexAria" aria-label="Open the changelog search regex builder" aria-expanded="false" aria-controls="changelog-regex-builder">.*</button></span></label>
+            </div>
+            <section class="documentation-regex-builder hidden" id="changelog-regex-builder" data-i18n-aria-label="changelog.regexBuilderAria" aria-label="Changelog search regex builder">
+              <div class="panel-heading"><div><h4 data-i18n="changelog.regexTitle">Regex builder</h4><p class="muted" data-i18n="changelog.regexDescription">Patterns are bounded and apply only to the bundled changelog records currently in this window.</p></div><button id="close-changelog-regex-button" type="button" class="icon-action" data-i18n-aria-label="changelog.closeRegexAria" aria-label="Close the changelog search regex builder">×</button></div>
+              <label class="field"><span data-i18n="changelog.rawPattern">Raw pattern</span><input id="changelog-regex-pattern" type="text" maxlength="256" autocomplete="off" data-i18n-placeholder="changelog.regexExample" placeholder="Example: ^0\\.1\\.0$"></label>
+              <fieldset class="documentation-regex-flags"><legend data-i18n="changelog.regexFlags">Flags</legend><label><input id="changelog-regex-flag-i" type="checkbox"> <span data-i18n="changelog.caseInsensitive">Case-insensitive</span></label><label><input id="changelog-regex-flag-m" type="checkbox"> <span data-i18n="changelog.multiline">Multiline</span></label><label><input id="changelog-regex-flag-s" type="checkbox"> <span data-i18n="changelog.dotAll">Dot matches newlines</span></label></fieldset>
+              <div class="documentation-regex-tools" data-i18n-aria-label="changelog.tokenToolsAria" aria-label="Guided pattern tokens"><button type="button" class="outlined-action" data-changelog-regex-token="literal" data-i18n="changelog.literal">Literal</button><button type="button" class="outlined-action" data-changelog-regex-token="class" data-i18n="changelog.characterClass">Character class</button><button type="button" class="outlined-action" data-changelog-regex-token="anchor" data-i18n="changelog.anchor">Anchor</button><button type="button" class="outlined-action" data-changelog-regex-token="group" data-i18n="changelog.group">Group</button><button type="button" class="outlined-action" data-changelog-regex-token="alternation" data-i18n="changelog.alternation">Alternation</button><button type="button" class="outlined-action" data-changelog-regex-token="quantifier" data-i18n="changelog.quantifier">Quantifier</button></div>
+              <label class="field"><span data-i18n="changelog.sample">Sample text</span><textarea id="changelog-regex-sample" rows="3" maxlength="4096" data-i18n-placeholder="changelog.samplePlaceholder" placeholder="Try the pattern against local sample text"></textarea></label>
+              <p id="changelog-regex-status" class="documentation-regex-status" role="status">Regex mode is off. Plain-text search is active.</p>
+              <div class="documentation-regex-actions"><button id="apply-changelog-regex-button" type="button" class="primary-action" data-i18n="changelog.applyRegex">Apply regex to changelog</button><button id="reset-changelog-regex-button" type="button" class="outlined-action" data-i18n="changelog.plainText">Return to plain text</button></div>
+            </section>
+            <p id="changelog-filter-error" class="history-filter-error" role="alert" hidden></p>
+            <p id="changelog-boundary" class="muted">Loading the bundled changelog…</p>
+            <div id="changelog-records" class="changelog-record-list" aria-live="polite"></div>
+          </section>
+
+          <section class="changelog-export-card" aria-labelledby="changelog-export-title">
+            <div>
+              <h4 id="changelog-export-title" data-i18n="changelog.exportTitle">Copy or export the current filtered view</h4>
+              <p class="muted" data-i18n="changelog.exportDescription">Copy and export use exactly the records currently visible above. A native save dialog chooses the destination; no release data is fetched.</p>
+            </div>
+            <div class="history-export-actions">
+              <button id="copy-changelog-button" type="button" class="outlined-action" data-i18n="changelog.copy">Copy filtered changelog</button>
+              <button id="export-changelog-markdown-button" type="button" class="primary-action" data-i18n="changelog.exportMarkdown">Export Markdown</button>
+              <button id="export-changelog-text-button" type="button" class="outlined-action" data-i18n="changelog.exportText">Export plain text</button>
+            </div>
+            <p id="changelog-export-detail" class="muted">No changelog export has been requested.</p>
+          </section>
         </section>
 
         <section id="authenticator-destination" class="authenticator-destination hidden" aria-labelledby="authenticator-destination-title">
