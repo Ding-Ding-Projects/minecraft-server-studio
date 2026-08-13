@@ -13,6 +13,7 @@
 - Browser-local companion-site logo customization with three shipped presets, bounded local PNG/JPEG validation and derived display data, local fit/background/focal controls, School-mode fallback, and reset without a source-file, desktop-app, or network route.
 - Browser-local notification center with bounded origin-local notices/audit entries, local plain-text/regex discovery, and dismissed/all record clearing behind two acknowledgements and a full slider. It never represents a desktop, server, installer, transfer, or file operation.
 - Local external-editor handoff foundation for validated server folders and existing application-created exports, with discovered or explicitly selected Visual Studio Code as the preferred generated-export destination.
+- Bounded desktop `Ctrl+Shift+F` command-palette foundation for real local renderer destinations and non-secret controls, with local regex search and exact-element focus; it does not execute server actions or claim complete application coverage.
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
 - Offline changelog browsing from bundled curated notes and package-local release metadata, with local filtering and export rather than runtime release fetching.
 - Serialized next-release metadata that can record one unused public dim-sum catalog link without copying the source photo into the product release.
@@ -31,5 +32,6 @@
 - Extend the companion-site logo foundation with complete localized copy, accessibility and narrow-layout evidence, safe browser-storage recovery evidence, interaction coverage, and real public-site captures before treating it as a complete every-element logo system.
 - Complete notification-center accessibility/localization, persistent-state evidence, and notification-action exercise; any future destructive operation beyond page-local notification metadata must name and safely perform its exact affected-data action.
 - Extend the external-editor handoff foundation with complete export coverage, localized recovery states, focused verification, packaged interaction, and capture evidence before treating it as a complete application-wide editor/export workflow.
+- Expand the desktop command palette only through explicit per-surface registrations and evidence: complete settings/article/control coverage, localized and accessibility validation, safe rich-control behavior, runtime interaction, and captures remain outstanding.
 - Produce release packaging and runtime verification evidence after the speed-delivery boundary is lifted.
 - Complete the companion site's operation-level localization, QR import/decoder and camera boundaries, all-element toy-lock coverage, synchronized accessibility evidence, automated tests, built-site interaction, and captures before treating its authenticator or lock surface as complete.
