@@ -219,6 +219,51 @@
     'settings.logoApply': { english: 'Apply logo rendering', cantonese: '套用標誌顯示' },
     'settings.logoReset': { english: 'Reset shipped logo', cantonese: '重設內建標誌' },
     'settings.logoStoragePending': { english: 'Loading app-private logo settings…', cantonese: '正在載入程式私用標誌設定…' },
+    'settings.personalVocabularyTitle': { english: 'Private vocabulary', cantonese: '私用詞彙' },
+    'settings.personalVocabularyDescription': { english: 'Choose a local JSON replacement map for app-owned wording. The complete file is validated before local use; no source name or location is retained.', cantonese: '揀一個本機 JSON 替換對照表，套用到程式本身嘅文字。完整檔案驗證後先會喺本機使用；唔會保留來源名稱或位置。' },
+    'settings.personalVocabularyStatus': { english: 'Private vocabulary status', cantonese: '私用詞彙狀態' },
+    'settings.personalVocabularySelect': { english: 'Choose private JSON', cantonese: '揀私用 JSON' },
+    'settings.personalVocabularySelectHint': { english: 'Only a validated private local cache is kept. The selected file name, location, and contents never enter history, exports, status, telemetry, or a network request.', cantonese: '只會保留經驗證嘅私用本機快取。已揀檔案嘅名稱、位置同內容永遠唔會進入歷史、匯出、狀態、遙測或者網絡請求。' },
+    'settings.personalVocabularyClear': { english: 'Clear private vocabulary', cantonese: '清除私用詞彙' },
+    'settings.personalVocabularyClearHint': { english: 'Clearing removes the app-private validated cache and restores shipped wording. It requires the full destructive-action confirmation.', cantonese: '清除會移除程式私用嘅已驗證快取，並還原內建文字。需要完成完整破壞性動作確認。' },
+    'settings.personalVocabularySearch': { english: 'Find private-vocabulary controls', cantonese: '搵私用詞彙控制項' },
+    'settings.personalVocabularySearchPlaceholder': { english: 'Search this setting', cantonese: '搜尋呢個設定' },
+    'settings.personalVocabularyRegexButton': { english: 'Build regex', cantonese: '建立 regex' },
+    'settings.personalVocabularyRegexTitle': { english: 'Private-vocabulary search regex builder', cantonese: '私用詞彙搜尋 regex 建立器' },
+    'settings.personalVocabularyRegexDescription': { english: 'Build a bounded local pattern for this settings card. Plain text remains the default.', cantonese: '為呢張設定卡建立受限本機模式。預設仍然係普通文字。' },
+    'settings.personalVocabularyRegexPattern': { english: 'Raw pattern', cantonese: '原始模式' },
+    'settings.personalVocabularyRegexFlags': { english: 'Flags', cantonese: '旗標' },
+    'settings.personalVocabularyRegexIgnoreCase': { english: 'Ignore case', cantonese: '忽略大小寫' },
+    'settings.personalVocabularyRegexCaseSensitive': { english: 'Case sensitive', cantonese: '區分大小寫' },
+    'settings.personalVocabularyRegexIgnoreCaseMultiline': { english: 'Ignore case + multiline', cantonese: '忽略大小寫 + 多行' },
+    'settings.personalVocabularyRegexSample': { english: 'Sample text', cantonese: '範例文字' },
+    'settings.personalVocabularyRegexTokens': { english: 'Regex construction tokens', cantonese: 'Regex 建構符號' },
+    'settings.personalVocabularyRegexLiteral': { english: 'Literal', cantonese: '文字' },
+    'settings.personalVocabularyRegexClass': { english: 'Character class', cantonese: '字元類別' },
+    'settings.personalVocabularyRegexAnchor': { english: 'Anchor', cantonese: '錨點' },
+    'settings.personalVocabularyRegexGroup': { english: 'Group', cantonese: '群組' },
+    'settings.personalVocabularyRegexAlternation': { english: 'Alternation', cantonese: '分支' },
+    'settings.personalVocabularyRegexQuantifier': { english: 'Quantifier', cantonese: '量詞' },
+    'settings.personalVocabularyRegexApply': { english: 'Apply regex search', cantonese: '套用 regex 搜尋' },
+    'settings.personalVocabularyRegexPlain': { english: 'Return to plain search', cantonese: '返回普通文字搜尋' },
+    'settings.personalVocabularyRegexEmpty': { english: 'Enter a pattern to preview local matches.', cantonese: '輸入模式去預覽本機符合項目。' },
+    'settings.personalVocabularyRegexValid': { english: 'The bounded regex is valid for this settings card.', cantonese: '受限 regex 對呢張設定卡有效。' },
+    'settings.personalVocabularyRegexInvalid': { english: 'The regex pattern is invalid.', cantonese: 'Regex 模式唔正確。' },
+    'settings.personalVocabularySearchMatched': { english: 'Private-vocabulary controls match the active search.', cantonese: '私用詞彙控制項符合目前搜尋。' },
+    'settings.personalVocabularySearchEmpty': { english: 'No private-vocabulary controls match the active search.', cantonese: '冇私用詞彙控制項符合目前搜尋。' },
+    'settings.personalVocabularyStateReady': { english: 'Validated private vocabulary is active locally.', cantonese: '已啟用經驗證嘅本機私用詞彙。' },
+    'settings.personalVocabularyStateMissing': { english: 'No private vocabulary is active; shipped wording is shown.', cantonese: '未啟用私用詞彙；正顯示內建文字。' },
+    'settings.personalVocabularyStateInvalid': { english: 'Saved private vocabulary is invalid or unsupported; shipped wording is shown until a new valid file is selected.', cantonese: '已儲存嘅私用詞彙無效或者唔支援；揀新有效檔案之前會顯示內建文字。' },
+    'settings.personalVocabularyStateUnavailable': { english: 'App-private vocabulary storage is unavailable; shipped wording is shown.', cantonese: '程式私用詞彙儲存空間唔可用；正顯示內建文字。' },
+    'settings.personalVocabularyStateLoading': { english: 'Loading private vocabulary status…', cantonese: '正在載入私用詞彙狀態…' },
+    'settings.personalVocabularyStateSchool': { english: 'The shared mode is active, so private-vocabulary controls and replacements are unavailable.', cantonese: '共用模式已啟用，所以私用詞彙控制項同替換內容暫時唔可用。' },
+    'settings.personalVocabularyPaletteTitle': { english: 'Private vocabulary', cantonese: '私用詞彙' },
+    'settings.personalVocabularyPaletteDetail': { english: 'Reveal the local validated replacement-map picker, status, clear control, and its attached regex builder.', cantonese: '顯示本機已驗證替換對照表嘅選擇器、狀態、清除控制項同附屬 regex 建立器。' },
+    'settings.personalVocabularyErrorValidation': { english: 'This private vocabulary selection cannot be used. Shipped wording remains active.', cantonese: '呢個私用詞彙選擇唔可以使用。會繼續顯示內建文字。' },
+    'settings.personalVocabularyErrorStorage': { english: 'Private vocabulary storage is unavailable. Shipped wording remains active.', cantonese: '私用詞彙儲存空間唔可用。會繼續顯示內建文字。' },
+    'settings.personalVocabularyErrorConfirmation': { english: 'Review the private-vocabulary clear confirmation and try again.', cantonese: '請重新檢查私用詞彙清除確認，再試一次。' },
+    'settings.personalVocabularyErrorClear': { english: 'Private vocabulary could not be cleared. Shipped wording remains active until local storage is repaired.', cantonese: '未能清除私用詞彙。本機儲存空間修復前會繼續顯示內建文字。' },
+    'settings.personalVocabularyErrorGeneric': { english: 'Private vocabulary could not be updated. Shipped wording remains active.', cantonese: '未能更新私用詞彙。會繼續顯示內建文字。' },
     'settings.schoolTitle': { english: '{label} control', cantonese: '{label} 控制' },
     'settings.schoolEyebrow': { english: 'SHARED LOCAL EXPERIENCE CONTROL', cantonese: '共用本機使用體驗控制' },
     'settings.schoolDescription': { english: '{label} is a shared local user-experience control, not a security boundary. It forces English while active and hides language and message-playfulness controls. It does not encrypt data or prevent a local reset.', cantonese: '{label} 係共用本機使用體驗控制，唔係保安界線。啟用時會強制英文，同時隱藏語言同訊息玩味控制。佢唔會加密資料，亦唔會阻止本機重設。' },
@@ -254,6 +299,8 @@
     'toast.logoReset': { english: 'The shipped Studio Aqua logo is active again.', cantonese: 'Studio 水藍內建標誌已再次啟用。' },
     'toast.logoRegexCopied': { english: 'Preset regex pattern copied.', cantonese: '已複製預設 regex 模式。' },
     'toast.logoRegexCopyUnavailable': { english: 'Clipboard access is unavailable. Select the raw pattern to copy it.', cantonese: '剪貼簿存取唔可用。請揀原始模式去複製。' },
+    'toast.personalVocabularyImported': { english: 'Validated private vocabulary is active locally.', cantonese: '已啟用經驗證嘅本機私用詞彙。' },
+    'toast.personalVocabularyCleared': { english: 'Private vocabulary was cleared and shipped wording is restored.', cantonese: '已清除私用詞彙，並還原內建文字。' },
     'toast.error': { english: 'Attention', cantonese: '留意' },
     'toast.success': { english: 'Updated', cantonese: '已更新' },
     'toast.info': { english: 'Notice', cantonese: '提示' }
@@ -288,6 +335,14 @@
     '本機方塊派對總部'
   ]);
 
+  function projectedCopy(value, language, key) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const table = value[language];
+    if (!table || typeof table !== 'object' || Array.isArray(table) || !Object.prototype.hasOwnProperty.call(table, key)) return null;
+    const projected = table[key];
+    return typeof projected === 'string' && projected.length <= 2048 && !/[\u0000-\u001f\u007f]/.test(projected) ? projected : null;
+  }
+
   function interpolate(template, values = {}) {
     return String(template).replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, key) => String(values[key] ?? ''));
   }
@@ -296,10 +351,10 @@
     return COPY[key] || { english: key, cantonese: key };
   }
 
-  function format(key, mode, values) {
+  function format(key, mode, values, copyProjection) {
     const value = entry(key);
-    const english = interpolate(value.english, values);
-    const cantonese = interpolate(value.cantonese, values);
+    const english = projectedCopy(copyProjection, 'english', key) ?? interpolate(value.english, values);
+    const cantonese = projectedCopy(copyProjection, 'cantonese', key) ?? interpolate(value.cantonese, values);
     if (mode === 'cantonese') return cantonese;
     if (mode === 'bilingual') return `${english} · ${cantonese}`;
     return english;
@@ -310,9 +365,9 @@
     return values[Math.max(1, Math.min(5, Number(level) || 1)) - 1];
   }
 
-  function toastPrefix(mode, levels, kind) {
-    const englishBase = format(`toast.${kind}`, 'english');
-    const cantoneseBase = format(`toast.${kind}`, 'cantonese');
+  function toastPrefix(mode, levels, kind, copyProjection) {
+    const englishBase = format(`toast.${kind}`, 'english', {}, copyProjection);
+    const cantoneseBase = format(`toast.${kind}`, 'cantonese', {}, copyProjection);
     const english = `${englishBase} — ${tone('english', levels?.english)}`;
     const cantonese = `${cantoneseBase} — ${tone('cantonese', levels?.cantonese)}`;
     if (mode === 'cantonese') return cantonese;

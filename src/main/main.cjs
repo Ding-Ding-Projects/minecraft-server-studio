@@ -14,6 +14,7 @@ const { FileConverter } = require('./file-converter.cjs');
 const { ExternalEditorService } = require('./external-editor-service.cjs');
 const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
 const { LogoManager } = require('./logo-manager.cjs');
+const { PersonalVocabularyManager } = require('./personal-vocabulary-manager.cjs');
 const { CANONICAL_COMMIT_BASE_URL, LocalChangelogLibrary } = require('./changelog-library.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
@@ -105,6 +106,7 @@ let externalEditor;
 let buildToolsController;
 let offlineDocumentation;
 let logoManager;
+let personalVocabularyManager;
 let offlineChangelog;
 let scheduleTickTimer;
 let authenticatorService;
@@ -254,6 +256,13 @@ function schoolModeVaultStatus() {
 function experienceSnapshot() {
   const settings = requireStudioSettings().snapshot();
   const narrationSchedule = requireNarrationScheduleSettings().snapshot({ baseLanguage: settings.local.language });
+  const schoolModeActive = settings.shared?.effectiveSchoolMode === true;
+  const personalVocabulary = personalVocabularyManager
+    ? personalVocabularyManager.presentation({ suppressCopy: schoolModeActive })
+    : Object.freeze({
+      status: Object.freeze({ schemaVersion: 1, state: 'not-loaded', detail: 'Private vocabulary settings are still starting.', active: false }),
+      copy: Object.freeze({ english: Object.freeze({}), cantonese: Object.freeze({}) })
+    });
   return {
     ...settings,
     effectiveLocal: {
@@ -262,7 +271,9 @@ function experienceSnapshot() {
     },
     narrationSchedule,
     narratorRuntime: narratorRuntimeSnapshot(),
-    credential: schoolModeVaultStatus()
+    credential: schoolModeVaultStatus(),
+    personalVocabulary: personalVocabulary.status,
+    personalVocabularyCopy: personalVocabulary.copy
   };
 }
 
@@ -438,6 +449,10 @@ app.whenReady().then(async () => {
     nativeImage
   });
   await logoManager.initialize();
+  personalVocabularyManager = new PersonalVocabularyManager({
+    dataDir: path.join(app.getPath('userData'), 'personal-vocabulary')
+  });
+  personalVocabularyManager.initialize();
   credentialVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
@@ -557,6 +572,25 @@ function requireUpdater() {
 function requireLogoManager() {
   if (!logoManager) throw new Error('Logo customization controls are still starting.');
   return logoManager;
+}
+
+function requirePersonalVocabularyManager() {
+  if (!personalVocabularyManager) throw new Error('Private vocabulary controls are still starting.');
+  return personalVocabularyManager;
+}
+
+function personalVocabularyFailure(error) {
+  const code = String(error?.code || '');
+  const kind = /^(?:VOCABULARY_INVALID_JSON|VOCABULARY_ENCODING|VOCABULARY_INVALID_RECORD|VOCABULARY_UNSUPPORTED_VERSION|VOCABULARY_ENTRY_LIMIT|VOCABULARY_NESTING_LIMIT|VOCABULARY_DUPLICATE_KEY|VOCABULARY_INVALID_ENTRY|VOCABULARY_SIZE_LIMIT|VOCABULARY_PROJECTION_LIMIT|VOCABULARY_READ_FAILED|VOCABULARY_INVALID_PATH)$/.test(code)
+    ? 'validation'
+    : /^(?:VOCABULARY_DIRECTORY_UNAVAILABLE|VOCABULARY_INVALID_DIRECTORY|VOCABULARY_CACHE_INVALID)$/.test(code)
+      ? 'storage'
+      : /^(?:VOCABULARY_CONFIRMATION_REQUIRED|VOCABULARY_CONFIRMATION_INVALID|VOCABULARY_CONFIRMATION_STALE|VOCABULARY_NOT_ACTIVE)$/.test(code)
+        ? 'confirmation'
+        : code === 'VOCABULARY_CLEAR_FAILED'
+          ? 'clear'
+          : 'generic';
+  return Object.freeze({ ok: false, error: kind });
 }
 
 function requireOllamaSuite() {
@@ -742,6 +776,36 @@ ipcMain.handle('studio:reset-logo', async () => {
   const snapshot = await requireLogoManager().reset();
   await recordLogoHistory('The app logo returned to its shipped preset. Raw image bytes, source paths, and image metadata were omitted from history.');
   return snapshot;
+});
+ipcMain.handle('studio:pick-personal-vocabulary', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'JSON file', extensions: ['json'] }]
+    });
+    if (result.canceled || !result.filePaths[0]) {
+      return Object.freeze({ ok: true, canceled: true, snapshot: experienceSnapshot() });
+    }
+    requirePersonalVocabularyManager().importFile(result.filePaths[0]);
+    return Object.freeze({ ok: true, canceled: false, snapshot: publishExperienceSettings() });
+  } catch (error) {
+    return personalVocabularyFailure(error);
+  }
+});
+ipcMain.handle('studio:personal-vocabulary-clear-preview', () => {
+  try {
+    return Object.freeze({ ok: true, preview: requirePersonalVocabularyManager().clearPreview() });
+  } catch (error) {
+    return personalVocabularyFailure(error);
+  }
+});
+ipcMain.handle('studio:clear-personal-vocabulary', (_event, confirmation) => {
+  try {
+    requirePersonalVocabularyManager().clear(confirmation);
+    return Object.freeze({ ok: true, snapshot: publishExperienceSettings() });
+  } catch (error) {
+    return personalVocabularyFailure(error);
+  }
 });
 ipcMain.handle('studio:narration-schedule-settings', () => experienceSnapshot().narrationSchedule);
 ipcMain.handle('studio:update-narrator-settings', async (_event, patch) => {
