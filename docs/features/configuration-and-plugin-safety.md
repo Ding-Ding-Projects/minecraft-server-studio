@@ -4,7 +4,7 @@ Minecraft Server Studio keeps a server definition in local application data, but
 
 ## Preserving `server.properties`
 
-The application parses `server.properties` as a bounded line model before it changes a GUI-managed property. Comments, blank lines, unknown keys, separator style, byte-order mark, final-newline state, and the existing LF or CRLF convention are retained. The updater changes only known property keys requested by the current settings save, and it writes the completed file through a same-directory temporary file followed by an atomic rename.
+The application parses `server.properties` as a bounded line model before it changes a GUI-managed property. Comments, blank lines, unknown keys, separator style, byte-order mark, final-newline state, and the existing LF or CRLF convention are retained. The updater changes only known property keys requested by the current settings save, and it writes the completed file through a same-directory temporary file followed by an atomic rename. When a validated Paper JAR CLI profile explicitly supplies `-c`, that inside-server properties path is the file the same bounded writer updates; an empty profile field retains the normal server-root `server.properties` path.
 
 This design deliberately does not turn unknown settings into defaults, sort the file, remove comments, or silently move third-party keys. If the file is malformed beyond its size and text bounds, the application leaves it unchanged and reports the safety boundary.
 
@@ -38,7 +38,7 @@ Compatibility evidence is not a malware scan, code-signature trust decision, or 
 
 ## Staging, promotion, and rollback record
 
-When a managed server is stopped, a reviewed JAR is copied into its final `plugins` destination through a same-filesystem temporary file and atomic rename. Existing JARs are never overwritten.
+When a managed server is stopped, a reviewed JAR is copied into its final `plugins` destination through a same-filesystem temporary file and atomic rename. Existing JARs are never overwritten. If the validated Paper JAR CLI profile supplies `-P`, that inside-server directory becomes the same plugin destination for inspection, dependency planning, staging promotion, and launch; a plugin JAR is never converted into a CLI token.
 
 When the managed server is running, the reviewed JAR is copied instead to an app-managed staging directory outside `plugins`. It is not promoted into the live folder. The operator can choose **Promote staged plugins** once the process has stopped, and the next managed start also revalidates and promotes eligible staged JARs before Java starts. A staged JAR is re-inspected and SHA-256 checked before that atomic move; a new duplicate, dependency, cycle, or compatibility blocker prevents promotion and startup rather than replacing a file.
 

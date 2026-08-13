@@ -754,8 +754,9 @@ function createPluginInstallationPlan(input = {}) {
   if (installed.some((item) => item?.inspectionError || !item?.descriptor)) {
     blockers.push('An existing plugin JAR could not be inspected, so a complete dependency and cycle plan cannot be established.');
   }
+  const pluginDirectory = text(server.pluginDirectory).trim() || path.join(text(server.serverPath), 'plugins');
   const destinationFileName = safeJarFileName(source.sourcePath, descriptor);
-  const destination = path.join(text(server.serverPath), 'plugins', destinationFileName);
+  const destination = path.join(pluginDirectory, destinationFileName);
   const normalizedDestinationFileName = destinationFileName.toLocaleLowerCase('en-US');
   if (installed.some((item) => text(item?.fileName).toLocaleLowerCase('en-US') === normalizedDestinationFileName)) {
     blockers.push(`A plugin JAR already uses the destination file name ${destinationFileName}.`);
@@ -804,7 +805,7 @@ function createPluginInstallationPlan(input = {}) {
     serverRunning: input.serverRunning === true,
     staging: input.serverRunning === true
       ? Object.freeze({ state: 'separate-staging-required', location: path.join(text(server.serverPath), '.minecraft-server-studio', 'plugin-staging') })
-      : Object.freeze({ state: 'same-filesystem-atomic-promotion', location: path.join(text(server.serverPath), 'plugins') })
+      : Object.freeze({ state: 'same-filesystem-atomic-promotion', location: pluginDirectory })
   });
 }
 

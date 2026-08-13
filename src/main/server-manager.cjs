@@ -114,7 +114,7 @@ const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'status-hub-bridge': { implementationPath: ['src/main/shared-status-hub-client.cjs', 'src/main/main.cjs', 'src/main/preload.cjs', 'src/main/desktop-status-model.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/shared-status-hub-bridge.md', 'docs/features/local-status-and-completeness.md'], localization: { state: 'pending', detail: 'Desktop localization resources are not yet complete.' }, test: { state: 'pending', detail: 'No test was run in this delivery pass.' }, capture: { state: 'pending', detail: 'No capture was run in this delivery pass.' }, evidence: { state: 'in-progress', detail: 'The opt-in main-process Status Hub bridge source is registered; no external registration, update, poll, reply delivery, or runtime verification is claimed.' } },
   'server-creation': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Structured Paper and Spigot server creation source is registered; verification remains pending.' } },
   'dependency-bootstrap': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/dependency-bootstrap.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Detection, installation, retry, and status source is registered; verification remains pending.' } },
-  'paper': { implementationPath: ['src/main/paper-cli-profile.cjs', 'src/main/server-manager.cjs', 'src/main/main.cjs', 'src/main/preload.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/server-orchestration.md', 'docs/features/paper-jar-cli-controls.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection, typed direct JAR CLI planning, and setup source are registered; verification remains pending.' } },
+  'paper': { implementationPath: ['src/main/paper-cli-profile.cjs', 'src/main/server-manager.cjs', 'src/main/config-plugin-safety.cjs', 'src/main/main.cjs', 'src/main/preload.cjs', 'src/renderer/index.html', 'src/renderer/renderer.js'], documentationPath: ['docs/features/server-orchestration.md', 'docs/features/paper-jar-cli-controls.md', 'docs/features/configuration-and-plugin-safety.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Official Paper selection, typed direct JAR CLI planning, and same-path managed properties/plugin source are registered; verification remains pending.' } },
   'spigot-buildtools': { implementationPath: ['src/main/buildtools-adapter.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/spigot-buildtools.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'BuildTools preflight and rich-control source is registered; verification remains pending.' } },
   'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, persistent app-managed runtime records, official portable-source metadata, direct probes, and launch preflight source are registered; verification remains pending.' } },
   'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Endpoint-bound, time-limited discovery metadata and the provider-authentication boundary are registered; verification remains pending.' } },
@@ -785,6 +785,16 @@ function paperCliProfileForServer(server) {
   }
 }
 
+function serverPropertiesPathForServer(server) {
+  const root = path.resolve(server.serverPath);
+  return paperCliProfileForServer(server).serverPropertiesPath || path.join(root, 'server.properties');
+}
+
+function pluginDirectoryForServer(server) {
+  const root = path.resolve(server.serverPath);
+  return paperCliProfileForServer(server).pluginsDirectory || path.join(root, 'plugins');
+}
+
 function copyPublicServer(server) {
   return {
     id: server.id,
@@ -1168,9 +1178,8 @@ class ServerManager {
   }
 
   pluginDestinationPath(server, fileName) {
-    const root = path.resolve(server.serverPath);
-    const destination = path.resolve(root, 'plugins', fileName);
-    const pluginsRoot = path.resolve(root, 'plugins');
+    const pluginsRoot = path.resolve(pluginDirectoryForServer(server));
+    const destination = path.resolve(pluginsRoot, fileName);
     if (!pathInside(pluginsRoot, destination) || path.dirname(destination) !== pluginsRoot) {
       throw new Error('The plugin destination escaped the server plugins folder.');
     }
@@ -1178,7 +1187,7 @@ class ServerManager {
   }
 
   async inspectInstalledPluginJars(server) {
-    const pluginsPath = path.join(server.serverPath, 'plugins');
+    const pluginsPath = pluginDirectoryForServer(server);
     if (!(await pathExists(pluginsPath))) return [];
     const entries = await fs.readdir(pluginsPath, { withFileTypes: true });
     const candidates = entries.filter((entry) => entry.isFile() && /\.jar$/i.test(entry.name)).sort((left, right) => left.name.localeCompare(right.name));
@@ -1211,7 +1220,7 @@ class ServerManager {
       .filter((record) => record.state === 'staged')
       .map((record) => record.fileName);
     return configPluginSafety.createPluginInstallationPlan({
-      server,
+      server: { ...server, pluginDirectory: pluginDirectoryForServer(server) },
       source,
       installed,
       pendingFileNames,
@@ -1220,7 +1229,7 @@ class ServerManager {
   }
 
   async pluginDescriptors(server) {
-    const pluginsPath = path.join(server.serverPath, 'plugins');
+    const pluginsPath = pluginDirectoryForServer(server);
     if (!(await pathExists(pluginsPath))) return [];
     const entries = await fs.readdir(pluginsPath, { withFileTypes: true });
     const descriptors = [];
@@ -1992,7 +2001,8 @@ class ServerManager {
 
   async writeServerFiles(server, options = {}) {
     await fs.mkdir(server.serverPath, { recursive: true });
-    const propertyPath = path.join(server.serverPath, 'server.properties');
+    const propertyPath = serverPropertiesPathForServer(server);
+    await fs.mkdir(path.dirname(propertyPath), { recursive: true });
     const existingProperties = await pathExists(propertyPath);
     const suppliedUpdates = options.propertyUpdates && typeof options.propertyUpdates === 'object' && !Array.isArray(options.propertyUpdates)
       ? { ...options.propertyUpdates }
@@ -2737,7 +2747,7 @@ class ServerManager {
     if (plan.blockers.length) throw new Error(`Plugin installation was not staged: ${plan.blockers.join(' ')}`);
     const server = await this.getServer(id);
     const running = this.processes.has(id);
-    const destinationDirectory = running ? this.pluginStagingDirectory(server) : path.join(server.serverPath, 'plugins');
+    const destinationDirectory = running ? this.pluginStagingDirectory(server) : pluginDirectoryForServer(server);
     const staged = await configPluginSafety.stageAndVerifyPluginJar({
       sourcePath,
       destinationDirectory,
@@ -2810,7 +2820,7 @@ class ServerManager {
           .filter((candidate) => candidate.state === 'staged' && candidate.id !== record.id)
           .map((candidate) => candidate.fileName);
         const plan = configPluginSafety.createPluginInstallationPlan({
-          server,
+          server: { ...server, pluginDirectory: pluginDirectoryForServer(server) },
           source,
           installed,
           pendingFileNames,
