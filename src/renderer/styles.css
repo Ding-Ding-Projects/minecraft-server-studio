@@ -387,6 +387,13 @@ body.school-mode-active [data-school-hidden] { display: none !important; }
 .authenticator-status[data-state="ready"] { border-color: #4f9d75; color: var(--success); }
 .authenticator-status[data-state="credential-unavailable"], .authenticator-status[data-state="metadata-unavailable"] { border-color: var(--warning); color: var(--warning); }
 .authenticator-action-stack { display: grid; gap: 10px; align-items: start; }
+.authenticator-pairing { display: grid; gap: 12px; padding: 16px; border: 1px solid color-mix(in srgb, var(--primary) 54%, var(--outline-variant)); border-radius: 18px; background: color-mix(in srgb, var(--primary) 7%, var(--surface-container-high)); }
+.authenticator-pairing canvas { width: min(100%, 320px); height: auto; image-rendering: pixelated; border: 12px solid #fff; border-radius: 8px; background: #fff; }
+.authenticator-manual-secret { display: grid; gap: 8px; max-width: 100%; padding: 12px; border: 1px solid var(--outline-variant); border-radius: 14px; background: var(--surface-container-high); }
+.authenticator-manual-secret strong { color: var(--on-surface); }
+.authenticator-manual-secret output { overflow-wrap: anywhere; color: var(--primary); font-family: "Cascadia Mono", Consolas, monospace; font-size: 1rem; font-weight: 800; letter-spacing: .12em; user-select: all; }
+.authenticator-manual-secret small { color: var(--on-surface-variant); line-height: 1.4; }
+.totp-pairing-confirmation { display: grid; gap: 10px; width: min(100%, 520px); padding: 14px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container-high); }
 .authenticator-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
 .regex-builder { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; border: 1px solid var(--outline); border-radius: 16px; background: var(--surface-container-high); }
 .regex-builder > div, .regex-builder > .switch-field, .regex-builder > .regex-token-row, .regex-builder > p { grid-column: 1 / -1; }

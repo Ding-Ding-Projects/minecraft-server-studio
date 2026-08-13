@@ -21,6 +21,7 @@ let CredentialVault;
 let SharedStatusHubClient;
 let AuthenticatorService;
 let ToyLockService;
+let TotpPairingService;
 let SupportTicketService;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
@@ -41,6 +42,11 @@ try {
   ({ ToyLockService } = require('./toy-lock-service.cjs'));
 } catch {
   ToyLockService = null;
+}
+try {
+  ({ TotpPairingService } = require('./totp-pairing-service.cjs'));
+} catch {
+  TotpPairingService = null;
 }
 try {
   ({ SupportTicketService } = require('./support-ticket-service.cjs'));
@@ -100,6 +106,7 @@ let offlineChangelog;
 let scheduleTickTimer;
 let authenticatorService;
 let toyLockService;
+let totpPairingService;
 let supportTicketService;
 const unsavedWorkQueries = new Map();
 
@@ -444,6 +451,7 @@ app.whenReady().then(async () => {
     targets: TOY_LOCK_TARGETS,
     onChange: () => sendToRenderer({ type: 'toy-locks-changed' })
   }) : null;
+  totpPairingService = TotpPairingService ? new TotpPairingService() : null;
   supportTicketService = SupportTicketService ? new SupportTicketService({
     dataDir: path.join(app.getPath('userData'), 'support-tickets'),
     recoveryDirectory: app.getPath('userData'),
@@ -520,6 +528,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  totpPairingService?.dispose();
   studioSettings?.stopWatching();
   updateController?.shutdown();
   if (scheduleTickTimer) clearInterval(scheduleTickTimer);
@@ -619,6 +628,29 @@ function requireAuthenticator() {
 function requireToyLocks() {
   if (!toyLockService) throw new Error('Toy locks are unavailable in this app build.');
   return toyLockService;
+}
+
+function requireTotpPairing() {
+  if (!totpPairingService) throw new Error('Local TOTP pairing is unavailable in this app build.');
+  return totpPairingService;
+}
+
+function authenticatorStatusWithPairing() {
+  const status = requireAuthenticator().getStatus();
+  const registration = status.registration || {};
+  const pairingAvailable = Boolean(totpPairingService);
+  return Object.freeze({
+    ...status,
+    registration: Object.freeze({
+      ...registration,
+      qrPairing: Object.freeze({
+        available: pairingAvailable,
+        reason: pairingAvailable
+          ? (registration.qrPairing?.reason || 'An explicit 60-second local pairing reveal can draw a standard TOTP QR code before a new entry is stored.')
+          : 'The bundled local pairing service is unavailable, so this build will not begin a QR/manual pairing reveal.'
+      })
+    })
+  });
 }
 
 function requireSupportTickets() {
@@ -937,22 +969,53 @@ ipcMain.handle('studio:open-changelog-commit', async (_event, value) => {
 ipcMain.handle('studio:local-status', () => localStatusWithBridge());
 ipcMain.handle('studio:ollama-status', () => requireOllamaSuite().status());
 ipcMain.handle('studio:refresh-ollama', () => requireOllamaSuite().refresh());
-ipcMain.handle('studio:authenticator-status', () => requireAuthenticator().getStatus());
-ipcMain.handle('studio:authenticator-snapshot', () => requireAuthenticator().snapshot());
-ipcMain.handle('studio:create-authenticator-entry', async (_event, input) => {
-  const created = await requireAuthenticator().createEntry(input);
-  await recordLocalHistory({
-    action: 'record-created',
-    subject: 'authenticator',
-    subjectId: String(created.id),
-    label: 'Authenticator record created',
-    detail: 'A local authenticator record was created. Sensitive values were omitted from history.'
-  });
-  return created;
+ipcMain.handle('studio:authenticator-status', () => authenticatorStatusWithPairing());
+ipcMain.handle('studio:authenticator-snapshot', () => {
+  const snapshot = requireAuthenticator().snapshot();
+  return Object.freeze({ ...snapshot, status: authenticatorStatusWithPairing() });
+});
+ipcMain.handle('studio:begin-authenticator-pairing', (_event, input) => {
+  const status = authenticatorStatusWithPairing();
+  if (status.state !== 'ready') throw new Error('Protected credential storage must be available before a local pairing reveal can begin.');
+  return requireTotpPairing().beginAuthenticatorEntry(input);
+});
+ipcMain.handle('studio:begin-toy-lock-pairing', (_event, input) => {
+  const status = requireToyLocks().getStatus();
+  if (status.state !== 'ready') throw new Error('Protected credential storage must be available before a local pairing reveal can begin.');
+  return requireTotpPairing().beginToyLock(input);
+});
+ipcMain.handle('studio:cancel-totp-pairing', (_event, pairingId) => requireTotpPairing().cancel(pairingId));
+ipcMain.handle('studio:confirm-totp-pairing', async (_event, pairingId, code) => {
+  const pairing = requireTotpPairing().confirm(pairingId, code);
+  if (pairing.kind === 'authenticator-entry') {
+    const created = await requireAuthenticator().createEntry(pairing.input);
+    await recordLocalHistory({
+      action: 'record-created',
+      subject: 'authenticator',
+      subjectId: String(created.id),
+      label: 'Authenticator record created',
+      detail: 'A local authenticator record was created after a current-code pairing confirmation. Sensitive values were omitted from history.'
+    });
+    return Object.freeze({ kind: pairing.kind, created });
+  }
+  if (pairing.kind === 'toy-lock') {
+    const created = await requireToyLocks().createLock(pairing.input);
+    await recordLocalHistory({
+      action: 'record-created',
+      subject: 'toy-lock',
+      subjectId: String(created.id),
+      label: 'Toy lock record created',
+      detail: 'A local TOTP toy lock was created after a current-code pairing confirmation. Sensitive values were omitted from history.'
+    });
+    return Object.freeze({ kind: pairing.kind, created });
+  }
+  throw new Error('The local pairing session has an unsupported target.');
 });
 ipcMain.handle('studio:toy-lock-status', () => requireToyLocks().getStatus());
 ipcMain.handle('studio:list-toy-locks', () => requireToyLocks().listLocks());
 ipcMain.handle('studio:create-toy-lock', async (_event, input) => {
+  if (input?.method === 'totp') throw new Error('A TOTP toy lock must complete the local pairing confirmation before it is created.');
+  if (input?.method !== 'password') throw new Error('Choose a supported toy-lock credential method.');
   const created = await requireToyLocks().createLock(input);
   await recordLocalHistory({
     action: 'record-created',

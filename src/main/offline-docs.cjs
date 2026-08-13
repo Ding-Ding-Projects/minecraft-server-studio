@@ -50,7 +50,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('unsigned-automatic-updates', 'unsigned-automatic-updates.md', 'Unsigned automatic updates', 'Understand the fixed Squirrel update feed and restart choice.'),
   entry('release-packaging', 'release-packaging.md', 'Windows release packaging metadata', 'Understand public dim-sum code-name metadata and its no-copy release boundary.'),
   entry('file-converter', 'file-converter.md', 'Local app-owned file converter', 'Convert bounded local text, structured data, or bytes through verified in-process routes while unavailable formats remain visible.'),
-  entry('authenticator-and-toy-locks', 'authenticator-and-toy-locks.md', 'Local authenticator and toy-lock foundation', 'Manage local RFC 6238 codes and independently credentialed toy-lock records.'),
+  entry('authenticator-and-toy-locks', 'authenticator-and-toy-locks.md', 'Local authenticator and toy-lock foundation', 'Manage local RFC 6238 codes, explicit QR/manual pairing confirmation, and independently credentialed toy-lock records.'),
   entry('support-tickets', 'support-tickets.md', 'Local Support Tickets', 'Open a fictional local recovery ticket and reveal the application-data folder yourself.'),
   entry('browser-local-authenticator-and-toy-locks', 'browser-local-authenticator-and-toy-locks.md', 'Browser-local authenticator, toy locks, and recovery', 'Use the public page’s bounded local TOTP, toy-lock, QR, and recovery foundation.'),
   entry('appearance-and-tabs', 'appearance-and-tabs.md', 'Appearance and tab-navigation foundation', 'Minecraft Server Studio now has a bounded, local desktop appearance and tab-navigation foundation.'),

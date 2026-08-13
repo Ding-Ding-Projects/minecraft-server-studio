@@ -167,7 +167,7 @@ function normalizeManualEntry(input) {
   });
 }
 
-function normalizeCreateInput(value) {
+function normalizeAuthenticatorEntryInput(value) {
   const input = value || {};
   assertKnownKeys(input, new Set(['issuer', 'account', 'label', 'group', 'manualSecret', 'otpauthUri', 'algorithm', 'digits', 'period']), 'Authenticator entry input is invalid.');
   const uri = typeof input.otpauthUri === 'string' ? input.otpauthUri.trim() : '';
@@ -178,6 +178,25 @@ function normalizeCreateInput(value) {
   const label = normalizeText(input.label, `${parsed.issuer} · ${parsed.account}`, LIMITS.labelChars, 'Display label');
   const group = normalizeText(input.group, 'Ungrouped', LIMITS.groupChars, 'Group');
   return Object.freeze({ ...parsed, label, group });
+}
+
+function buildOtpAuthUri(value) {
+  if (!isPlainRecord(value)) throw serviceError('AUTHENTICATOR_INVALID_INPUT', 'Authenticator pairing input is invalid.');
+  const issuer = normalizeText(value.issuer, undefined, LIMITS.issuerChars, 'Issuer');
+  const account = normalizeText(value.account, undefined, LIMITS.accountChars, 'Account');
+  const secret = normalizeBase32Secret(value.secret || '');
+  const algorithm = normalizeAlgorithm(value.algorithm || DEFAULT_ALGORITHM);
+  const digits = normalizePositiveInteger(value.digits, DEFAULT_DIGITS, normalizeDigits);
+  const period = normalizePositiveInteger(value.period, DEFAULT_PERIOD_SECONDS, normalizePeriod);
+  const params = new URLSearchParams();
+  params.set('secret', secret);
+  params.set('issuer', issuer);
+  params.set('algorithm', algorithm.replace('SHA-', ''));
+  params.set('digits', String(digits));
+  params.set('period', String(period));
+  const uri = `otpauth://totp/${encodeURIComponent(`${issuer}:${account}`)}?${params.toString()}`;
+  if (uri.length > LIMITS.uriChars) throw serviceError('AUTHENTICATOR_INVALID_URI', 'The authenticator URI is too long.');
+  return uri;
 }
 
 function normalizePersistedEntry(value) {
@@ -264,7 +283,8 @@ class AuthenticatorService {
       registration: Object.freeze({
         manualBase32: true,
         otpauthUri: true,
-        qr: Object.freeze({ available: false, reason: 'QR import and QR pairing are unavailable until a bundled in-process decoder and renderer are registered.' })
+        qrPairing: Object.freeze({ available: true, reason: 'An explicit 60-second local pairing reveal can draw a standard TOTP QR code before a new entry is stored.' }),
+        qrImport: Object.freeze({ available: false, reason: 'QR image, clipboard, and camera import are unavailable because this build has no bundled decoder or capture route.' })
       })
     });
   }
@@ -287,7 +307,7 @@ class AuthenticatorService {
   createEntry(input) {
     this._assertReady();
     if (this.entries.length >= LIMITS.entries) throw serviceError('AUTHENTICATOR_LIMIT', 'The authenticator entry limit has been reached.');
-    const created = normalizeCreateInput(input);
+    const created = normalizeAuthenticatorEntryInput(input);
     const now = new Date().toISOString();
     const entry = Object.freeze({
       id: crypto.randomUUID(),
@@ -378,5 +398,7 @@ module.exports = Object.freeze({
   AUTHENTICATOR_SCHEMA_VERSION,
   AuthenticatorService,
   LIMITS,
+  buildOtpAuthUri,
+  normalizeAuthenticatorEntryInput,
   parseOtpAuthUri
 });
