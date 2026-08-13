@@ -66,6 +66,16 @@ const state = {
   activeAuthenticatorTab: 'codes',
   activeToyLockId: null,
   pendingAuthenticatorDestination: false,
+  commandPalette: {
+    mode: 'plain',
+    query: '',
+    pattern: '',
+    flags: { i: true, m: false, u: true },
+    activeIndex: 0,
+    returnFocus: null,
+    restoreFocus: true,
+    catalogOverflow: false
+  },
   unsaved: {
     settings: false,
     createDraft: false,
@@ -188,6 +198,26 @@ const regexSearches = {
 const SERVER_TAB_IDS = Object.freeze([
   'general', 'world', 'gameplay', 'network', 'runtime', 'paper-cli', 'buildtools', 'backups',
   'live', 'commands', 'status', 'history', 'advanced', 'plugins', 'console'
+]);
+const COMMAND_PALETTE_MAX_ENTRIES = 512;
+const COMMAND_PALETTE_MAX_QUERY_LENGTH = 256;
+const COMMAND_PALETTE_MAX_SAMPLE_LENGTH = 512;
+const COMMAND_PALETTE_REGEX_TOKENS = Object.freeze({
+  literal: 'text',
+  class: '[A-Za-z]',
+  anchor: '^$',
+  group: '(pattern)',
+  alternation: 'left|right',
+  quantifier: '+'
+});
+const COMMAND_PALETTE_DESTINATIONS = Object.freeze([
+  Object.freeze({ id: 'destination-server-workspace', title: 'Server workspace', detail: 'Return to the local server workspace and its selected server.', route: 'servers', targetId: 'server-search' }),
+  Object.freeze({ id: 'destination-create-server', title: 'Create server', detail: 'Open the structured local server-creation dialog.', route: 'create', targetId: 'create-name' }),
+  Object.freeze({ id: 'destination-offline-documentation', title: 'Offline documentation', detail: 'Browse the fixed app-bundled documentation inventory without a network request.', route: 'documentation', targetId: 'documentation-search' }),
+  Object.freeze({ id: 'destination-offline-changelog', title: 'Offline changelog', detail: 'Browse locally bundled version records and their recorded commit links.', route: 'changelog', targetId: 'changelog-search' }),
+  Object.freeze({ id: 'destination-authenticator', title: 'Authenticator and toy locks', detail: 'Open the local authenticator and toy-lock destination.', route: 'authenticator', targetId: 'authenticator-codes-tab' }),
+  Object.freeze({ id: 'destination-support-tickets', title: 'Support Tickets', detail: 'Open the fictional local recovery desk and its exact recovery-folder route.', route: 'support-tickets', targetId: 'support-ticket-create-form' }),
+  Object.freeze({ id: 'destination-preferences', title: 'Studio preferences', detail: 'Open local presentation, appearance, narrator, and scheduled-setting controls.', route: 'preferences', targetId: 'experience-settings-search' })
 ]);
 const DEFAULT_APPEARANCE_NAVIGATION = Object.freeze({
   state: 'unavailable',
@@ -3396,6 +3426,406 @@ function rconConsoleLine(value) {
   return `${prefix}: ${response.text || '(no response)'}`;
 }
 
+function paletteText(value, maximum = 512) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maximum);
+}
+
+function commandPaletteFlags() {
+  const flags = ['i', 'm', 'u'].filter((flag) => state.commandPalette.flags?.[flag]).join('');
+  return flags || 'u';
+}
+
+function commandPaletteRegexSafetyIssue(pattern) {
+  if (!pattern) return 'Enter a pattern before enabling regex search.';
+  if (pattern.length > COMMAND_PALETTE_MAX_QUERY_LENGTH) return `Regex patterns are limited to ${COMMAND_PALETTE_MAX_QUERY_LENGTH} characters.`;
+  if (/[\u0000-\u001f\u007f]/.test(pattern)) return 'Regex patterns cannot contain control characters.';
+  if (/(?:\((?:[^()\\]|\\.){0,160}(?:[+*]|\{\d+(?:,\d*)?\})[^)]*\))(?:[+*]|\{\d+(?:,\d*)?\})/.test(pattern)) {
+    return 'Nested repeating groups are rejected to keep the local palette responsive.';
+  }
+  return '';
+}
+
+function commandPaletteMatcher() {
+  const palette = state.commandPalette;
+  if (palette.mode !== 'regex') {
+    const query = paletteText(palette.query, COMMAND_PALETTE_MAX_QUERY_LENGTH).toLocaleLowerCase();
+    return {
+      kind: 'plain',
+      detail: query ? `Plain-text matching for “${query}”.` : 'Plain-text matching with no query shows the local palette catalog.',
+      test: (entry) => !query || entry.searchText.toLocaleLowerCase().includes(query)
+    };
+  }
+  const pattern = paletteText(palette.pattern, COMMAND_PALETTE_MAX_QUERY_LENGTH);
+  const issue = commandPaletteRegexSafetyIssue(pattern);
+  if (issue) return { kind: 'invalid', detail: issue, test: () => true };
+  try {
+    const expression = new RegExp(pattern, commandPaletteFlags());
+    return {
+      kind: 'regex',
+      detail: `Regex /${pattern}/${commandPaletteFlags()} is active for this local palette catalog.`,
+      test: (entry) => expression.test(entry.searchText)
+    };
+  } catch (error) {
+    return {
+      kind: 'invalid',
+      detail: `Regex syntax is invalid: ${String(error?.message || 'unknown error').slice(0, 180)}`,
+      test: () => true
+    };
+  }
+}
+
+function commandPaletteControlLabel(control) {
+  if (!control) return '';
+  const id = control.id || '';
+  const explicit = control.getAttribute('aria-label');
+  if (explicit) return paletteText(explicit, 180);
+  const label = id ? $$('label[for]').find((candidate) => candidate.htmlFor === id) : null;
+  if (label) return paletteText(label.innerText || label.textContent, 180);
+  const wrappingLabel = control.closest('label');
+  if (wrappingLabel) return paletteText(wrappingLabel.innerText || wrappingLabel.textContent, 180);
+  const labelledBy = String(control.getAttribute('aria-labelledby') || '').split(/\s+/).map((token) => document.getElementById(token)?.textContent || '').join(' ');
+  if (labelledBy) return paletteText(labelledBy, 180);
+  const heading = control.closest('.settings-panel, .experience-card, .authenticator-card, .history-filter-card, .changelog-filter-card')?.querySelector('h3, h4')?.textContent;
+  return paletteText(heading || control.placeholder || id, 180);
+}
+
+function commandPaletteControlDetail(control) {
+  const wrapper = control?.closest('label, .field, .switch-field, .settings-panel, .experience-card');
+  const detail = wrapper?.querySelector('small, .muted')?.textContent || control?.placeholder || '';
+  return paletteText(detail, 300);
+}
+
+function commandPaletteControlIsSafe(control) {
+  if (!control?.id || control.closest('#command-palette-dialog')) return false;
+  if (control.disabled && control.closest('[hidden]')) return false;
+  const type = String(control.type || '').toLowerCase();
+  if (['hidden', 'password', 'file'].includes(type)) return false;
+  const identity = `${control.id} ${control.name || ''} ${control.getAttribute('aria-label') || ''} ${commandPaletteControlLabel(control)}`.toLocaleLowerCase();
+  if (/password|credential|secret|token|otp|totp|rcon|management|status-hub|command|console|shell|raw|recovery|unlock/.test(identity)) return false;
+  if (control.matches('#updates-enabled')) return false;
+  return true;
+}
+
+function commandPaletteRouteForControl(control) {
+  if (control.closest('#experience-settings-dialog')) return { route: 'preferences' };
+  if (control.closest('#documentation-destination')) return { route: 'documentation' };
+  if (control.closest('#changelog-destination')) return { route: 'changelog' };
+  if (control.closest('#authenticator-destination')) return { route: 'authenticator' };
+  if (control.closest('#support-tickets-destination')) return { route: 'support-tickets' };
+  if (control.closest('#create-dialog')) return { route: 'create' };
+  const panel = control.closest('[data-panel]')?.dataset.panel;
+  if (panel && SERVER_TAB_IDS.includes(panel)) return { route: 'servers', tab: panel };
+  return { route: 'servers' };
+}
+
+function commandPaletteEntry(input) {
+  const title = paletteText(input.title, 180);
+  const detail = paletteText(input.detail, 360);
+  const category = paletteText(input.category, 80);
+  return Object.freeze({
+    id: paletteText(input.id, 160),
+    title,
+    detail,
+    category,
+    route: input.route || 'servers',
+    targetId: input.targetId || '',
+    tab: input.tab || '',
+    documentId: input.documentId || '',
+    available: input.available !== false,
+    unavailableDetail: paletteText(input.unavailableDetail, 240),
+    safeInline: input.safeInline || '',
+    searchText: paletteText([title, detail, category, input.searchText].filter(Boolean).join('\n'), 8 * 1024)
+  });
+}
+
+function commandPaletteDestinationEntries() {
+  return COMMAND_PALETTE_DESTINATIONS.map((destination) => commandPaletteEntry({
+    ...destination,
+    category: 'Destination',
+    searchText: destination.title
+  }));
+}
+
+function commandPaletteTabEntries() {
+  return $$('#server-editor .tab').map((tab) => {
+    const tabId = tab.id || `server-tab-${tab.dataset.tab}`;
+    tab.id = tabId;
+    const panel = document.getElementById(tab.getAttribute('aria-controls') || '') || document.querySelector(`[data-panel="${tab.dataset.tab}"]`);
+    const panelTitle = paletteText(panel?.querySelector('h3, h4')?.textContent || 'Server settings panel', 180);
+    const available = Boolean(selectedServer());
+    return commandPaletteEntry({
+      id: `tab-${tab.dataset.tab}`,
+      title: paletteText(tab.textContent, 180),
+      detail: `${panelTitle}. ${available ? 'Open this implemented server settings tab.' : 'Choose a local server before this tab can open.'}`,
+      category: 'Server settings tab',
+      route: 'servers',
+      tab: tab.dataset.tab,
+      targetId: tabId,
+      available,
+      unavailableDetail: 'Choose or create a local server before opening server settings.',
+      searchText: panel?.textContent || ''
+    });
+  });
+}
+
+function commandPaletteDocumentationEntries() {
+  return documentationDocuments().map((document) => commandPaletteEntry({
+    id: `documentation-${document.id}`,
+    title: document.title,
+    detail: document.summary || 'Open this app-bundled documentation article.',
+    category: 'Bundled documentation',
+    route: 'documentation',
+    documentId: document.id,
+    targetId: 'documentation-markdown',
+    searchText: document.searchText || ''
+  }));
+}
+
+function commandPaletteControlEntries() {
+  return $$('input, select, textarea')
+    .filter(commandPaletteControlIsSafe)
+    .map((control) => {
+      const route = commandPaletteRouteForControl(control);
+      const panel = control.closest('[data-panel]')?.dataset.panel || '';
+      const available = route.route !== 'servers' || !panel || Boolean(selectedServer());
+      return commandPaletteEntry({
+        id: `control-${control.id}`,
+        title: commandPaletteControlLabel(control),
+        detail: commandPaletteControlDetail(control) || 'Reveal this existing local control.',
+        category: route.route === 'preferences' ? 'Studio preference' : panel ? 'Server control' : 'Local control',
+        route: route.route,
+        tab: route.tab,
+        targetId: control.id,
+        available,
+        unavailableDetail: 'Choose or create a local server before opening this server control.',
+        searchText: `${control.id} ${control.placeholder || ''}`
+      });
+    });
+}
+
+function commandPaletteCatalog() {
+  const entries = [
+    ...commandPaletteDestinationEntries(),
+    ...commandPaletteDocumentationEntries(),
+    ...commandPaletteTabEntries(),
+    commandPaletteEntry({
+      id: 'control-updates-enabled',
+      title: 'Automatically check for updates',
+      detail: 'A safe inline switch backed by the same persisted application-update setting as the visible update card.',
+      category: 'Safe inline setting',
+      route: 'servers',
+      targetId: 'updates-enabled',
+      safeInline: 'updates-enabled',
+      searchText: 'update automatic check restart unsigned squirrel windows'
+    }),
+    ...commandPaletteControlEntries()
+  ];
+  const unique = new Map();
+  for (const entry of entries) {
+    if (entry.id && !unique.has(entry.id)) unique.set(entry.id, entry);
+    if (unique.size >= COMMAND_PALETTE_MAX_ENTRIES) break;
+  }
+  state.commandPalette.catalogOverflow = entries.length > unique.size;
+  return [...unique.values()];
+}
+
+function filteredCommandPaletteEntries() {
+  const catalog = commandPaletteCatalog();
+  const matcher = commandPaletteMatcher();
+  const matches = matcher.kind === 'invalid' ? catalog : catalog.filter((entry) => matcher.test(entry));
+  return { catalog, matcher, matches: matches.slice(0, 80), totalMatches: matches.length };
+}
+
+function renderCommandPalette() {
+  const dialog = $('#command-palette-dialog');
+  if (!dialog?.open) return;
+  const { matcher, matches, totalMatches } = filteredCommandPaletteEntries();
+  const palette = state.commandPalette;
+  palette.activeIndex = matches.length ? Math.max(0, Math.min(palette.activeIndex, matches.length - 1)) : 0;
+  const builder = $('#command-palette-regex-builder');
+  const regexButton = $('#command-palette-regex-toggle');
+  if (builder) builder.hidden = palette.mode !== 'regex';
+  if (regexButton) regexButton.setAttribute('aria-expanded', String(palette.mode === 'regex'));
+  const feedback = $('#command-palette-regex-feedback');
+  if (feedback) feedback.textContent = matcher.kind === 'regex'
+    ? `${matcher.detail} ${String($('#command-palette-sample')?.value || '').trim() ? (matcher.test({ searchText: String($('#command-palette-sample').value) }) ? 'The local sample matches.' : 'The local sample does not match.') : 'Add optional local sample text to preview this expression.'}`
+    : matcher.kind === 'invalid' ? matcher.detail : 'Regex mode is off. Plain-text search is active.';
+  const status = $('#command-palette-status');
+  if (status) {
+    status.dataset.state = matcher.kind === 'invalid' ? 'invalid' : matches.length ? 'ready' : 'empty';
+    const overflow = state.commandPalette.catalogOverflow ? ` The first ${COMMAND_PALETTE_MAX_ENTRIES} safe local entries are indexed in this foundation.` : '';
+    status.textContent = matcher.kind === 'invalid'
+      ? `${matcher.detail} No catalog entries were hidden.${overflow}`
+      : matches.length
+        ? `${totalMatches} local result${totalMatches === 1 ? '' : 's'} match the current ${matcher.kind === 'regex' ? 'regex' : 'plain-text'} search.${overflow}`
+        : `No safe local result matches the current ${matcher.kind === 'regex' ? 'regex' : 'plain-text'} search.${overflow}`;
+  }
+  const search = $('#command-palette-search');
+  const results = $('#command-palette-results');
+  if (!results) return;
+  results.replaceChildren();
+  if (!matches.length) {
+    const empty = document.createElement('p');
+    empty.className = 'command-palette-empty';
+    empty.textContent = matcher.kind === 'invalid'
+      ? 'Correct the local regex to filter results. The unfiltered safe catalog remains available when the expression is invalid.'
+      : 'No safe local result matches this search.';
+    results.append(empty);
+    if (search) search.removeAttribute('aria-activedescendant');
+    return;
+  }
+  matches.forEach((entry, index) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.id = `command-palette-result-${index}`;
+    item.className = `command-palette-result${index === palette.activeIndex ? ' active' : ''}`;
+    item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', String(index === palette.activeIndex));
+    item.dataset.paletteIndex = String(index);
+    item.dataset.unavailable = String(!entry.available);
+    item.disabled = !entry.available;
+    const copy = document.createElement('span');
+    copy.className = 'command-palette-result-copy';
+    const title = document.createElement('strong');
+    title.textContent = entry.title;
+    const detail = document.createElement('span');
+    detail.textContent = entry.available ? entry.detail : (entry.unavailableDetail || entry.detail);
+    copy.append(title, detail);
+    const meta = document.createElement('span');
+    meta.className = 'command-palette-result-meta';
+    meta.textContent = entry.safeInline === 'updates-enabled'
+      ? `Updates: ${$('#updates-enabled')?.checked ? 'on' : 'off'}`
+      : entry.available ? entry.category : 'Unavailable';
+    item.append(copy, meta);
+    item.addEventListener('pointermove', () => {
+      if (palette.activeIndex === index) return;
+      palette.activeIndex = index;
+      renderCommandPalette();
+    });
+    item.addEventListener('click', () => void activateCommandPaletteEntry(entry));
+    results.append(item);
+  });
+  if (search) search.setAttribute('aria-activedescendant', `command-palette-result-${palette.activeIndex}`);
+}
+
+function syncCommandPaletteControls() {
+  const palette = state.commandPalette;
+  const search = $('#command-palette-search');
+  const pattern = $('#command-palette-pattern');
+  if (search && search.value !== palette.query) search.value = palette.query;
+  if (pattern && pattern.value !== palette.pattern) pattern.value = palette.pattern;
+  ['i', 'm', 'u'].forEach((flag) => {
+    const control = $(`#command-palette-flag-${flag}`);
+    if (control) control.checked = Boolean(palette.flags[flag]);
+  });
+}
+
+function openCommandPalette() {
+  const dialog = $('#command-palette-dialog');
+  const search = $('#command-palette-search');
+  if (!dialog || !search) return;
+  if (!dialog.open) {
+    state.commandPalette.returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    state.commandPalette.restoreFocus = true;
+    dialog.showModal();
+  }
+  state.commandPalette.activeIndex = 0;
+  syncCommandPaletteControls();
+  renderCommandPalette();
+  search.focus();
+  search.select();
+}
+
+function closeCommandPalette(options = {}) {
+  const dialog = $('#command-palette-dialog');
+  if (!dialog?.open) return;
+  state.commandPalette.restoreFocus = options.restoreFocus !== false;
+  dialog.close();
+}
+
+function commandPaletteTargetIsFocusable(target) {
+  return target instanceof HTMLElement && !target.hidden && !target.closest('[hidden]');
+}
+
+function focusCommandPaletteTarget(targetId) {
+  const target = document.getElementById(targetId);
+  if (!commandPaletteTargetIsFocusable(target)) return false;
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  target.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+  target.focus({ preventScroll: true });
+  target.classList.add('palette-target-highlight');
+  setTimeout(() => target.classList.remove('palette-target-highlight'), 1_800);
+  return true;
+}
+
+async function revealCommandPaletteEntry(entry) {
+  if (entry.route === 'documentation') {
+    await openOfflineDocumentation();
+    if (entry.documentId) await readOfflineDocument(entry.documentId);
+  } else if (entry.route === 'changelog') {
+    await openOfflineChangelog();
+  } else if (entry.route === 'authenticator') {
+    await openAuthenticatorDestination();
+  } else if (entry.route === 'support-tickets') {
+    await openSupportTicketsDestination();
+  } else if (entry.route === 'preferences') {
+    openExperienceSettings();
+  } else if (entry.route === 'create') {
+    openCreateDialog();
+  } else {
+    state.workspaceDestination = 'servers';
+    renderAll();
+    if (entry.tab && SERVER_TAB_IDS.includes(entry.tab)) setActiveTab(entry.tab, { persist: true });
+  }
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  if (!focusCommandPaletteTarget(entry.targetId)) {
+    toast('The selected local route opened, but its exact control is currently unavailable.', 'info');
+  }
+}
+
+function toggleCommandPaletteUpdateCheck() {
+  const control = $('#updates-enabled');
+  if (!control || control.disabled) return toast('Automatic update checks are currently unavailable.', 'error');
+  control.checked = !control.checked;
+  control.dispatchEvent(new Event('change', { bubbles: true }));
+  renderCommandPalette();
+}
+
+async function activateCommandPaletteEntry(entry) {
+  if (!entry?.available) return toast(entry?.unavailableDetail || 'This local route is currently unavailable.', 'error');
+  if (entry.safeInline === 'updates-enabled') {
+    toggleCommandPaletteUpdateCheck();
+    return;
+  }
+  closeCommandPalette({ restoreFocus: false });
+  await revealCommandPaletteEntry(entry);
+}
+
+function moveCommandPaletteSelection(direction) {
+  const { matches } = filteredCommandPaletteEntries();
+  if (!matches.length) return;
+  state.commandPalette.activeIndex = (state.commandPalette.activeIndex + direction + matches.length) % matches.length;
+  renderCommandPalette();
+}
+
+function insertCommandPaletteRegexToken(tokenId) {
+  const token = COMMAND_PALETTE_REGEX_TOKENS[tokenId];
+  const input = $('#command-palette-pattern');
+  if (!token || !input) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  const value = `${input.value.slice(0, start)}${token}${input.value.slice(end)}`.slice(0, COMMAND_PALETTE_MAX_QUERY_LENGTH);
+  input.value = value;
+  input.setSelectionRange(Math.min(start + token.length, value.length), Math.min(start + token.length, value.length));
+  state.commandPalette.mode = 'regex';
+  state.commandPalette.pattern = value;
+  state.commandPalette.query = value;
+  const search = $('#command-palette-search');
+  if (search) search.value = value;
+  renderCommandPalette();
+  input.focus();
+}
+
 const DOCUMENTATION_REGEX_TOKENS = Object.freeze({
   literal: 'text',
   class: '[A-Za-z]',
@@ -6065,6 +6495,7 @@ function logEvent(event) {
   if (event?.type === 'application-update') {
     state.applicationUpdate = event.update || null;
     renderApplicationUpdate();
+    renderCommandPalette();
     return;
   }
   const prefix = new Date(event.at || Date.now()).toLocaleTimeString();
@@ -6191,6 +6622,92 @@ function bindOllamaSuiteEvents() {
 }
 
 function bindEvents() {
+  const commandPaletteDialog = $('#command-palette-dialog');
+  const commandPaletteSearch = $('#command-palette-search');
+  $('#open-command-palette-button')?.addEventListener('click', openCommandPalette);
+  $('#close-command-palette-button')?.addEventListener('click', () => closeCommandPalette());
+  commandPaletteDialog?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeCommandPalette();
+  });
+  commandPaletteDialog?.addEventListener('close', () => {
+    const returnFocus = state.commandPalette.returnFocus;
+    const restoreFocus = state.commandPalette.restoreFocus;
+    state.commandPalette.returnFocus = null;
+    state.commandPalette.restoreFocus = true;
+    if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.ctrlKey && event.shiftKey && String(event.key || '').toLocaleLowerCase() === 'f') {
+      event.preventDefault();
+      openCommandPalette();
+      return;
+    }
+    if (!commandPaletteDialog?.open || event.key !== 'Escape') return;
+    event.preventDefault();
+    closeCommandPalette();
+  });
+  commandPaletteSearch?.addEventListener('input', () => {
+    const value = commandPaletteSearch.value.slice(0, COMMAND_PALETTE_MAX_QUERY_LENGTH);
+    state.commandPalette.query = value;
+    if (state.commandPalette.mode === 'regex') state.commandPalette.pattern = value;
+    state.commandPalette.activeIndex = 0;
+    renderCommandPalette();
+  });
+  commandPaletteSearch?.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveCommandPaletteSelection(1);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveCommandPaletteSelection(-1);
+      return;
+    }
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const { matches } = filteredCommandPaletteEntries();
+    const entry = matches[state.commandPalette.activeIndex];
+    if (entry) void activateCommandPaletteEntry(entry);
+  });
+  $('#command-palette-regex-toggle')?.addEventListener('click', () => {
+    const enteringRegex = state.commandPalette.mode !== 'regex';
+    state.commandPalette.mode = enteringRegex ? 'regex' : 'plain';
+    if (enteringRegex) state.commandPalette.pattern = state.commandPalette.query;
+    else state.commandPalette.query = state.commandPalette.pattern;
+    state.commandPalette.activeIndex = 0;
+    syncCommandPaletteControls();
+    renderCommandPalette();
+    (enteringRegex ? $('#command-palette-pattern') : commandPaletteSearch)?.focus();
+  });
+  $('#command-palette-pattern')?.addEventListener('input', (event) => {
+    const value = String(event.target.value || '').slice(0, COMMAND_PALETTE_MAX_QUERY_LENGTH);
+    state.commandPalette.mode = 'regex';
+    state.commandPalette.pattern = value;
+    state.commandPalette.query = value;
+    if (commandPaletteSearch) commandPaletteSearch.value = value;
+    state.commandPalette.activeIndex = 0;
+    renderCommandPalette();
+  });
+  ['i', 'm', 'u'].forEach((flag) => {
+    $(`#command-palette-flag-${flag}`)?.addEventListener('change', (event) => {
+      state.commandPalette.mode = 'regex';
+      state.commandPalette.flags[flag] = event.target.checked;
+      state.commandPalette.activeIndex = 0;
+      renderCommandPalette();
+    });
+  });
+  $('#command-palette-sample')?.addEventListener('input', () => renderCommandPalette());
+  $$('[data-command-palette-token]').forEach((button) => button.addEventListener('click', () => insertCommandPaletteRegexToken(button.dataset.commandPaletteToken || '')));
+  $('#command-palette-use-plain')?.addEventListener('click', () => {
+    state.commandPalette.mode = 'plain';
+    state.commandPalette.query = state.commandPalette.pattern;
+    state.commandPalette.activeIndex = 0;
+    syncCommandPaletteControls();
+    renderCommandPalette();
+    commandPaletteSearch?.focus();
+  });
   attachRegexSearch('preferences');
   attachRegexSearch('schedules');
   bindAppearanceContextSearch('tab');
@@ -6537,6 +7054,7 @@ function bindEvents() {
     if (update) {
       state.applicationUpdate = update;
       renderApplicationUpdate();
+      renderCommandPalette();
     }
   });
   $('#check-updates-button').addEventListener('click', async () => {

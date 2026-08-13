@@ -692,3 +692,41 @@ body[data-density="spacious"] .experience-card { gap: 22px; padding: 24px; }
 @media (max-width: 1050px) {
   .logo-customization-grid { grid-template-columns: 1fr; }
 }
+
+/* The command palette stays local to the renderer and paints a bounded surface of its own. */
+#command-palette-dialog { width: min(760px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: min(760px, calc(100vh - 24px)); overflow: auto; }
+#command-palette-dialog::backdrop { background: #000b; }
+.command-palette-shell { display: grid; gap: 16px; padding: clamp(16px, 3vw, 28px); }
+.command-palette-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.command-palette-heading h2 { margin-top: 4px; }
+.command-palette-heading p:not(.eyebrow) { max-width: 620px; margin-top: 8px; line-height: 1.45; }
+.command-palette-search-anchor { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.command-palette-regex-builder { grid-column: 1 / -1; display: grid; gap: 14px; max-height: min(520px, 56vh); overflow: auto; padding: 16px; border: 1px solid var(--outline); border-radius: 18px; background: var(--surface-container-highest); box-shadow: 0 14px 34px #0008; }
+.command-palette-regex-builder[hidden] { display: none; }
+.command-palette-regex-builder h3 { margin: 0; }
+.command-palette-regex-builder p { margin-top: 5px; }
+.command-palette-status, .command-palette-boundary { margin: 0; padding: 11px 13px; border: 1px solid var(--outline-variant); border-radius: 14px; color: var(--on-surface-variant); background: var(--surface-container); font-size: .82rem; line-height: 1.4; }
+.command-palette-status[data-state="invalid"] { border-color: var(--error); color: var(--error); }
+.command-palette-status[data-state="empty"] { border-color: var(--warning); color: var(--warning); }
+.command-palette-results { display: grid; gap: 8px; min-height: 90px; max-height: min(420px, 45vh); overflow: auto; padding: 2px; }
+.command-palette-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 64px; padding: 12px 14px; border: 1px solid var(--outline-variant); border-radius: 16px; color: var(--on-surface); background: var(--surface-container); text-align: left; }
+.command-palette-result:hover, .command-palette-result.active { border-color: var(--primary); background: var(--surface-container-high); }
+.command-palette-result-copy { display: grid; gap: 4px; min-width: 0; }
+.command-palette-result-copy strong { overflow-wrap: anywhere; }
+.command-palette-result-copy span { color: var(--on-surface-variant); font-size: .78rem; line-height: 1.35; overflow-wrap: anywhere; }
+.command-palette-result-meta { align-self: start; max-width: 170px; padding: 4px 8px; border: 1px solid var(--outline-variant); border-radius: 999px; color: var(--primary); font-size: .72rem; font-weight: 800; text-align: center; }
+.command-palette-result[data-unavailable="true"] { opacity: .68; }
+.command-palette-inline-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 10px; border: 1px solid var(--outline); border-radius: 12px; color: var(--on-surface-variant); background: var(--surface-container-highest); font-size: .77rem; font-weight: 700; }
+.command-palette-inline-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); }
+.command-palette-empty { margin: 0; padding: 18px; border: 1px dashed var(--outline); border-radius: 16px; color: var(--on-surface-variant); text-align: center; }
+.palette-target-highlight { outline: 3px solid var(--primary) !important; outline-offset: 5px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 18%, transparent); }
+
+@media (max-width: 700px) {
+  #command-palette-dialog { width: calc(100vw - 16px); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+  .command-palette-shell { padding: 16px; }
+  .command-palette-search-anchor { grid-template-columns: 1fr; }
+  .command-palette-search-anchor > .outlined-action { width: 100%; }
+  .command-palette-regex-builder .settings-grid { grid-template-columns: 1fr; }
+  .command-palette-result { grid-template-columns: 1fr; }
+  .command-palette-result-meta { max-width: none; justify-self: start; }
+}
