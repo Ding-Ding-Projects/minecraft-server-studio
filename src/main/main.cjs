@@ -16,6 +16,7 @@ let CredentialVault;
 let SharedStatusHubClient;
 let AuthenticatorService;
 let ToyLockService;
+let SupportTicketService;
 try {
   ({ CredentialVault } = require('./credential-vault.cjs'));
 } catch {
@@ -35,6 +36,11 @@ try {
   ({ ToyLockService } = require('./toy-lock-service.cjs'));
 } catch {
   ToyLockService = null;
+}
+try {
+  ({ SupportTicketService } = require('./support-ticket-service.cjs'));
+} catch {
+  SupportTicketService = null;
 }
 
 app.setName('Minecraft Server Studio');
@@ -58,6 +64,7 @@ let offlineDocumentation;
 let scheduleTickTimer;
 let authenticatorService;
 let toyLockService;
+let supportTicketService;
 const unsavedWorkQueries = new Map();
 
 function rconPacket(id, type, body) {
@@ -380,8 +387,14 @@ app.whenReady().then(async () => {
     credentialVault,
     onChange: () => sendToRenderer({ type: 'toy-locks-changed' })
   }) : null;
+  supportTicketService = SupportTicketService ? new SupportTicketService({
+    dataDir: path.join(app.getPath('userData'), 'support-tickets'),
+    recoveryDirectory: app.getPath('userData'),
+    onChange: () => sendToRenderer({ type: 'support-tickets-changed' })
+  }) : null;
   authenticatorService?.initialize();
   toyLockService?.initialize();
+  supportTicketService?.initialize();
   schoolModeVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(sharedSettingsDirectory, 'credential-vault'),
     safeStorage
@@ -494,6 +507,11 @@ function requireAuthenticator() {
 function requireToyLocks() {
   if (!toyLockService) throw new Error('Toy locks are unavailable in this app build.');
   return toyLockService;
+}
+
+function requireSupportTickets() {
+  if (!supportTicketService) throw new Error('Local Support Tickets are unavailable in this app build.');
+  return supportTicketService;
 }
 
 ipcMain.handle('studio:list-servers', async () => (await requireManager().listServers()).map(publicServerWithManagementCredentialState));
@@ -641,6 +659,19 @@ ipcMain.handle('studio:list-toy-locks', () => requireToyLocks().listLocks());
 ipcMain.handle('studio:create-toy-lock', (_event, input) => requireToyLocks().createLock(input));
 ipcMain.handle('studio:unlock-toy-lock', (_event, lockId, credential) => requireToyLocks().unlock(lockId, credential));
 ipcMain.handle('studio:relock-toy-lock', (_event, lockId) => requireToyLocks().relock(lockId));
+ipcMain.handle('studio:support-ticket-status', () => requireSupportTickets().getStatus());
+ipcMain.handle('studio:list-support-tickets', () => requireSupportTickets().listTickets());
+ipcMain.handle('studio:create-support-ticket', (_event, input) => requireSupportTickets().createTicket(input));
+ipcMain.handle('studio:acknowledge-support-ticket', (_event, ticketId) => requireSupportTickets().acknowledgeTicket(ticketId));
+ipcMain.handle('studio:open-support-ticket-recovery-folder', async (_event, ticketId) => {
+  if (ticketId !== undefined && ticketId !== null && typeof ticketId !== 'string') throw new Error('Support ticket identifier is invalid.');
+  const service = requireSupportTickets();
+  const recoveryDirectory = service.getStatus().recoveryDirectory;
+  const error = await shell.openPath(recoveryDirectory);
+  if (error) throw new Error(error);
+  const ticket = ticketId ? service.recordRecoveryFolderOpened(ticketId) : null;
+  return Object.freeze({ recoveryDirectory, ticket });
+});
 ipcMain.handle('studio:status-hub-bridge', () => statusHubBridge ? {
   status: statusHubBridge.getStatus(),
   configuration: statusHubBridge.getConfigurationForRenderer()

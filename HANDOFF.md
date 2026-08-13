@@ -209,6 +209,41 @@ evidence pending.
 No tests, linting, runtime interaction, package build, release, or capture was
 run for this fast-delivery source candidate.
 
+## Local Support Tickets recovery desk
+
+The desktop candidate adds a fictional, local-only Support Tickets desk for
+the toy-lock recovery route. It can create a locally numbered record with a
+category, description, severity, and status, then present a canned local
+response. The record is not sent to a service, email address, or person, and
+the app does not claim that a remote ticket exists.
+
+The resolution shows the exact application-data folder for the current
+installation and can ask the operating system file manager to open it. The
+application does not delete that folder, its contents, a credential, or a toy
+lock. A user who chooses to reset local application data must do so themselves
+after reviewing the wider effect on their Studio data.
+
+The route is available from the toy-lock unlock prompt, toy-lock settings, and
+Help. It never requests, renders, or exports a password, TOTP code, TOTP secret,
+or protected credential-vault value. Folder-resolution and file-manager-launch
+failures remain local and report an honest unavailable or failed state rather
+than creating a fake external escalation.
+
+### Directly related documentation
+
+- `docs/features/support-tickets.md`: local-only scope, entry routes,
+  application-data-folder handoff, privacy boundary, failure behavior, and
+  unrun verification boundary.
+- `docs/features/authenticator-and-toy-locks.md`: the associated toy-lock
+  model and user-directed recovery boundary.
+
+### Verification boundary
+
+No tests, linting, build, package, installed-app interaction, screen capture,
+or external delivery ran for this fast-delivery candidate. The source and
+documentation do not prove that the file manager launched, that the local
+ticket UI rendered, or that a recovery reset occurred.
+
 ## Unsigned Squirrel application-update controller
 
 The updater lane adds an application-update controller for the Windows
