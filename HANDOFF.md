@@ -4,6 +4,41 @@
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.
 
+## Release code-name metadata
+
+The Windows release workflow now serializes publication without cancelling an
+in-flight release. Before a release body is finalized, it reads complete
+paginated product release history and assigns `Classic Har Gow · 蝦餃` only
+when no older release name or body has already recorded that code name,
+`hk-dish-0001`, or its immutable public image URL. The release note links to
+the public catalog asset only; it never downloads, copies, bundles, or attaches
+that photo to a product release.
+
+### Directly related paths
+
+- `.github/workflows/windows-package.yml`
+- `docs/features/release-packaging.md`
+- `docs/features/README.md`
+- `src/main/offline-docs.cjs`
+- `README.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+
+### Verification boundary
+
+The source lane read current product release history and found no previous
+record of `Classic Har Gow`, `hk-dish-0001`, or the public photo filename. No
+tests, linting, build, package, release, runtime interaction, or capture ran in
+this lane. A future workflow execution must provide the actual release-note,
+asset, and timing evidence.
+
+### Remaining work
+
+- Present a future assigned code name in the installed application and public
+  marketing release surface after an actual release has assigned it.
+- Do not treat a release-note hyperlink as an attached, downloaded, or bundled
+  dim-sum image.
+
 ## Paper JAR CLI control candidate
 
 The Paper JAR CLI lane adds `src/main/paper-cli-profile.cjs`, a typed profile
@@ -64,7 +99,7 @@ implementation lane.
 - `docs/features/local-ollama-suite.md`: local Ollama foundation behavior, disabled capability boundaries, recovery states, privacy constraints, and unrun verification boundary.
 - `docs/features/offline-documentation-browser.md`: bundled-documentation behavior, package wiring, local renderer boundary, failure states, and unrun verification boundary.
 - `site/`: public marketing and browser-local interaction source, including a local Status destination.
-- `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. It does not assert a dim sum code name or photo unless a separately verified catalog asset is available.
+- `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It serializes non-cancelling release publication, packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. Before finalizing notes, it checks complete prior release history and can record the unused `Classic Har Gow · 蝦餃` / `hk-dish-0001` metadata with a public link only; it omits that code name if reuse or unreadable history prevents an honest assignment, and never copies or attaches a catalog photo.
 - `assets/minecraft-server-studio.svg`, `assets/minecraft-server-studio.ico`, and `scripts/generate-app-icon.ps1`: original vector master and reproducible multi-resolution Windows icon source.
 - `package.json`: local Windows executable icon plus an immutable commit-pinned Squirrel icon metadata URL.
 

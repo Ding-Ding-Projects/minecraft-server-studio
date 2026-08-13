@@ -15,6 +15,7 @@
 - [CLI RCON gateway](cli-rcon-gateway.md)
 - [Local Ollama suite foundation](local-ollama-suite.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
+- [Windows release packaging metadata](release-packaging.md)
 - [Local file-converter foundation](file-converter.md)
 - [Local authenticator and toy-lock foundation](authenticator-and-toy-locks.md)
 - [Local status and completeness](local-status-and-completeness.md)

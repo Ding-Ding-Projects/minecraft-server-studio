@@ -69,7 +69,7 @@ The Windows release workflow at `.github/workflows/windows-package.yml` runs for
 
 Each workflow execution uploads safe package evidence, including the bounded Squirrel output and build context, even when an earlier packaging step fails. It also runs `node scripts/line-count.cjs --format markdown` to create the release-note line-count table from the tagged source tree. The table separates source, tests, styles/markup, documentation, workflows/configuration, other hand-written text, and generated text; it also records tracked-file exclusions and surviving-line automation-versus-human attribution.
 
-When the workflow reaches publication, it creates one non-draft GitHub Release with a rerun-unique tag, attaches the validated unsigned Squirrel assets, and includes the line-count table plus verified workflow timing in the release notes. The release remains unsigned by design and may trigger the operating system's unknown-publisher warning. A dim sum code name or photo is not asserted unless a separately verified catalog asset is available; this workflow neither fetches nor copies catalog assets. The workflow does not run tests or lint jobs; package production and release evidence are not test or runtime-interaction evidence.
+When the workflow reaches publication, it creates one non-draft GitHub Release with a rerun-unique tag, attaches the validated unsigned Squirrel assets, and includes the line-count table plus verified workflow timing in the release notes. The release remains unsigned by design and may trigger the operating system's unknown-publisher warning. It serializes publication and, only after checking the complete prior release history, may record the one-time `Classic Har Gow · 蝦餃` code name with a hyperlink to the verified public `hk-dish-0001` catalog photo. The photo remains on its source release: this workflow never downloads, copies, bundles, or attaches it. If the record was already used or history is unavailable, the release notes honestly omit the code name. See [Windows release packaging metadata](docs/features/release-packaging.md) for the exact behavior and failure boundary. The workflow does not run tests or lint jobs; package production and release evidence are not test or runtime-interaction evidence.
 
 ## Security and operational boundaries
 
@@ -104,6 +104,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Local authenticator and toy-lock foundation](docs/features/authenticator-and-toy-locks.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
 - [Local Ollama suite foundation](docs/features/local-ollama-suite.md)
+- [Windows release packaging metadata](docs/features/release-packaging.md)
 - [Local file-converter foundation](docs/features/file-converter.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
