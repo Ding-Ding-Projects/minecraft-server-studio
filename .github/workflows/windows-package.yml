@@ -215,10 +215,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Unable to finalize the release notes for $tag."
           }
-          $verified = (& gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,isDraft,url,assets) | ConvertFrom-Json
-          if ($verified.isDraft -or $verified.targetCommitish -ne $env:GITHUB_SHA) {
-            throw "Release verification failed for $tag."
-          }
           function Get-SetupAssetEquivalenceKey {
             param([Parameter(Mandatory)][string] $Name)
 
@@ -272,32 +268,75 @@ jobs:
           }
           $expectedSetupAsset = $expectedSetupAssets[0]
           $expectedExactAssets = @($expectedLocalAssets | Where-Object { $_.Path -ne $expectedSetupAsset.Path })
-          $publishedAssets = @($verified.assets)
 
-          $publishedSetupMatches = @($publishedAssets | Where-Object {
-            Test-SetupAssetNameEquivalent -ExpectedName $expectedSetupAsset.Name -PublishedName ([string]$_.name)
-          })
-          if ($publishedSetupMatches.Count -ne 1) {
-            throw "Release $tag must contain exactly one Setup.exe asset equivalent to $($expectedSetupAsset.Name); found $($publishedSetupMatches.Count)."
-          }
+          function Resolve-ExpectedReleaseAssets {
+            param([Parameter(Mandatory)] $PublishedAssets)
 
-          $resolvedPublishedAssets = @($publishedSetupMatches[0])
-          foreach ($expectedAsset in $expectedExactAssets) {
-            $exactMatches = @($publishedAssets | Where-Object {
-              [string]::Equals([string]$_.name, $expectedAsset.Name, [StringComparison]::Ordinal)
+            $publishedAssets = @($PublishedAssets | Where-Object { $null -ne $_ })
+            $unresolved = [System.Collections.Generic.List[string]]::new()
+            $resolved = [System.Collections.Generic.List[object]]::new()
+
+            $publishedSetupMatches = @($publishedAssets | Where-Object {
+              Test-SetupAssetNameEquivalent -ExpectedName $expectedSetupAsset.Name -PublishedName ([string]$_.name)
             })
-            if ($exactMatches.Count -ne 1) {
-              throw "Release $tag must contain exactly one asset named $($expectedAsset.Name); found $($exactMatches.Count)."
+            if ($publishedSetupMatches.Count -ne 1) {
+              $unresolved.Add("$($expectedSetupAsset.Name) (expected exactly one normalized Setup.exe match; found $($publishedSetupMatches.Count))")
+            } else {
+              $resolved.Add($publishedSetupMatches[0])
             }
-            $resolvedPublishedAssets += $exactMatches[0]
+
+            foreach ($expectedAsset in $expectedExactAssets) {
+              $exactMatches = @($publishedAssets | Where-Object {
+                [string]::Equals([string]$_.name, $expectedAsset.Name, [StringComparison]::Ordinal)
+              })
+              if ($exactMatches.Count -ne 1) {
+                $unresolved.Add("$($expectedAsset.Name) (expected exactly one exact-name match; found $($exactMatches.Count))")
+              } else {
+                $resolved.Add($exactMatches[0])
+              }
+            }
+
+            foreach ($asset in $resolved) {
+              if (([int64]$asset.size) -le 0) {
+                $unresolved.Add("$($asset.name) (published size is $($asset.size))")
+              }
+              if ([string]::IsNullOrWhiteSpace([string]$asset.downloadUrl)) {
+                $unresolved.Add("$($asset.name) (download URL is unavailable)")
+              }
+            }
+
+            return [pscustomobject]@{
+              Complete = $unresolved.Count -eq 0
+              Resolved = @($resolved.ToArray())
+              Unresolved = @($unresolved.ToArray())
+            }
           }
 
-          $unavailableAssets = @($resolvedPublishedAssets | Where-Object {
-            ([int64]$_.size) -le 0 -or [string]::IsNullOrWhiteSpace([string]$_.downloadUrl)
-          })
-          if ($unavailableAssets.Count -gt 0) {
-            throw "Release $tag has missing or non-downloadable assets: $($unavailableAssets.name -join ', ')."
-          }
+          $assetPollIntervalSeconds = 5
+          $assetAvailabilityDeadline = [DateTimeOffset]::UtcNow.AddSeconds(90)
+          $verified = $null
+          $assetResolution = $null
+          $lastUnresolvedAssets = @()
+          do {
+            $verified = (& gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,isDraft,url,assets) | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $null -eq $verified) {
+              throw "Unable to read release $tag while waiting for published assets."
+            }
+            if ($verified.isDraft -or $verified.targetCommitish -ne $env:GITHUB_SHA) {
+              throw "Release verification failed for $tag."
+            }
+
+            $assetResolution = Resolve-ExpectedReleaseAssets -PublishedAssets $verified.assets
+            $lastUnresolvedAssets = @($assetResolution.Unresolved)
+            if ($assetResolution.Complete) {
+              break
+            }
+            if ([DateTimeOffset]::UtcNow -ge $assetAvailabilityDeadline) {
+              $unresolvedText = if ($lastUnresolvedAssets.Count -gt 0) { $lastUnresolvedAssets -join '; ' } else { 'no asset details were returned' }
+              throw "Release $tag assets did not become available within 90 seconds: $unresolvedText"
+            }
+            Start-Sleep -Seconds $assetPollIntervalSeconds
+          } while ($true)
           @(
             '## Windows package release',
             '',
