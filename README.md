@@ -15,7 +15,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Use the CLI for setup, foreground operation, protected loopback RCON commands, plugin installation, and configuration automation.
 - Discover an advertised Minecraft Server Management Protocol schema with `rpc.discover` before enabling any live protocol operation; use the local console or opt-in RCON fallback where an operation is not advertised.
 - Use the capability-first Command Center for structured command families, source badges, typed controls, explicit selected-JAR and live runtime evidence collection, tokenized Minecraft-only raw fallback, and guarded consequential operations.
-- Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory without a chat or external status-service bridge.
+- Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory. An optional main-process Status Hub bridge can be configured separately; it keeps the local destination as the fallback and never reports registration, update, inbox-poll, or reply delivery without an accepted transport response.
 - Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
 
 ## Desktop workflow
@@ -76,6 +76,7 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 - RCON passwords and management bearer credentials are stored through the operating system protected-storage boundary and omitted from the local registry, exports, and console logs. Minecraft still requires its active RCON password in its local configuration; treat the server folder as sensitive.
 - The CLI never accepts an RCON password from command-line arguments, environment variables, stdin, or `servers.json`. Its one-shot local gateway reads the app-private protected value only under the same Windows account, uses it only for a fixed loopback connection, and emits no credential data.
 - Plugins are local JARs selected through the operating-system file picker. Minecraft Server Studio calculates SHA-256 and inspects bounded JAR, manifest, descriptor, dependency, duplicate, and cycle evidence before staging, but it does not claim to audit or trust third-party plugin safety.
+- The optional Status Hub bridge is HTTPS-only except for an explicitly enabled HTTP development route at the exact numeric loopback host `127.0.0.1` or `::1`. Once an eligible endpoint and vault enrollment token are available, the main process generates and stores a fresh session key through `CredentialVault`; it is not returned by the Hub. Enrollment tokens and session keys are not accepted by renderer forms, placed in exports, or copied into local status history. An attempted connection does not claim external delivery.
 
 ## Companion Sites source
 
@@ -91,6 +92,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
 - [CLI RCON gateway](docs/features/cli-rcon-gateway.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
+- [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)
 - [Feature documentation index](docs/features/README.md)
 - [Changelog](CHANGELOG.md)
 - [Handoff](HANDOFF.md)

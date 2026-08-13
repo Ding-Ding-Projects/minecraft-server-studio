@@ -6,7 +6,9 @@
  * This module is deliberately pure: it imports no packages, opens no files,
  * starts no processes, and makes no network request. The Electron main process
  * can use the returned snapshots to render a local status destination without
- * implying a chat bridge, remote control surface, or external Status Hub.
+ * making this model itself a chat bridge, remote control surface, or network
+ * client. A separate main-process adapter may attach a safe bridge-state
+ * projection to a snapshot after it receives real transport responses.
  */
 
 const STATUS_SCHEMA_VERSION = 1;
@@ -34,17 +36,32 @@ const PROOF_STATES = Object.freeze([
   'not-applicable'
 ]);
 
+const STATUS_HUB_BRIDGE_STATES = Object.freeze([
+  'unconfigured',
+  'credential-unavailable',
+  'connecting',
+  'connected',
+  'failed'
+]);
+
+const STATUS_HUB_INBOX_STATES = Object.freeze([
+  'not-polled',
+  'polled-empty',
+  'replies-observed',
+  'failed'
+]);
+
 const LOCAL_BRIDGE_BOUNDARY = deepFreeze({
   id: 'local-desktop-only',
   state: 'local-only',
-  exactBoundary: 'No chat bridge or external Status Hub bridge exists: this model is an in-process, local-only record and does not send, receive, poll, synchronize, or execute through a network, chat service, or external Hub.',
+  exactBoundary: 'This in-process local status model has no network client. It cannot send, receive, poll, synchronize, or execute through a chat service or external Hub. A separate main-process adapter may attach only safe connection state after an accepted transport response.',
   chatBridge: {
     available: false,
     reason: 'This model does not deliver messages to or receive messages from chat.'
   },
   externalStatusHubBridge: {
     available: false,
-    reason: 'This model has no external Status Hub registration, transport, polling, or inbox bridge.'
+    reason: 'This pure model has no external Status Hub registration, transport, polling, or inbox implementation.'
   },
   network: {
     available: false,
@@ -58,6 +75,7 @@ const LOCAL_BRIDGE_BOUNDARY = deepFreeze({
 
 const DESKTOP_SURFACES = deepFreeze([
   surface('status-destination', 'Local status destination', 'A local desktop status view for current work, evidence, events, and next steps.'),
+  surface('status-hub-bridge', 'Shared Status Hub bridge', 'An opt-in main-process bridge with protected credentials, explicit connection state, and local fallback.'),
   surface('server-creation', 'Server creation', 'Structured creation of local Paper or Spigot server definitions.'),
   surface('dependency-bootstrap', 'Automatic dependency bootstrap', 'Detection, automatic installation, recovery, and evidence for required tools.'),
   surface('paper', 'Paper setup', 'Official Paper version selection, download, validation, and setup controls.'),
@@ -100,7 +118,33 @@ function createLocalStatusSnapshot(input = {}) {
     events: normalizeCollection(source.events, normalizeEvent, now),
     localEvidence: normalizeCollection(source.localEvidence, normalizeEvidence, now),
     nextSteps: normalizeCollection(source.nextSteps, normalizeNextStep, now),
+    statusHubBridge: createStatusHubBridgeSnapshot(source.statusHubBridge),
     bridgeBoundary: LOCAL_BRIDGE_BOUNDARY
+  });
+}
+
+/**
+ * Normalizes safe, non-secret state reported by the optional main-process
+ * bridge. The local model never reads credentials, raw response envelopes, or
+ * reply text; those values cannot enter this renderer-facing projection.
+ */
+function createStatusHubBridgeSnapshot(input = {}) {
+  const source = objectValue(input);
+  const state = STATUS_HUB_BRIDGE_STATES.includes(source.state) ? source.state : 'unconfigured';
+  const inboxState = STATUS_HUB_INBOX_STATES.includes(source.inboxState) ? source.inboxState : 'not-polled';
+  return deepFreeze({
+    state,
+    endpoint: normalizeBridgeEndpoint(source.endpoint),
+    allowInsecureLoopback: source.allowInsecureLoopback === true,
+    localFallback: true,
+    detail: detailValue(source.detail),
+    lastAcceptedRegistrationAt: normalizeOptionalTimestamp(source.lastAcceptedRegistrationAt),
+    lastAcceptedUpdateAt: normalizeOptionalTimestamp(source.lastAcceptedUpdateAt),
+    lastAcceptedPollAt: normalizeOptionalTimestamp(source.lastAcceptedPollAt),
+    inboxState,
+    observedReplyCount: normalizeBoundedInteger(source.observedReplyCount, 5_000, 0),
+    latestReplySequence: normalizeBoundedInteger(source.latestReplySequence, Number.MAX_SAFE_INTEGER, null),
+    lastFailureCode: normalizeFailureCode(source.lastFailureCode)
   });
 }
 
@@ -282,6 +326,32 @@ function normalizeTimestamp(value, fallback) {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
 }
 
+function normalizeOptionalTimestamp(value) {
+  return normalizeTimestamp(value, null);
+}
+
+function normalizeBoundedInteger(value, maximum, fallback) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= maximum ? value : fallback;
+}
+
+function normalizeFailureCode(value) {
+  if (typeof value !== 'string') return '';
+  const code = value.trim().slice(0, 96);
+  return /^[A-Z0-9_]+$/.test(code) ? code : '';
+}
+
+function normalizeBridgeEndpoint(value) {
+  if (typeof value !== 'string' || !value.trim() || value.length > MAX_TEXT_LENGTH) return '';
+  try {
+    const parsed = new URL(value);
+    if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) return '';
+    const pathname = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '');
+    return `${parsed.origin}${pathname}`;
+  } catch {
+    return '';
+  }
+}
+
 function normalizeIdentifier(value, fallback) {
   if (typeof value !== 'string') return fallback;
   const normalized = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -341,9 +411,12 @@ module.exports = {
   LOCAL_BRIDGE_BOUNDARY,
   OPERATION_STATES,
   PROOF_STATES,
+  STATUS_HUB_BRIDGE_STATES,
+  STATUS_HUB_INBOX_STATES,
   STATUS_SCHEMA_VERSION,
   assessDesktopCompleteness,
   createCompletenessRow,
   createDesktopCompletenessInventory,
-  createLocalStatusSnapshot
+  createLocalStatusSnapshot,
+  createStatusHubBridgeSnapshot
 };

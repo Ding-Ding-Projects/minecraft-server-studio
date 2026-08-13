@@ -236,6 +236,18 @@
                 <article class="status-summary-card"><span>Completeness inventory</span><strong id="local-status-completeness">Not loaded</strong></article>
               </div>
               <section class="wide status-detail-card">
+                <div>
+                  <h4>Optional Shared Status Hub bridge</h4>
+                  <p class="muted">Local status stays available whether this bridge is unconfigured, unavailable, or disconnected. This page never accepts an enrollment token or session key.</p>
+                </div>
+                <div class="settings-grid">
+                  <label class="field wide"><span>Bridge endpoint</span><input id="status-hub-endpoint" type="url" maxlength="1024" autocomplete="off" placeholder="https://status.example.invalid/"><small>Use HTTPS. HTTP is accepted only for explicitly enabled numeric loopback development endpoints.</small></label>
+                  <label class="switch-field wide"><input id="status-hub-allow-loopback" type="checkbox"><span><strong>Allow local HTTP development</strong><small>Only `127.0.0.1` or `::1` is accepted when this is enabled. It does not enable LAN or public HTTP.</small></span></label>
+                  <div class="wide live-connection-actions"><button id="save-status-hub-bridge-button" type="button" class="outlined-action">Save bridge settings</button><button id="sync-status-hub-bridge-button" type="button" class="primary-action">Connect and refresh status</button><button id="clear-status-hub-bridge-button" type="button" class="outlined-action">Remove bridge settings</button></div>
+                  <div class="wide status-record" data-state="idle"><strong id="status-hub-bridge-state">Bridge state: not loaded</strong><span id="status-hub-bridge-detail">The local status destination remains active. A privileged protected-storage provisioning route must already provide an enrollment credential before any external request can start.</span><span id="status-hub-bridge-activity">No accepted external registration, update, inbox poll, or reply delivery has been observed.</span></div>
+                </div>
+              </section>
+              <section class="wide status-detail-card">
                 <div><h4>Active operations</h4><p class="muted">Install, setup, start, stop, and discovery work reports here when the app has observed it.</p></div>
                 <div id="local-status-operations" class="status-record-list" aria-live="polite"></div>
               </section>

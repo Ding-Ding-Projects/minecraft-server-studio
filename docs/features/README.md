@@ -10,3 +10,4 @@
 - [Presentation settings and shared School mode](experience-settings.md)
 - [CLI RCON gateway](cli-rcon-gateway.md)
 - [Local status and completeness](local-status-and-completeness.md)
+- [Shared Status Hub bridge](shared-status-hub-bridge.md)
