@@ -304,6 +304,14 @@ jobs:
             $unresolved = [System.Collections.Generic.List[string]]::new()
             $resolved = [System.Collections.Generic.List[object]]::new()
 
+            function Test-ReleaseAssetUrl {
+              param([Parameter(Mandatory)][string] $Value)
+
+              $uri = $null
+              return [Uri]::TryCreate($Value, [UriKind]::Absolute, [ref]$uri) -and
+                [string]::Equals($uri.Scheme, [Uri]::UriSchemeHttps, [StringComparison]::OrdinalIgnoreCase)
+            }
+
             foreach ($expectedAsset in $expectedLocalAssets) {
               $exactMatches = @($publishedAssets | Where-Object {
                 [string]::Equals([string]$_.name, $expectedAsset.Name, [StringComparison]::Ordinal)
@@ -319,8 +327,9 @@ jobs:
               if (([int64]$asset.size) -le 0) {
                 $unresolved.Add("$($asset.name) (published size is $($asset.size))")
               }
-              if ([string]::IsNullOrWhiteSpace([string]$asset.url)) {
-                $unresolved.Add("$($asset.name) (release URL is unavailable)")
+              $releaseUrl = [string]$asset.url
+              if ([string]::IsNullOrWhiteSpace($releaseUrl) -or -not (Test-ReleaseAssetUrl -Value $releaseUrl)) {
+                $unresolved.Add("$($asset.name) (release URL is unavailable or invalid)")
               }
             }
 
