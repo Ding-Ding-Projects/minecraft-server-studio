@@ -129,7 +129,9 @@
                 <label class="switch-field"><input id="gamerule-allowEnteringNetherUsingPortals" type="checkbox"><span><strong>Allow Nether portal travel</strong><small>Current Minecraft versions expose this as the allowEnteringNetherUsingPortals gamerule.</small></span></label>
                 <label class="switch-field"><input id="gamerule-spawnMonsters" type="checkbox"><span><strong>Spawn monsters</strong><small>Current Minecraft versions expose this as the spawnMonsters gamerule.</small></span></label>
                 <label class="switch-field"><input id="gamerule-commandBlocksEnabled" type="checkbox"><span><strong>Enable command blocks</strong><small>Current Minecraft versions expose this as the commandBlocksEnabled gamerule.</small></span></label>
+                <label class="switch-field"><input id="gamerule-spawnerBlocksEnabled" type="checkbox"><span><strong>Enable spawner blocks</strong><small>Minecraft 1.21.9 and later expose this as the spawnerBlocksEnabled gamerule.</small></span></label>
                 <label class="switch-field"><input id="force-gamemode" type="checkbox"><span><strong>Force the default game mode</strong><small>Apply the selected default game mode when players join.</small></span></label>
+                <p id="gamerule-application-state" class="wide muted">These controls are Minecraft 1.21.9+ game rules. They are never written as obsolete server.properties keys. The generic management protocol remains unavailable here until discovery provides its exact parameter schema.</p>
               </div>
             </section>
 
@@ -254,9 +256,11 @@
             <section id="panel-plugins" class="settings-panel" role="tabpanel" data-panel="plugins" hidden>
               <div class="panel-heading"><div><p class="eyebrow">PAPER AND SPIGOT EXTENSIONS</p><h3>Plugin folder</h3></div></div>
               <div class="plugin-install-card">
-                <div><h4>Install a plugin JAR</h4><p>Select a local plugin JAR. Minecraft Server Studio copies it into the selected server's plugins folder without opening a shell.</p></div>
+                <div><h4>Inspect and stage a local plugin JAR</h4><p>Select a local plugin JAR. The app inspects its bounded ZIP/JAR signature, manifest, descriptor, SHA-256, declared dependencies, duplicate names, and load-order cycles. It never downloads a third-party plugin.</p></div>
                 <div class="plugin-actions"><input id="plugin-path" type="text" readonly placeholder="No plugin selected"><button id="browse-plugin-button" class="outlined-action" type="button">Choose JAR</button><button id="install-plugin-button" class="primary-action" type="button">Install plugin</button></div>
               </div>
+              <section id="plugin-plan" class="plugin-plan" aria-live="polite">Choose a local JAR to inspect its ZIP signature, SHA-256, descriptor, dependencies, and compatibility plan before staging.</section>
+              <div class="plugin-promotion-row"><p class="muted">When the server is running, a reviewed JAR is staged outside <code>plugins</code>. Promotion is atomic and occurs only after the server stops.</p><button id="promote-staged-plugins-button" class="outlined-action" type="button" disabled>Promote staged plugins</button></div>
               <div class="plugin-list" id="plugin-list" aria-live="polite"></div>
             </section>
 

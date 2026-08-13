@@ -8,7 +8,9 @@ const state = {
   buildToolsMetadata: null,
   buildToolsPlan: null,
   activeTab: 'general',
-  pluginPath: ''
+  pluginPath: '',
+  pluginPlan: null,
+  pluginPlanServerId: null
 };
 
 const ADVANCED_FIELDS = [
@@ -183,7 +185,8 @@ function gameRulesFromForm() {
     pvp: $('#gamerule-pvp').checked,
     allowEnteringNetherUsingPortals: $('#gamerule-allowEnteringNetherUsingPortals').checked,
     spawnMonsters: $('#gamerule-spawnMonsters').checked,
-    commandBlocksEnabled: $('#gamerule-commandBlocksEnabled').checked
+    commandBlocksEnabled: $('#gamerule-commandBlocksEnabled').checked,
+    spawnerBlocksEnabled: $('#gamerule-spawnerBlocksEnabled').checked
   };
 }
 
@@ -550,7 +553,14 @@ function renderServers() {
     item.type = 'button';
     item.className = `server-card ${server.id === state.selectedId ? 'selected' : ''}`;
     item.innerHTML = `<strong>${escapeHtml(server.name)}</strong><span class="server-meta"><span>${escapeHtml(server.software)} · ${escapeHtml(server.minecraftVersion)}</span><span><i class="dot ${server.status}"></i>${escapeHtml(server.status)}</span></span>`;
-    item.addEventListener('click', () => { state.selectedId = server.id; renderAll(); refreshCommandCatalog(); });
+    item.addEventListener('click', () => {
+      state.selectedId = server.id;
+      state.pluginPath = '';
+      state.pluginPlan = null;
+      state.pluginPlanServerId = null;
+      renderAll();
+      refreshCommandCatalog();
+    });
     container.append(item);
   }
 }
@@ -577,6 +587,25 @@ function renderDependencies() {
   $('#install-dependencies-button').disabled = !missing;
   $('#install-dependencies-button').textContent = Object.keys(state.dependencyErrors).length ? 'Retry missing tools' : 'Install missing tools';
   $('#install-dependencies-button').title = missing ? 'Uses Windows package managers first, then an app-private portable fallback.' : 'All required tools are installed.';
+}
+
+function renderGameRuleStatus(server) {
+  const target = $('#gamerule-application-state');
+  if (!target) return;
+  const statuses = server?.gameRuleStatus || {};
+  const labels = {
+    'sent-local-console': 'sent to the local console',
+    'sent-rcon': 'sent through RCON',
+    'saved-pending-server-start': 'saved for the next managed start',
+    'saved-no-live-transport': 'saved locally only',
+    'saved-version-incompatible': 'not sent: target version is too old',
+    failed: 'not confirmed by the selected live route'
+  };
+  const entries = Object.entries(statuses)
+    .map(([name, status]) => `${name}: ${labels[status.state] || 'saved'}${status.minimumVersion ? ` (requires ${status.minimumVersion}+)` : ''}`);
+  target.textContent = entries.length
+    ? entries.join(' · ')
+    : `These controls are Minecraft 1.21.9+ game rules. They are never written as obsolete server.properties keys. The generic management protocol remains unavailable here until discovery provides its exact parameter schema.`;
 }
 
 function renderEditor() {
@@ -628,6 +657,8 @@ function renderEditor() {
   $('#gamerule-allowEnteringNetherUsingPortals').checked = Boolean(gameRules.allowEnteringNetherUsingPortals);
   $('#gamerule-spawnMonsters').checked = Boolean(gameRules.spawnMonsters);
   $('#gamerule-commandBlocksEnabled').checked = Boolean(gameRules.commandBlocksEnabled);
+  $('#gamerule-spawnerBlocksEnabled').checked = Boolean(gameRules.spawnerBlocksEnabled);
+  renderGameRuleStatus(server);
   $('#view-distance-output').value = $('#view-distance').value;
   $('#simulation-distance-output').value = $('#simulation-distance').value;
   renderManagement();
@@ -801,6 +832,39 @@ function renderRuntimeInventory(payload = []) {
   }
 }
 
+function renderPluginPlan() {
+  const container = $('#plugin-plan');
+  if (!container) return;
+  const plan = state.pluginPlanServerId === selectedServer()?.id ? state.pluginPlan : null;
+  container.replaceChildren();
+  if (!plan) {
+    container.textContent = 'Choose a local JAR to inspect its ZIP signature, SHA-256, descriptor, dependencies, and compatibility plan before staging.';
+    $('#install-plugin-button').disabled = true;
+    return;
+  }
+  const title = document.createElement('strong');
+  const descriptor = plan.descriptor || {};
+  title.textContent = `${descriptor.name || plan.source.fileName} ${descriptor.version ? `· ${descriptor.version}` : ''}`;
+  const summary = document.createElement('span');
+  summary.textContent = `${plan.state.replace(/-/g, ' ')} · SHA-256 ${String(plan.source.sha256 || '').slice(0, 16)}… · ${plan.compatibility?.reason || 'Compatibility is not declared.'}`;
+  container.append(title, summary);
+  const details = [
+    descriptor.apiVersion ? `api-version ${descriptor.apiVersion}` : 'no api-version declaration',
+    descriptor.hardDependencies?.length ? `required: ${descriptor.hardDependencies.join(', ')}` : 'no declared required dependencies',
+    plan.serverRunning ? 'the live server is running, so this JAR will be staged outside plugins' : 'the server is stopped, so a verified JAR can be atomically promoted'
+  ];
+  const detail = document.createElement('small');
+  detail.textContent = details.join(' · ');
+  container.append(detail);
+  for (const message of [...(plan.blockers || []), ...(plan.warnings || [])]) {
+    const item = document.createElement('small');
+    item.className = plan.blockers?.includes(message) ? 'plugin-plan-blocker' : 'muted';
+    item.textContent = message;
+    container.append(item);
+  }
+  $('#install-plugin-button').disabled = Boolean(plan.blockers?.length);
+}
+
 async function refreshPlugins() {
   const server = selectedServer();
   const container = $('#plugin-list');
@@ -811,16 +875,30 @@ async function refreshPlugins() {
   if (!plugins.length) {
     const text = document.createElement('p');
     text.className = 'muted';
-    text.textContent = 'No plugin JARs are installed for this server.';
+    text.textContent = 'No plugin JARs are installed or staged for this server.';
     container.append(text);
   } else {
     plugins.forEach((plugin) => {
-      const pill = document.createElement('span');
-      pill.className = 'plugin-pill';
-      pill.textContent = plugin;
-      container.append(pill);
+      const item = document.createElement('article');
+      item.className = 'plugin-pill';
+      const title = document.createElement('strong');
+      title.textContent = `${plugin.state === 'staged' ? 'Staged' : 'Installed'} · ${plugin.fileName}`;
+      const descriptor = plugin.descriptor || {};
+      const detail = document.createElement('small');
+      detail.textContent = `${descriptor.name || 'Unidentified plugin'}${descriptor.version ? ` ${descriptor.version}` : ''}${plugin.sha256 ? ` · SHA-256 ${plugin.sha256.slice(0, 16)}…` : ''}`;
+      item.append(title, detail);
+      if (plugin.inspectionError) {
+        const warning = document.createElement('small');
+        warning.className = 'plugin-plan-blocker';
+        warning.textContent = plugin.inspectionError;
+        item.append(warning);
+      }
+      container.append(item);
     });
   }
+  const stagedCount = plugins.filter((plugin) => plugin.state === 'staged').length;
+  $('#promote-staged-plugins-button').disabled = !stagedCount || server.status === 'running';
+  renderPluginPlan();
 }
 
 function openCreateDialog() {
@@ -857,6 +935,7 @@ async function saveSettings(event) {
   event.preventDefault();
   const server = selectedServer();
   if (!server) return;
+  const gameRules = gameRulesFromForm();
   const saved = await safely(() => window.studio.updateServer(server.id, {
     name: $('#edit-name').value,
     memoryGb: $('#memory-gb').value,
@@ -867,10 +946,13 @@ async function saveSettings(event) {
       expertTokens: $('#jvm-expert-tokens').value
     },
     eulaAccepted: $('#eula-accepted').checked,
-    settings: settingsFromForm(),
-    gameRules: gameRulesFromForm()
-  }), 'Server settings saved.');
-  if (saved) await refreshServers();
+    settings: settingsFromForm()
+  }), 'Server properties and local settings saved.');
+  if (saved) {
+    const applied = await safely(() => window.studio.applyGameRules(server.id, gameRules));
+    if (applied) toast('Game-rule delivery state updated without treating it as a server.properties field.', 'success');
+    await refreshServers();
+  }
 }
 
 async function saveManagementConnection() {
@@ -1041,8 +1123,39 @@ function bindEvents() {
   $('#setup-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (server.software === 'spigot') { setActiveTab('buildtools'); return toast('Spigot setup requires the isolated BuildTools plan and its explicit execution action.', 'error'); } await safely(() => window.studio.provision(server.id), 'Official server software is ready.'); });
   $('#start-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.start(server.id), 'Server start requested.'); });
   $('#stop-button').addEventListener('click', async () => { const server = selectedServer(); if (server) await safely(() => window.studio.stop(server.id), 'Graceful server stop requested.'); });
-  $('#browse-plugin-button').addEventListener('click', async () => { const selected = await safely(() => window.studio.pickPlugin()); if (selected) { state.pluginPath = selected; $('#plugin-path').value = selected; } });
-  $('#install-plugin-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; if (!state.pluginPath) return toast('Choose a plugin JAR first.', 'error'); const result = await safely(() => window.studio.installPlugin(server.id, state.pluginPath), 'Plugin installed. Restart the server to load it.'); if (result) { state.pluginPath = ''; $('#plugin-path').value = ''; refreshPlugins(); } });
+  $('#browse-plugin-button').addEventListener('click', async () => {
+    const selected = await safely(() => window.studio.pickPlugin());
+    if (!selected) return;
+    const server = selectedServer();
+    state.pluginPath = selected;
+    $('#plugin-path').value = selected;
+    state.pluginPlan = server ? await safely(() => window.studio.planPluginInstall(server.id, selected)) : null;
+    state.pluginPlanServerId = server?.id || null;
+    renderPluginPlan();
+  });
+  $('#install-plugin-button').addEventListener('click', async () => {
+    const server = selectedServer();
+    if (!server) return;
+    if (!state.pluginPath) return toast('Choose a local plugin JAR first.', 'error');
+    const result = await safely(() => window.studio.installPlugin(server.id, state.pluginPath));
+    if (result) {
+      toast(result.state === 'staged' ? 'Plugin JAR staged safely outside the live plugins directory.' : 'Plugin JAR promoted with its local rollback record.', 'success');
+      state.pluginPath = '';
+      state.pluginPlan = null;
+      state.pluginPlanServerId = null;
+      $('#plugin-path').value = '';
+      await refreshPlugins();
+    }
+  });
+  $('#promote-staged-plugins-button').addEventListener('click', async () => {
+    const server = selectedServer();
+    if (!server) return;
+    const result = await safely(() => window.studio.promoteStagedPlugins(server.id));
+    if (result) {
+      toast(result.promoted?.length ? `Promoted ${result.promoted.length} staged plugin JAR(s).` : 'No staged plugin JAR required promotion.', 'success');
+      await refreshPlugins();
+    }
+  });
   $('#send-console-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const result = await safely(() => window.studio.console(server.id, command)); if (result) $('#console-command').value = ''; });
   $('#send-rcon-button').addEventListener('click', async () => { const server = selectedServer(); if (!server) return; const command = $('#console-command').value; const response = await safely(() => window.studio.rcon(server.id, command)); if (response !== null) { state.logs.push(`RCON: ${response || '(no response)'}`); renderConsole(); } });
   $('#clear-console-button').addEventListener('click', () => { state.logs = []; renderConsole(); });

@@ -22,6 +22,7 @@ const {
   ROUTES
 } = require('./command-center-registry.cjs');
 const javaRuntime = require('./java-runtime-manager.cjs');
+const configPluginSafety = require('./config-plugin-safety.cjs');
 
 const PAPER_API = 'https://api.papermc.io/v2/projects/paper';
 const SPIGOT_BUILDTOOLS_URL = 'https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar';
@@ -86,14 +87,12 @@ const DEFAULT_PROPERTIES = Object.freeze({
   'white-list': 'false'
 });
 
-// Since current Minecraft versions expose these as gamerules, they deliberately
-// remain outside server.properties. The live protocol registry may add more.
-const DEFAULT_GAMERULES = Object.freeze({
-  pvp: true,
-  allowEnteringNetherUsingPortals: true,
-  spawnMonsters: true,
-  commandBlocksEnabled: false
-});
+// These current Minecraft game rules deliberately remain outside server.properties.
+// Delivery uses a serialized local console or protected RCON route; the generic
+// management protocol remains unavailable until discovery supplies exact params.
+const DEFAULT_GAMERULES = Object.freeze(Object.fromEntries(
+  Object.entries(configPluginSafety.MANAGED_GAME_RULES).map(([name, definition]) => [name, definition.defaultValue])
+));
 
 const ALLOWED_PROPERTY_KEYS = new Set(Object.keys(DEFAULT_PROPERTIES));
 const STATUS_COMPLETENESS_ROWS = Object.freeze({
@@ -105,8 +104,8 @@ const STATUS_COMPLETENESS_ROWS = Object.freeze({
   'java-runtime-and-jar-launch': { implementationPath: ['src/main/java-runtime-manager.cjs', 'src/main/server-manager.cjs', 'src/renderer/renderer.js'], documentationPath: ['docs/features/java-runtime-and-launch.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Version-aware runtime discovery, direct probes, and launch preflight source are registered; verification remains pending.' } },
   'protocol-management': { implementationPath: ['src/main/minecraft-management-protocol.cjs', 'src/main/main.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Capability-first protocol discovery is being integrated.' } },
   'command-center': { implementationPath: ['src/main/command-center-registry.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/command-center.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Registry and renderer integration are being completed.' } },
-  'plugins': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Plugin staging is present; manifest inspection is being integrated.' } },
-  'configuration': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'verified', detail: 'Rich server, world, gameplay, network, and advanced property controls are registered.' } },
+  'plugins': { implementationPath: ['src/main/config-plugin-safety.cjs', 'src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/configuration-and-plugin-safety.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Bounded local JAR inspection, dependency planning, staging, promotion records, and rollback metadata are registered; no runtime verification is claimed.' } },
+  'configuration': { implementationPath: ['src/main/config-plugin-safety.cjs', 'src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/configuration-and-plugin-safety.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Lossless known-key server.properties updates and version-badged live gamerule delivery are registered; no runtime verification is claimed.' } },
   'console-and-rcon': { implementationPath: ['src/main/server-manager.cjs', 'src/renderer/index.html'], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'in-progress', detail: 'Local console is available; vault-backed RCON integration is in progress.' } },
   'backups-and-updates': { implementationPath: [], documentationPath: ['docs/features/server-orchestration.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Backup-first update and rollback controls remain pending.' } },
   'settings-appearance-and-localization': { implementationPath: [], documentationPath: ['docs/features/local-status-and-completeness.md'], localization: { state: 'pending' }, test: { state: 'pending' }, capture: { state: 'pending' }, evidence: { state: 'pending', detail: 'Universal settings and localization work remain incomplete.' } },
@@ -209,13 +208,7 @@ function normalizeProperties(input = {}) {
 }
 
 function normalizeGameRules(input = {}) {
-  const normalized = { ...DEFAULT_GAMERULES };
-  for (const [key, value] of Object.entries(input || {})) {
-    if (/^[A-Za-z][A-Za-z0-9_]{0,127}$/.test(key)) {
-      normalized[key] = typeof value === 'boolean' || typeof value === 'number' ? value : stringValue(value).slice(0, 512);
-    }
-  }
-  return normalized;
+  return configPluginSafety.normalizeManagedGameRules({ ...DEFAULT_GAMERULES, ...(input || {}) });
 }
 
 function normalizeLaunchProfile(input = {}) {
@@ -239,24 +232,6 @@ function normalizeLaunchProfile(input = {}) {
     }
   }
   return { gc, diagnostics, expertTokens };
-}
-
-function parseProperties(content) {
-  const parsed = {};
-  for (const rawLine of content.split(/\r?\n/)) {
-    if (!rawLine || rawLine.startsWith('#')) continue;
-    const separator = rawLine.indexOf('=');
-    if (separator < 0) continue;
-    parsed[rawLine.slice(0, separator)] = rawLine.slice(separator + 1);
-  }
-  return normalizeProperties(parsed);
-}
-
-function serializeProperties(properties) {
-  return `${Object.entries(properties)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${String(value).replace(/[\r\n]/g, ' ')}`)
-    .join('\n')}\n`;
 }
 
 function parseMemoryGb(value) {
@@ -403,6 +378,7 @@ function copyPublicServer(server) {
     rconSecretConfigured: Boolean(server.rconSecretConfigured),
     eulaAccepted: Boolean(server.eulaAccepted),
     gameRules: { ...normalizeGameRules(server.gameRules) },
+    gameRuleStatus: currentGameRuleStatus(server),
     management: {
       endpoint: server.management?.endpoint || '',
       allowInsecureLoopback: Boolean(server.management?.allowInsecureLoopback),
@@ -414,6 +390,109 @@ function copyPublicServer(server) {
     updatedAt: server.updatedAt,
     settings: { ...server.settings }
   };
+}
+
+function copyGameRuleStatus(input) {
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const result = {};
+  for (const name of Object.keys(configPluginSafety.MANAGED_GAME_RULES)) {
+    const candidate = source[name];
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+    const compatibility = configPluginSafety.gameRuleCompatibility(candidate.selectedVersion || '', name);
+    result[name] = {
+      value: candidate.value === true,
+      state: ['saved-pending-server-start', 'saved-version-incompatible', 'sent-local-console', 'sent-rcon', 'saved-no-live-transport', 'failed'].includes(candidate.state)
+        ? candidate.state
+        : 'saved-pending-server-start',
+      transport: ['local-console', 'rcon', 'none'].includes(candidate.transport) ? candidate.transport : 'none',
+      selectedVersion: stringValue(candidate.selectedVersion || compatibility.selectedVersion || '').slice(0, 32),
+      minimumVersion: compatibility.minimumVersion,
+      detail: stringValue(candidate.detail).slice(0, 512),
+      updatedAt: candidate.updatedAt || null
+    };
+  }
+  return result;
+}
+
+function currentGameRuleStatus(server) {
+  const result = { ...copyGameRuleStatus(server.gameRuleStatus) };
+  const gameRules = normalizeGameRules(server.gameRules);
+  for (const name of Object.keys(configPluginSafety.MANAGED_GAME_RULES)) {
+    if (result[name]) continue;
+    const compatibility = configPluginSafety.gameRuleCompatibility(server.minecraftVersion, name);
+    result[name] = {
+      value: Boolean(gameRules[name]),
+      state: compatibility.supported ? 'saved-pending-server-start' : 'saved-version-incompatible',
+      transport: 'none',
+      selectedVersion: server.minecraftVersion,
+      minimumVersion: compatibility.minimumVersion,
+      detail: compatibility.supported
+        ? `No live delivery record exists yet. The stored value can be sent through a supported local console or RCON route after a save or managed start.`
+        : compatibility.reason,
+      updatedAt: null
+    };
+  }
+  return result;
+}
+
+function initialGameRuleStatus(server, ruleNames = Object.keys(configPluginSafety.MANAGED_GAME_RULES)) {
+  const result = { ...currentGameRuleStatus(server) };
+  for (const name of ruleNames) {
+    if (!Object.prototype.hasOwnProperty.call(configPluginSafety.MANAGED_GAME_RULES, name)) continue;
+    const compatibility = configPluginSafety.gameRuleCompatibility(server.minecraftVersion, name);
+    result[name] = {
+      value: Boolean(server.gameRules?.[name]),
+      state: compatibility.supported ? 'saved-pending-server-start' : 'saved-version-incompatible',
+      transport: 'none',
+      selectedVersion: server.minecraftVersion,
+      detail: compatibility.supported
+        ? `Saved for Minecraft ${server.minecraftVersion}; it will be sent through a live command transport after the server starts.`
+        : compatibility.reason,
+      updatedAt: new Date().toISOString()
+    };
+  }
+  return result;
+}
+
+function safePluginRecord(input) {
+  const record = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const descriptor = configPluginSafety.publicPluginDescriptor(record.descriptor);
+  const fileName = stringValue(record.fileName).trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._ -]{0,180}\.jar$/i.test(fileName)) return null;
+  const sha256 = stringValue(record.sha256).toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(sha256)) return null;
+  return {
+    id: /^[0-9a-f-]{36}$/i.test(stringValue(record.id)) ? record.id : crypto.randomUUID(),
+    state: ['staged', 'promoted'].includes(record.state) ? record.state : 'staged',
+    fileName,
+    sha256,
+    descriptor,
+    plannedAt: record.plannedAt || new Date().toISOString(),
+    promotedAt: record.promotedAt || null,
+    lastBlockedReason: stringValue(record.lastBlockedReason).slice(0, 512),
+    rollback: record.rollback && typeof record.rollback === 'object' && !Array.isArray(record.rollback)
+      ? {
+        action: stringValue(record.rollback.action).slice(0, 128),
+        fileName: stringValue(record.rollback.fileName).slice(0, 256),
+        requiresConfirmation: record.rollback.requiresConfirmation !== false
+      }
+      : null
+  };
+}
+
+function normalizePluginRecords(input) {
+  const records = Array.isArray(input) ? input : [];
+  const result = [];
+  for (const item of records.slice(-256)) {
+    const record = safePluginRecord(item);
+    if (record) result.push(record);
+  }
+  return result;
+}
+
+function pathInside(parent, candidate) {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
 }
 
 class ServerManager {
@@ -431,6 +510,7 @@ class ServerManager {
     this.buildToolsMetadata = null;
     this.buildToolsPlans = new Map();
     this.commandDiscovery = new Map();
+    this.consoleQueues = new Map();
     this.registryFile = path.join(this.dataDir, 'servers.json');
     this.toolchainDir = path.join(this.dataDir, 'toolchain');
     this.javaPortableSources = options.javaPortableSources && typeof options.javaPortableSources === 'object'
@@ -639,6 +719,65 @@ class ServerManager {
     }
   }
 
+  pluginStagingDirectory(server) {
+    const root = path.resolve(server.serverPath);
+    const directory = path.resolve(root, '.minecraft-server-studio', 'plugin-staging');
+    if (!pathInside(root, directory)) throw new Error('The app-managed plugin staging location escaped the selected server folder.');
+    return directory;
+  }
+
+  pluginDestinationPath(server, fileName) {
+    const root = path.resolve(server.serverPath);
+    const destination = path.resolve(root, 'plugins', fileName);
+    const pluginsRoot = path.resolve(root, 'plugins');
+    if (!pathInside(pluginsRoot, destination) || path.dirname(destination) !== pluginsRoot) {
+      throw new Error('The plugin destination escaped the server plugins folder.');
+    }
+    return destination;
+  }
+
+  async inspectInstalledPluginJars(server) {
+    const pluginsPath = path.join(server.serverPath, 'plugins');
+    if (!(await pathExists(pluginsPath))) return [];
+    const entries = await fs.readdir(pluginsPath, { withFileTypes: true });
+    const candidates = entries.filter((entry) => entry.isFile() && /\.jar$/i.test(entry.name)).sort((left, right) => left.name.localeCompare(right.name));
+    if (candidates.length > 128) throw new Error('The plugin dependency plan is bounded to 128 installed JARs. Remove or separately review extra plugin files before adding another one.');
+    const inspected = [];
+    let totalBytes = 0;
+    for (const entry of candidates) {
+      const candidatePath = path.join(pluginsPath, entry.name);
+      try {
+        const stats = await fs.lstat(candidatePath);
+        if (totalBytes + stats.size > 2 * 1024 * 1024 * 1024) {
+          inspected.push({ state: 'installed', fileName: entry.name, inspectionError: 'Installed plugin inspection exceeds the 2 GB aggregate safety bound.' });
+          break;
+        }
+        totalBytes += stats.size;
+        const inspection = await configPluginSafety.inspectPluginJar(candidatePath);
+        inspected.push({ state: 'installed', fileName: entry.name, ...inspection });
+      } catch (error) {
+        inspected.push({ state: 'installed', fileName: entry.name, inspectionError: redactOutput(error.message).slice(0, 512) });
+      }
+    }
+    return inspected;
+  }
+
+  async planPluginInstallation(id, sourcePath) {
+    const server = await this.getServer(id);
+    const source = await configPluginSafety.inspectPluginJar(sourcePath);
+    const installed = await this.inspectInstalledPluginJars(server);
+    const pendingFileNames = normalizePluginRecords(server.pluginInstallations)
+      .filter((record) => record.state === 'staged')
+      .map((record) => record.fileName);
+    return configPluginSafety.createPluginInstallationPlan({
+      server,
+      source,
+      installed,
+      pendingFileNames,
+      serverRunning: this.processes.has(id)
+    });
+  }
+
   async pluginDescriptors(server) {
     const pluginsPath = path.join(server.serverPath, 'plugins');
     if (!(await pathExists(pluginsPath))) return [];
@@ -765,6 +904,8 @@ class ServerManager {
 
     await fs.mkdir(serverPath, { recursive: true });
     const now = new Date().toISOString();
+    const settings = normalizeProperties({ ...draft.settings, 'server-port': draft.port ?? draft.settings?.['server-port'] });
+    settings['rcon.password'] = '';
     const server = {
       id: crypto.randomUUID(),
       name,
@@ -775,8 +916,10 @@ class ServerManager {
       javaPath: stringValue(draft.javaPath).trim(),
       launchProfile: normalizeLaunchProfile(draft.launchProfile),
       eulaAccepted: Boolean(draft.eulaAccepted),
-      settings: normalizeProperties({ ...draft.settings, 'server-port': draft.port ?? draft.settings?.['server-port'] }),
+      settings,
       gameRules: normalizeGameRules(draft.gameRules),
+      gameRuleStatus: {},
+      pluginInstallations: [],
       management: {
         endpoint: '',
         allowInsecureLoopback: false,
@@ -786,7 +929,8 @@ class ServerManager {
       createdAt: now,
       updatedAt: now
     };
-    await this.writeServerFiles(server);
+    server.gameRuleStatus = initialGameRuleStatus(server);
+    await this.writeServerFiles(server, { initializeProperties: true, writeEula: true });
     const registry = await this.registry();
     registry.servers.push(server);
     await this.saveRegistry(registry);
@@ -794,21 +938,43 @@ class ServerManager {
     return copyPublicServer(server);
   }
 
-  async writeServerFiles(server) {
+  async writeServerFiles(server, options = {}) {
     await fs.mkdir(server.serverPath, { recursive: true });
-    const materializedSettings = { ...normalizeProperties(server.settings) };
-    if (toBoolean(materializedSettings['enable-rcon']) && server.rconSecretConfigured) {
-      if (!this.credentialSecretProvider) throw new Error('RCON is enabled but the protected credential provider is unavailable. Disable RCON or save its secret through the desktop app.');
-      const rconSecret = await this.credentialSecretProvider('rcon', server.id);
-      if (!rconSecret) throw new Error('RCON is enabled but no protected RCON password is available. Save the password in the Network tab before starting the server.');
-      materializedSettings['rcon.password'] = rconSecret;
+    const propertyPath = path.join(server.serverPath, 'server.properties');
+    const existingProperties = await pathExists(propertyPath);
+    const suppliedUpdates = options.propertyUpdates && typeof options.propertyUpdates === 'object' && !Array.isArray(options.propertyUpdates)
+      ? { ...options.propertyUpdates }
+      : {};
+    const initializeProperties = options.initializeProperties === true || !existingProperties;
+    const propertyUpdates = initializeProperties ? { ...normalizeProperties(server.settings) } : suppliedUpdates;
+    const rconWasTouched = initializeProperties
+      || options.materializeRconSecret === true
+      || Object.prototype.hasOwnProperty.call(suppliedUpdates, 'enable-rcon')
+      || Object.prototype.hasOwnProperty.call(suppliedUpdates, 'rcon.password');
+    if (rconWasTouched) {
+      if (toBoolean(server.settings?.['enable-rcon']) && server.rconSecretConfigured) {
+        if (!this.credentialSecretProvider) throw new Error('RCON is enabled but the protected credential provider is unavailable. Disable RCON or save its secret through the desktop app.');
+        const rconSecret = await this.credentialSecretProvider('rcon', server.id);
+        if (!rconSecret) throw new Error('RCON is enabled but no protected RCON password is available. Save the password in the Network tab before starting the server.');
+        propertyUpdates['rcon.password'] = rconSecret;
+      } else if (!toBoolean(server.settings?.['enable-rcon'])) {
+        propertyUpdates['rcon.password'] = '';
+      }
     }
-    await fs.writeFile(path.join(server.serverPath, 'server.properties'), serializeProperties(materializedSettings), 'utf8');
-    await fs.writeFile(
-      path.join(server.serverPath, 'eula.txt'),
-      `# EULA accepted with Minecraft Server Studio on ${new Date().toISOString()}\neula=${server.eulaAccepted ? 'true' : 'false'}\n`,
-      'utf8'
-    );
+    const propertyResult = await configPluginSafety.updateServerPropertiesFile({
+      serverPath: server.serverPath,
+      knownKeys: [...ALLOWED_PROPERTY_KEYS],
+      updates: propertyUpdates
+    });
+    const eulaPath = path.join(server.serverPath, 'eula.txt');
+    if (options.writeEula === true || !(await pathExists(eulaPath))) {
+      await fs.writeFile(
+        eulaPath,
+        `# EULA accepted with Minecraft Server Studio on ${new Date().toISOString()}\neula=${server.eulaAccepted ? 'true' : 'false'}\n`,
+        'utf8'
+      );
+    }
+    return propertyResult;
   }
 
   async updateServer(id, patch) {
@@ -816,6 +982,13 @@ class ServerManager {
     const index = registry.servers.findIndex((server) => server.id === id);
     if (index < 0) throw new Error('The selected server no longer exists in the local registry.');
     const existing = registry.servers[index];
+    const propertyPatch = patch?.settings && typeof patch.settings === 'object' && !Array.isArray(patch.settings)
+      ? { ...patch.settings }
+      : null;
+    const gameRulePatch = patch?.gameRules && typeof patch.gameRules === 'object' && !Array.isArray(patch.gameRules)
+      ? { ...patch.gameRules }
+      : null;
+    const eulaChanged = patch.eulaAccepted !== undefined;
     if (patch.name !== undefined) {
       const name = stringValue(patch.name).trim();
       if (!name || name.length > 80) throw new Error('Server name must be between 1 and 80 characters.');
@@ -826,8 +999,18 @@ class ServerManager {
     if (patch.launchProfile !== undefined) existing.launchProfile = normalizeLaunchProfile(patch.launchProfile);
     if (patch.rconSecretConfigured !== undefined) existing.rconSecretConfigured = Boolean(patch.rconSecretConfigured);
     if (patch.eulaAccepted !== undefined) existing.eulaAccepted = Boolean(patch.eulaAccepted);
-    if (patch.settings) existing.settings = normalizeProperties({ ...existing.settings, ...patch.settings });
-    if (patch.gameRules) existing.gameRules = normalizeGameRules({ ...existing.gameRules, ...patch.gameRules });
+    let changedPropertyUpdates = {};
+    if (propertyPatch) {
+      const previousSettings = normalizeProperties(existing.settings);
+      const nextSettings = normalizeProperties({ ...previousSettings, ...propertyPatch });
+      changedPropertyUpdates = Object.fromEntries(
+        Object.keys(propertyPatch)
+          .filter((key) => ALLOWED_PROPERTY_KEYS.has(key) && stringValue(nextSettings[key]) !== stringValue(previousSettings[key]))
+          .map((key) => [key, nextSettings[key]])
+      );
+      existing.settings = nextSettings;
+      existing.settings['rcon.password'] = '';
+    }
     if (patch.management) {
       existing.management = {
         ...existing.management,
@@ -841,10 +1024,112 @@ class ServerManager {
       };
     }
     existing.updatedAt = new Date().toISOString();
-    await this.writeServerFiles(existing);
+    await this.writeServerFiles(existing, {
+      propertyUpdates: changedPropertyUpdates,
+      materializeRconSecret: patch.rconSecretConfigured === true,
+      writeEula: eulaChanged
+    });
     await this.saveRegistry(registry);
     this.emit({ type: 'server-updated', serverId: id, message: `Saved configuration for ${existing.name}.` });
+    if (gameRulePatch) return this.applyGameRules(id, gameRulePatch);
     return copyPublicServer(existing);
+  }
+
+  isServerRunning(id) {
+    return this.processes.has(id);
+  }
+
+  async applyGameRules(id, values, options = {}) {
+    const registry = await this.registry();
+    const server = registry.servers.find((candidate) => candidate.id === id);
+    if (!server) throw new Error('The selected server no longer exists in the local registry.');
+    const requested = configPluginSafety.selectedManagedGameRuleValues(values);
+    const names = Object.keys(requested);
+    if (!names.length) return { server: copyPublicServer(server), application: [] };
+    server.gameRules = normalizeGameRules({ ...server.gameRules, ...requested });
+    const statuses = { ...copyGameRuleStatus(server.gameRuleStatus) };
+    const sendable = [];
+    for (const name of names) {
+      const compatibility = configPluginSafety.gameRuleCompatibility(server.minecraftVersion, name);
+      if (!compatibility.supported) {
+        statuses[name] = {
+          value: Boolean(server.gameRules[name]),
+          state: 'saved-version-incompatible',
+          transport: 'none',
+          selectedVersion: server.minecraftVersion,
+          detail: compatibility.reason,
+          updatedAt: new Date().toISOString()
+        };
+        continue;
+      }
+      sendable.push({ name, value: Boolean(server.gameRules[name]), compatibility });
+    }
+
+    let transport = 'none';
+    let sendBatch = null;
+    if (this.processes.has(id)) {
+      transport = 'local-console';
+      sendBatch = async (commands) => this.sendConsoleCommands(id, commands);
+    } else if (options.transport === 'rcon' && typeof options.sendCommand === 'function') {
+      transport = 'rcon';
+      sendBatch = async (commands) => this.enqueueConsoleWork(id, async () => {
+        for (const command of commands) await options.sendCommand(command);
+      });
+    }
+
+    if (sendable.length && sendBatch) {
+      const commands = sendable.map((entry) => `gamerule ${entry.name} ${entry.value ? 'true' : 'false'}`);
+      try {
+        await sendBatch(commands);
+        for (const entry of sendable) {
+          statuses[entry.name] = {
+            value: entry.value,
+            state: transport === 'rcon' ? 'sent-rcon' : 'sent-local-console',
+            transport,
+            selectedVersion: server.minecraftVersion,
+            detail: `Sent through the ${transport === 'rcon' ? 'RCON' : 'local console'} transport; server-side confirmation remains visible in console output.`,
+            updatedAt: new Date().toISOString()
+          };
+        }
+      } catch (error) {
+        const detail = redactOutput(error.message).slice(0, 512);
+        for (const entry of sendable) {
+          statuses[entry.name] = {
+            value: entry.value,
+            state: 'failed',
+            transport,
+            selectedVersion: server.minecraftVersion,
+            detail: `The requested live command was not confirmed: ${detail}`,
+            updatedAt: new Date().toISOString()
+          };
+        }
+      }
+    } else {
+      for (const entry of sendable) {
+        statuses[entry.name] = {
+          value: entry.value,
+          state: 'saved-no-live-transport',
+          transport: 'none',
+          selectedVersion: server.minecraftVersion,
+          detail: 'Saved locally only. Start this managed server to use its serialized local console, or configure an explicit RCON route for a separately running server. The management protocol is not used until a discovered descriptor provides a parameter schema for this operation.',
+          updatedAt: new Date().toISOString()
+        };
+      }
+    }
+    server.gameRuleStatus = statuses;
+    server.updatedAt = new Date().toISOString();
+    await this.saveRegistry(registry);
+    this.emit({
+      type: 'gamerules-updated',
+      serverId: id,
+      message: sendable.length && sendBatch
+        ? `Queued ${sendable.length} supported game rule command(s) through ${transport}.`
+        : `Saved ${names.length} game rule value(s) with no live transport claim.`
+    });
+    return {
+      server: copyPublicServer(server),
+      application: names.map((name) => ({ name, ...statuses[name] }))
+    };
   }
 
   async inspectDependencies() {
@@ -1104,6 +1389,10 @@ class ServerManager {
 
   async startServer(id) {
     if (this.processes.has(id)) throw new Error('This server is already running in Minecraft Server Studio.');
+    const promotions = await this.promoteStagedPlugins(id);
+    if (promotions.blocked.length) {
+      throw new Error(`Resolve staged plugin safety checks before starting the server: ${promotions.blocked.join(' ')}`);
+    }
     const server = await this.getServer(id);
     if (!server.eulaAccepted) throw new Error('Accept the Minecraft EULA in the General tab before starting this server.');
     const { jarPath } = await this.provisionServer(id);
@@ -1144,6 +1433,15 @@ class ServerManager {
       this.emit({ type: 'server-state', serverId: id, status: 'stopped', exitCode: code, signal: signal || null });
     });
     this.emit({ type: 'server-state', serverId: id, status: 'running', startedAt: processEntry.startedAt });
+    try {
+      await this.applyGameRules(id, server.gameRules);
+    } catch (error) {
+      this.emit({
+        type: 'gamerules-application-failed',
+        serverId: id,
+        message: `The server started, but its saved game-rule delivery state could not be recorded: ${redactOutput(error.message).slice(0, 512)}`
+      });
+    }
     return { id, status: 'running', startedAt: processEntry.startedAt };
   }
 
@@ -1163,37 +1461,183 @@ class ServerManager {
     return { id, status: 'stopping' };
   }
 
-  async sendConsoleCommand(id, command) {
+  async enqueueConsoleWork(id, work) {
+    if (typeof work !== 'function') throw new Error('A serialized console operation must be a function.');
+    const previous = this.consoleQueues.get(id) || Promise.resolve();
+    const queued = previous.catch(() => undefined).then(work);
+    this.consoleQueues.set(id, queued);
+    try {
+      return await queued;
+    } finally {
+      if (this.consoleQueues.get(id) === queued) this.consoleQueues.delete(id);
+    }
+  }
+
+  writeConsoleCommand(id, command) {
     const running = this.processes.get(id);
     const text = stringValue(command).replace(/[\r\n]/g, '').trim();
     if (!running) throw new Error('Start the server in Minecraft Server Studio before using its local console.');
     if (!text || text.length > 1024) throw new Error('Console commands must contain between 1 and 1024 characters.');
     running.child.stdin.write(`${text}\n`);
     this.emit({ type: 'console-command', serverId: id, message: `> ${text}` });
-    return { id, accepted: true };
+    return { id, accepted: true, command: text };
+  }
+
+  async sendConsoleCommand(id, command) {
+    return this.enqueueConsoleWork(id, async () => this.writeConsoleCommand(id, command));
+  }
+
+  async sendConsoleCommands(id, commands) {
+    const list = Array.isArray(commands) ? commands : [];
+    if (!list.length || list.length > 32) throw new Error('A serialized game-rule command batch must contain between 1 and 32 commands.');
+    return this.enqueueConsoleWork(id, async () => {
+      const accepted = [];
+      for (const command of list) accepted.push(this.writeConsoleCommand(id, command));
+      return { id, accepted };
+    });
   }
 
   async installPlugin(id, sourcePath) {
+    const plan = await this.planPluginInstallation(id, sourcePath);
+    if (plan.blockers.length) throw new Error(`Plugin installation was not staged: ${plan.blockers.join(' ')}`);
     const server = await this.getServer(id);
-    const source = path.resolve(stringValue(sourcePath));
-    if (!/\.jar$/i.test(source)) throw new Error('Choose a plugin JAR file.');
-    if (!(await pathExists(source))) throw new Error('The selected plugin file no longer exists.');
-    const pluginsPath = path.join(server.serverPath, 'plugins');
-    await fs.mkdir(pluginsPath, { recursive: true });
-    const destination = path.join(pluginsPath, path.basename(source));
-    await fs.copyFile(source, destination);
-    this.emit({ type: 'plugin-installed', serverId: id, message: `Installed ${path.basename(source)}. Restart the server to load it.` });
-    return { destination };
+    const running = this.processes.has(id);
+    const destinationDirectory = running ? this.pluginStagingDirectory(server) : path.join(server.serverPath, 'plugins');
+    const staged = await configPluginSafety.stageAndVerifyPluginJar({
+      sourcePath,
+      destinationDirectory,
+      fileName: plan.destination.fileName,
+      expectedSha256: plan.source.sha256
+    });
+    const record = {
+      id: crypto.randomUUID(),
+      state: running ? 'staged' : 'promoted',
+      fileName: plan.destination.fileName,
+      sha256: plan.source.sha256,
+      descriptor: staged.inspection.descriptor,
+      plannedAt: new Date().toISOString(),
+      promotedAt: running ? null : new Date().toISOString(),
+      lastBlockedReason: '',
+      rollback: {
+        action: running ? 'discard-staged-plugin-file' : 'remove-created-plugin-file',
+        fileName: plan.destination.fileName,
+        requiresConfirmation: true
+      }
+    };
+    const registry = await this.registry();
+    const index = registry.servers.findIndex((candidate) => candidate.id === id);
+    if (index < 0) throw new Error('The selected server no longer exists in the local registry.');
+    const target = registry.servers[index];
+    target.pluginInstallations = [...normalizePluginRecords(target.pluginInstallations), record].slice(-256);
+    target.updatedAt = new Date().toISOString();
+    await this.saveRegistry(registry);
+    this.emit({
+      type: running ? 'plugin-staged' : 'plugin-promoted',
+      serverId: id,
+      message: running
+        ? `Staged ${plan.destination.fileName} outside the live plugins folder. It will be revalidated and promoted only while the server is stopped.`
+        : `Promoted ${plan.destination.fileName} with a SHA-256 and descriptor rollback record.`
+    });
+    return {
+      state: record.state,
+      plan,
+      destination: running ? null : staged.path,
+      stagedPath: running ? staged.path : null,
+      rollback: record.rollback
+    };
+  }
+
+  async promoteStagedPlugins(id) {
+    if (this.processes.has(id)) throw new Error('Stop the selected server before promoting staged plugin JARs.');
+    const registry = await this.registry();
+    const index = registry.servers.findIndex((candidate) => candidate.id === id);
+    if (index < 0) throw new Error('The selected server no longer exists in the local registry.');
+    const server = registry.servers[index];
+    const records = normalizePluginRecords(server.pluginInstallations);
+    const stagedRecords = records.filter((record) => record.state === 'staged');
+    if (!stagedRecords.length) return { promoted: [], blocked: [] };
+    const stagingDirectory = this.pluginStagingDirectory(server);
+    const promoted = [];
+    const blocked = [];
+    let installed = await this.inspectInstalledPluginJars(server);
+    for (const record of stagedRecords) {
+      const stagedPath = path.resolve(stagingDirectory, record.fileName);
+      const destinationPath = this.pluginDestinationPath(server, record.fileName);
+      if (!pathInside(stagingDirectory, stagedPath) || path.dirname(stagedPath) !== stagingDirectory) {
+        record.lastBlockedReason = 'The staged plugin path was not contained in the app-managed staging location.';
+        blocked.push(record.lastBlockedReason);
+        continue;
+      }
+      try {
+        const source = await configPluginSafety.inspectPluginJar(stagedPath);
+        if (source.sha256 !== record.sha256) throw new Error('The staged plugin SHA-256 no longer matches the reviewed record.');
+        const pendingFileNames = records
+          .filter((candidate) => candidate.state === 'staged' && candidate.id !== record.id)
+          .map((candidate) => candidate.fileName);
+        const plan = configPluginSafety.createPluginInstallationPlan({
+          server,
+          source,
+          installed,
+          pendingFileNames,
+          serverRunning: false
+        });
+        if (plan.destination.fileName !== record.fileName) throw new Error('The staged plugin descriptor no longer resolves to its recorded destination file name.');
+        if (plan.blockers.length) throw new Error(plan.blockers.join(' '));
+        const promotedResult = await configPluginSafety.promoteVerifiedPluginJar({
+          stagedPath,
+          destinationPath,
+          expectedSha256: record.sha256
+        });
+        record.state = 'promoted';
+        record.promotedAt = new Date().toISOString();
+        record.lastBlockedReason = '';
+        record.descriptor = promotedResult.inspection.descriptor;
+        record.rollback = {
+          action: 'remove-created-plugin-file',
+          fileName: record.fileName,
+          requiresConfirmation: true
+        };
+        installed = [...installed, { state: 'installed', fileName: record.fileName, ...promotedResult.inspection }];
+        promoted.push(record.fileName);
+        this.emit({ type: 'plugin-promoted', serverId: id, message: `Promoted staged plugin ${record.fileName} while the server was stopped.` });
+      } catch (error) {
+        record.lastBlockedReason = redactOutput(error.message).slice(0, 512);
+        blocked.push(`${record.fileName}: ${record.lastBlockedReason}`);
+      }
+    }
+    server.pluginInstallations = records;
+    server.updatedAt = new Date().toISOString();
+    await this.saveRegistry(registry);
+    return { promoted, blocked };
   }
 
   async listPlugins(id) {
     const server = await this.getServer(id);
-    const pluginsPath = path.join(server.serverPath, 'plugins');
-    if (!(await pathExists(pluginsPath))) return [];
-    return (await fs.readdir(pluginsPath, { withFileTypes: true }))
-      .filter((entry) => entry.isFile() && /\.jar$/i.test(entry.name))
-      .map((entry) => entry.name)
-      .sort((left, right) => left.localeCompare(right));
+    const records = normalizePluginRecords(server.pluginInstallations);
+    const installed = await this.inspectInstalledPluginJars(server);
+    const recordByFile = new Map(records.filter((record) => record.state === 'promoted').map((record) => [record.fileName.toLocaleLowerCase('en-US'), record]));
+    const result = installed.map((item) => {
+      const record = recordByFile.get(item.fileName.toLocaleLowerCase('en-US')) || null;
+      return {
+        state: 'installed',
+        fileName: item.fileName,
+        sha256: item.sha256 || record?.sha256 || null,
+        descriptor: item.descriptor || record?.descriptor || null,
+        inspectionError: item.inspectionError || null,
+        rollback: record?.rollback || null
+      };
+    });
+    for (const record of records.filter((candidate) => candidate.state === 'staged')) {
+      result.push({
+        state: 'staged',
+        fileName: record.fileName,
+        sha256: record.sha256,
+        descriptor: record.descriptor,
+        inspectionError: record.lastBlockedReason || null,
+        rollback: record.rollback
+      });
+    }
+    return result.sort((left, right) => `${left.state}:${left.fileName}`.localeCompare(`${right.state}:${right.fileName}`));
   }
 
   async rconCommand(id, command) {
@@ -1267,7 +1711,5 @@ module.exports = {
   DEFAULT_GAMERULES,
   ServerManager,
   normalizeGameRules,
-  normalizeProperties,
-  parseProperties,
-  serializeProperties
+  normalizeProperties
 };

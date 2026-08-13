@@ -7,6 +7,7 @@ The application source provides a Windows Electron control center, shared CLI, s
 ### Changed areas
 
 - `src/main/server-manager.cjs`: server registry, Paper/Spigot provisioning, dependency bootstrap, lifecycle, plugins, and RCON.
+- `src/main/config-plugin-safety.cjs`: lossless `server.properties` updates, Minecraft 1.21.9+ game-rule delivery state, bounded local plugin JAR inspection, dependency/cycle planning, staging, atomic promotion, and rollback records.
 - `src/main/buildtools-adapter.cjs`, `command-center-registry.cjs`, `minecraft-management-protocol.cjs`, `credential-vault.cjs`, `desktop-status-model.cjs`, and `java-runtime-manager.cjs`: capability, safety, status, secret-boundary, and version-aware Java runtime modules.
 - `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, and command planning.
 - `src/renderer/`: desktop UI with rich server controls, capability-first management, Command Center, confirmation, and Local status destination.
@@ -23,6 +24,7 @@ This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime int
 ### Remaining work
 
 - The dedicated Java runtime-manager now owns strict Paper/Spigot compatibility policy, direct Java probes, bounded configured/PATH/JAVA_HOME discovery, explicit package-manager plans, optional configured portable-source handling, and direct-argv launch preflight. Tests, runtime interaction, and captures remain unrun under the speed-delivery boundary.
+- Configuration saves now preserve comments, unknown keys, line endings, and original file layout while changing only GUI-managed `server.properties` keys. The five current game-rule controls are version-badged for Minecraft 1.21.9+ and report saved, sent-local-console, sent-RCON, incompatible, or unconfirmed outcomes without treating them as server properties. Plugin installation now plans and stages a user-selected local JAR with bounded signature, SHA-256, manifest, descriptor, dependency, duplicate, cycle, target-compatibility, atomic-promotion, and rollback-record behavior. Tests, runtime interaction, and captures remain unrun under the speed-delivery boundary.
 - Add a provider-specific authenticated WebSocket connector before treating a stored management bearer credential as transmitted authentication.
 - Run the repository's normal focused verification after the speed-delivery boundary is lifted.
 - Run and inspect the release workflow against an immutable integrated candidate when external delivery authority is available; verify the resulting non-draft release, tag, assets, line-count note, and workflow timing rather than predicting them.
