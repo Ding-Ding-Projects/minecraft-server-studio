@@ -48,6 +48,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('support-tickets', 'support-tickets.md', 'Local Support Tickets', 'Open a fictional local recovery ticket and reveal the application-data folder yourself.'),
   entry('browser-local-authenticator-and-toy-locks', 'browser-local-authenticator-and-toy-locks.md', 'Browser-local authenticator, toy locks, and recovery', 'Use the public page’s bounded local TOTP, toy-lock, QR, and recovery foundation.'),
   entry('appearance-and-tabs', 'appearance-and-tabs.md', 'Appearance and tab-navigation foundation', 'Minecraft Server Studio now has a bounded, local desktop appearance and tab-navigation foundation.'),
+  entry('site-logo-customization', 'site-logo-customization.md', 'Browser-local companion-site logo customization', 'Choose a shipped browser-rendered mark or a bounded local PNG/JPEG display representation for the companion site.'),
   entry('local-status-and-completeness', 'local-status-and-completeness.md', 'Local status and desktop completeness', 'Read the local status surface and evidence inventory.'),
   entry('local-history-and-safe-exports', 'local-history-and-safe-exports.md', 'Local history and safe exports', 'Browse bounded redacted event metadata and create safe structured exports.'),
   entry('external-editor-integration', 'external-editor-integration.md', 'External editor integration', 'Choose a validated local editor and open a selected server root or safe app-private record.'),

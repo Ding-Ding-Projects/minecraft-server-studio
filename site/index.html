@@ -13,7 +13,7 @@
     <div class="site-shell">
       <header class="top-bar" id="top">
         <a class="brand" href="#top" aria-label="Minecraft Server Studio home">
-          <span class="brand-mark" aria-hidden="true">MS</span>
+          <span class="brand-mark" data-mss-logo-mark="true" data-mss-logo-preset="studio-aqua" aria-hidden="true">MS</span>
           <span><strong>Minecraft Server Studio</strong><small>Desktop server management</small></span>
         </a>
         <nav class="primary-navigation" aria-label="Primary navigation">
@@ -147,9 +147,22 @@
               <label data-contract-hook="appearance-font-family"><span>Typography family</span><select data-mss-page-font-family="true"><option value="system-ui">System interface</option><option value="ui-sans-serif">Generic sans serif</option><option value="ui-serif">Generic serif</option><option value="ui-monospace">Generic monospace</option></select><small>Only browser-provided generic families are offered; this page does not download fonts.</small></label>
               <label data-contract-hook="appearance-font-scale"><span>Typography scale</span><input type="range" min="0.75" max="2" step="0.05" value="1" data-mss-page-font-scale="true" /><output data-mss-page-font-scale-value="true">100%</output><small>Changes readable browser-local page text without changing desktop-app text.</small></label>
               <label data-contract-hook="appearance-font-weight"><span>Typography weight</span><select data-mss-page-font-weight="true"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select><small>Uses a safe browser font-weight value for this public page.</small></label>
-              <label data-contract-hook="app-logo-upload"><span>Custom app logo</span><input type="file" accept="image/*" /><small>Preview input only; no image leaves this page.</small></label>
               <label data-contract-hook="personal-vocabulary-upload" data-mss-suppressed-by-school="true"><span data-mss-copy="vocabulary-label">Personal vocabulary JSON</span><input type="file" accept="application/json,.json" aria-describedby="personal-vocabulary-help" /><small id="personal-vocabulary-help" data-mss-copy="vocabulary-help">Version 1 JSON is checked locally before a bounded cache can be applied. The source file name and path are not retained.</small><button type="button" data-mss-vocabulary-clear="true">Clear local vocabulary</button><output data-mss-vocabulary-status="true" aria-live="polite">No validated vocabulary JSON is loaded in this browser.</output></label>
             </div>
+            <section class="site-logo-customizer" id="site-logo-customizer" data-contract-hook="app-logo-customizer" data-mss-suppressed-by-school="true" tabindex="-1" aria-labelledby="site-logo-customizer-heading">
+              <div class="panel-heading"><div><p class="eyebrow" data-mss-copy="logo-eyebrow">Browser-local logo</p><h3 id="site-logo-customizer-heading" data-mss-copy="logo-title">Choose this public page's visual mark</h3></div><output class="preview-status" data-mss-logo-status="true" aria-live="polite">Studio Aqua is active in this browser.</output></div>
+              <p data-mss-copy="logo-description">This changes only the mark on this public page in this browser. It never changes the installed app, package, executable, installer, update feed, release, or Minecraft server.</p>
+              <div class="site-logo-layout">
+                <div class="site-logo-preview-card"><div class="site-logo-preview-mark" data-mss-logo-preview="true" data-mss-logo-preset="studio-aqua" role="img" aria-label="Current public-page logo preview">MS</div><small data-mss-logo-preview-detail="true">Studio Aqua is a browser-rendered shipped preset.</small></div>
+                <div class="site-logo-source-controls">
+                  <div class="preview-search site-logo-preset-search" data-contract-hook="app-logo-preset-search"><label><span data-mss-copy="logo-search-label">Find a shipped logo preset</span><input type="search" data-mss-logo-preset-search="true" data-mss-placeholder="logo-search-label" placeholder="Search logo presets" autocomplete="off" /></label><button type="button" disabled aria-label="Open regular expression builder for shipped logo presets">.*</button></div>
+                  <div class="site-logo-preset-list" data-mss-logo-preset-list="true" role="list" aria-label="Shipped logo presets"></div>
+                  <label class="site-logo-file-picker"><span data-mss-copy="logo-custom-label">Custom PNG or JPEG</span><input type="file" data-mss-logo-file="true" accept="image/png,image/jpeg,.png,.jpg,.jpeg" aria-describedby="site-logo-file-help" /><small id="site-logo-file-help" data-mss-copy="logo-custom-help">The browser validates actual PNG or JPEG bytes locally. Source files must be 512 KiB or smaller; paths and source names are not retained.</small></label>
+                </div>
+              </div>
+              <fieldset class="site-logo-rendering" data-mss-logo-rendering="true"><legend data-mss-copy="logo-rendering-title">Custom-image rendering</legend><p data-mss-copy="logo-rendering-help">Available after a bounded custom image is accepted. These controls apply locally to the derived display image, not to the original file.</p><div class="site-logo-rendering-grid"><label><span data-mss-copy="logo-fit-label">Fit</span><select data-mss-logo-fit="true" disabled><option value="contain" data-mss-copy="logo-fit-contain">Contain</option><option value="cover" data-mss-copy="logo-fit-cover">Fill and crop</option><option value="fill" data-mss-copy="logo-fit-fill">Stretch to bounds</option></select></label><label><span data-mss-copy="logo-background-label">Background</span><select data-mss-logo-background-mode="true" disabled><option value="transparent" data-mss-copy="logo-background-transparent">Transparent</option><option value="color" data-mss-copy="logo-background-color">Solid color</option></select></label><label><span data-mss-copy="logo-background-color-label">Background color</span><input type="color" data-mss-logo-background="true" value="#101827" disabled /></label><label><span data-mss-copy="logo-focal-x-label">Focal point horizontally</span><input type="range" data-mss-logo-focal-x="true" min="0" max="100" step="1" value="50" disabled /><output data-mss-logo-focal-x-output="true">50%</output></label><label><span data-mss-copy="logo-focal-y-label">Focal point vertically</span><input type="range" data-mss-logo-focal-y="true" min="0" max="100" step="1" value="50" disabled /><output data-mss-logo-focal-y-output="true">50%</output></label></div></fieldset>
+              <div class="inline-controls site-logo-actions"><button type="button" data-mss-logo-reset="true" data-mss-copy="logo-reset">Reset logo</button><output data-mss-logo-storage="true" role="status" aria-live="polite">No custom derived image is stored in this browser.</output></div>
+            </section>
             <section class="appearance-editor" data-contract-hook="appearance-editor" aria-labelledby="appearance-editor-heading">
               <div class="panel-heading"><div><p class="eyebrow">Browser-local appearance editor</p><h3 id="appearance-editor-heading">Edit the page or a feature tab</h3></div><span class="preview-status">Foundation controls</span></div>
               <p>Choose a target, then apply an accent, text scale, and text weight. The selected three values persist locally. This foundation does not yet edit every visual property or every rendered element.</p>
@@ -284,7 +297,7 @@
       </main>
 
       <footer>
-        <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">MS</span><span><strong>Minecraft Server Studio</strong><small>Paper and Spigot server management</small></span></a>
+        <a class="brand" href="#top"><span class="brand-mark" data-mss-logo-mark="true" data-mss-logo-preset="studio-aqua" aria-hidden="true">MS</span><span><strong>Minecraft Server Studio</strong><small>Paper and Spigot server management</small></span></a>
         <p>Local desktop server management for Minecraft worlds you control.</p>
         <a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio" rel="noopener">Project documentation</a>
       </footer>
