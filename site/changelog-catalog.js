@@ -102,7 +102,13 @@ const RECORDS = [
   ["v0.1.0-build.104.1", "2026-08-13", "371858e62b159c7519bb6b9736e3384705da88a3", "feat: add desktop tab workspace"],
   ["v0.1.0-build.105.1", "2026-08-13", "3ad97337eaf85e227e7b5ba5a30cb14f9d903c42", "docs(site): refresh verified installer link"],
   ["v0.1.0-build.106.1", "2026-08-13", "6cd9588b5e9508517aa730ea9303b06e92d0cda6", "fix: validate runtime Squirrel update versions"],
-  ["v0.1.0-build.107.1", "2026-08-13", "e0ef104a09db5f06aee0728141f0487cddbd64fe", "release: select unused dim-sum catalog metadata"]
+  ["v0.1.0-build.107.1", "2026-08-13", "e0ef104a09db5f06aee0728141f0487cddbd64fe", "release: select unused dim-sum catalog metadata"],
+  ["v0.1.0-build.108.1", "2026-08-13", "7720f37c2dba8a279f7362e45cb85248342dcd56", "feat: add registered desktop toy-lock targets"],
+  ["v0.1.0-build.111.1", "2026-08-13", "6ebddd3c5747d1e84d08c94e3a240f63bb19580b", "fix: register installer handoff offline article"],
+  ["v0.1.0-build.112.1", "2026-08-13", "6eaaa5701cd36664bd1dbeccf5080c73e43e36b4", "feat(auth): add local QR pairing confirmation"],
+  ["v0.1.0-build.113.1", "2026-08-13", "96a910db5ffab480385ec0012a0cc9e752c638a5", "feat: manage bounded local server access records"],
+  ["v0.1.0-build.114.1", "2026-08-13", "20f3e3a3e084089a8e9e437a49e3674502a8db2a", "feat: add private vocabulary upload foundation"],
+  ["v0.1.0-build.115.1", "2026-08-13", "0e654e48b2a5c535c709d07323e28c950038b15a", "fix: validate published release asset URLs"]
 ];
 
 export const STATIC_CHANGELOG_CATALOG = Object.freeze(RECORDS.map(function (record) {
