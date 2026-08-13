@@ -14,7 +14,7 @@ The initial application source provides a Windows Electron control center, share
 
 ### Verification state
 
-This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, screenshots, and packaging have not been run or claimed. A build/package attempt, if made, must be recorded with its exact candidate commit and output before release work proceeds.
+This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime interaction, and screenshots have not been run or claimed. Packaging is pending against the final immutable candidate and must be reported with its exact commit and output before release work proceeds.
 
 ### Remaining work
 
