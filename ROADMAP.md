@@ -17,7 +17,7 @@
 - Bounded desktop `Ctrl+Shift+F` command-palette foundation for real local renderer destinations and non-secret controls, with local regex search and exact-element focus; it does not execute server actions or claim complete application coverage.
 - Source-level status/completeness inventories that deliberately keep unrun verification pending.
 - Offline changelog browsing from bundled curated notes and package-local release metadata, with local filtering and export rather than runtime release fetching.
-- Serialized next-release metadata that can record one unused public dim-sum catalog link without copying the source photo into the product release.
+- Serialized next-release metadata that can select the first unused public catalog-backed dim-sum record from the complete published `catalog-v1*` asset intersection, record its source link without copying the photo, and honestly preserve the unresolved consumer-photo attachment conflict.
 - Workflow-local stable Squirrel/Electron application versions derived from Actions run/attempt metadata, with exact version-matched installer, full-package, and `RELEASES` validation before immutable release publication; the installed updater compares the packaged Electron version only with strict full-package metadata, not source `package.json` or a provenance tag, and refuses rollback candidates.
 
 ## Next implementation items

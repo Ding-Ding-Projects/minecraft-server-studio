@@ -258,16 +258,27 @@ controls, packaged-runtime evidence, or capture evidence.
 ## Release code-name metadata
 
 The Windows release workflow now serializes publication without cancelling an
-in-flight release. Before a release body is finalized, it reads complete
-paginated product release history and assigns `Classic Har Gow · 蝦餃` only
-when no older release name or body has already recorded that code name,
-`hk-dish-0001`, or its immutable public image URL. The release note links to
-the public catalog asset only; it never downloads, copies, bundles, or attaches
-that photo to a product release.
+in-flight release. Before a release body is finalized, the committed metadata
+resolver reads the current schema-1.0.0 public catalog, every published
+`catalog-v1*` asset inventory, and complete paginated product release history
+through the GitHub CLI. It forms the full catalog-record/public-asset
+intersection, reserves every older `hk-dish-####` reference, and selects the
+first remaining verified record in catalog order. This replaces the exhausted
+single-record `hk-dish-0001` behavior.
+
+The resolver is metadata-only: it records a bilingual code name, catalog record,
+immutable catalog source revision, source release tag, and public image link. It
+does not download, decode, copy, bundle, vendor, or attach the image. The
+consumer-photo rule conflicts with the generic release-photo attachment rule,
+so the release notes explicitly do not claim an attached dim-sum image. If
+catalog or history evidence is unavailable, malformed, or leaves no unused
+candidate, publication continues with an honest omission rather than a guessed
+or repeated code name.
 
 ### Directly related paths
 
 - `.github/workflows/windows-package.yml`
+- `scripts/resolve-dim-sum-release-metadata.ps1`
 - `docs/features/release-packaging.md`
 - `docs/features/README.md`
 - `src/main/offline-docs.cjs`
@@ -277,18 +288,22 @@ that photo to a product release.
 
 ### Verification boundary
 
-The source lane read current product release history and found no previous
-record of `Classic Har Gow`, `hk-dish-0001`, or the public photo filename. No
-tests, linting, build, package, release, runtime interaction, or capture ran in
-this lane. A future workflow execution must provide the actual release-note,
-asset, and timing evidence.
+Read-only research at catalog revision
+`f77ea1169db0bfc17365414c44ff495a823c6823` found 2,866 catalog records that
+each map to exactly one published `catalog-v1*` image asset. It found 92 product
+releases and one reserved catalog record: `hk-dish-0001` / `Classic Har Gow ·
+蝦餃` in `v0.1.0-build.81.1`. `hk-dish-0002` / `Scallop Har Gow · 帶子蝦餃` was
+the next observed eligible record. No tests, linting, build, package, release,
+runtime interaction, or capture ran in this lane. A future workflow execution
+must provide the actual release-note, asset, and timing evidence.
 
 ### Remaining work
 
 - Present a future assigned code name in the installed application and public
   marketing release surface after an actual release has assigned it.
-- Do not treat a release-note hyperlink as an attached, downloaded, or bundled
-  dim-sum image.
+- Do not treat a release-note hyperlink as an attached, downloaded, bundled, or
+  copied dim-sum image; resolve the policy conflict before claiming the generic
+  release-photo attachment condition is satisfied.
 
 ## Workflow-local Squirrel application versioning
 
@@ -398,7 +413,7 @@ implementation lane.
 - `docs/features/local-ollama-suite.md`: local Ollama foundation behavior, disabled capability boundaries, recovery states, privacy constraints, and unrun verification boundary.
 - `docs/features/offline-documentation-browser.md`: bundled-documentation behavior, package wiring, local renderer boundary, failure states, and unrun verification boundary.
 - `site/`: public marketing and browser-local interaction source, including a local Status destination.
-- `.github/workflows/windows-package.yml`: Windows GitHub Actions release workflow source for push and manual dispatch. It serializes non-cancelling release publication, packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. Before finalizing notes, it checks complete prior release history and can record the unused `Classic Har Gow · 蝦餃` / `hk-dish-0001` metadata with a public link only; it omits that code name if reuse or unreadable history prevents an honest assignment, and never copies or attaches a catalog photo.
+- `.github/workflows/windows-package.yml` and `scripts/resolve-dim-sum-release-metadata.ps1`: Windows GitHub Actions release workflow source and bounded public-catalog metadata resolver. The workflow serializes non-cancelling release publication, packages unsigned Squirrel assets, validates `Setup.exe`, `RELEASES`, the full `.nupkg`, the `RELEASES` index, and `NotSigned` status; uploads safe evidence; generates line-count release notes; verifies published asset download metadata; and publishes one rerun-unique non-draft release when an Actions run reaches publication. The resolver checks the complete current catalog/public-asset intersection and prior release record identifiers, then records the first unused public link only; it omits the code name if evidence is unavailable and never downloads, copies, bundles, or attaches a catalog photo.
 - `assets/minecraft-server-studio.svg`, `assets/minecraft-server-studio.ico`, and `scripts/generate-app-icon.ps1`: original vector master and reproducible multi-resolution Windows icon source.
 - `package.json`: local Windows executable icon plus an immutable commit-pinned Squirrel icon metadata URL.
 
