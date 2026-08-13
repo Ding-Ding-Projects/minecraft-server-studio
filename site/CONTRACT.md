@@ -81,6 +81,16 @@ The companion page does not keep a parallel `sessionStorage` settings model. Its
 
 `getNarratorCapabilities()` returns browser speech-synthesis availability and the actual currently available voices. `observeNarratorVoices(listener)` reports immediately and again on `voiceschanged`; its return value unsubscribes. The host must select voices by stable `voiceURI` where present, expose an automatic choice, and explain a missing selected voice. This contract does not speak text by itself, so a host can manage queues, cooldowns, assistive-technology behavior, and user initiation correctly.
 
+### Browser-local appearance and navigation foundation
+
+The companion site uses this same record for its bounded appearance and navigation preferences. It stores system/light/dark theme, density, accent, and safe typography choices as validated settings, then applies those choices only to this browser-local page. The host retains bounded accent, font-scale, and font-weight overrides or resets for the page, tab strip, and selected tab; these controls do not affect the installed application, an operating-system setting, a server, an installer, or another website.
+
+The browser-local tab state records `tabs.dock` (`left`, `right`, `top`, or `bottom`) in addition to a derived accessible vertical/horizontal orientation, active selection, ordered items, pinned state, group membership, group ordering, and collapsed state. A host maps left/right to `aria-orientation="vertical"` with Up/Down traversal, and top/bottom to `aria-orientation="horizontal"` with Left/Right traversal. It must retain an overflow route when labels do not fit and must not rotate labels to simulate a side dock. `setTabDock` changes the persisted dock, while `setTabAppearance` writes only the bounded per-tab appearance values; both leave unrelated companion-site and installed-application state untouched.
+
+The page keeps independent current-strip, group, and master tab searches. Each has its own plain-text default, adjacent anchored regular-expression builder, pattern, flags, validation feedback, and locally bounded candidate set. A search route must not silently reuse the state of another route or query local files, browser history, an installed application, or a remote service.
+
+This section records a browser-local foundation only. It does not promise every-element appearance editing, complete editor export/import, every menu or dropdown builder, a full command palette, cross-window discovery, complete bulk-close behavior, or evidence that the feature has been exercised in a built or deployed artifact.
+
 ### Renamed browser-local presentation mode
 
 `setSchoolMode({ enabled, name, credentialAccepted })` stores a browser-local user-renamable presentation mode. The host first derives a local one-way SHA-256 verifier from a user-entered unlock code and fresh random salt, then calls `setSchoolModeCredential({ algorithm: "SHA-256", salt, verifier })`. The engine validates only the fixed-size encoding and stores the verifier record; it never receives, stores, exports, logs, or returns the unlock code.
@@ -105,7 +115,7 @@ This is a bounded helper, not a replacement for a page's adjacent regex builder.
 
 ## Tabs, groups, and collections
 
-`registerTab`, `createTabGroup`, `updateTab`, `moveTab`, `setActiveTab`, and `closeTab` persist browser-local tab state. The tab model includes orientation, active tab, group association, pinned state, locked state, closability, display order, and panel association. `getAccessibleTabs()` returns tab roles, selected state, `aria-controls`, item position, set size, and correct orientation so the host can render a real tab strip. It supports up to 120 tabs and 40 groups.
+`registerTab`, `createTabGroup`, `updateTab`, `moveTab`, `setActiveTab`, `setTabDock`, `setTabAppearance`, and `closeTab` persist browser-local tab state. The tab model includes dock/orientation, active tab, group association, pinned state, locked state, closability, display order, collapsed-group state, bounded per-tab appearance, and panel association. `getAccessibleTabs()` returns tab roles, selected state, `aria-controls`, item position, set size, and correct orientation so the host can render a real tab strip. It supports up to 120 tabs and 40 groups.
 
 Closing a pinned, locked, or non-closable tab is refused unless the caller explicitly supplies `includeProtected: true`. The host still needs to display the affected-tab preview, collect any required destructive confirmation, return focus, and apply real keyboard behavior.
 
