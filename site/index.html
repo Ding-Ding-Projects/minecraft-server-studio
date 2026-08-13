@@ -172,7 +172,45 @@
               <output data-mss-school-status="true" role="status" aria-live="polite">Set a browser-local unlock code before enabling this mode.</output>
               <p class="school-mode-boundary" data-mss-school-boundary="true">If the code is forgotten, clear this site's storage in your browser. That resets this page's local preferences, vocabulary cache, local lock metadata, and this mode; it does not change desktop-app or server data.</p>
             </section>
-            <div class="inline-controls" data-contract-hook="scheduled-settings"><button type="button" disabled>Schedule a setting in the desktop app</button><button type="button" disabled>Open appearance editor in the desktop app</button><span>All actions are unavailable on this static page.</span></div>
+            <section class="narrator-schedule-card" data-contract-hook="narrator-settings" data-mss-suppressed-by-school="true" aria-labelledby="narrator-settings-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Browser-local narrator</p><h3 id="narrator-settings-heading">Optional event narration</h3></div><span class="preview-status">Off by default</span></div>
+              <p>This page uses your browser's speech-synthesis capability only after you turn narration on. It sends no text to a server and does not select a cloud provider.</p>
+              <div class="narrator-grid">
+                <label data-contract-hook="narrator-enabled"><span>Enable event narrator</span><input type="checkbox" aria-describedby="narrator-status" /><small>Disabled by default. Visible notices remain available whether narration is on or off.</small></label>
+                <label data-contract-hook="narrator-language"><span>Narrated language</span><select aria-describedby="narrator-status"><option value="english">English</option><option value="cantonese">Playful Hong Kong-style Cantonese</option><option value="bilingual">Both — English then Cantonese</option></select><small>Both queues the two tracks in order; they do not overlap.</small></label>
+                <label data-contract-hook="narrator-english-voice"><span>English voice</span><select aria-describedby="narrator-status"><option value="auto">Choose automatically</option></select><small>Actual browser voices appear when available. The saved voice identity is a browser voiceURI, not a display name.</small></label>
+                <label data-contract-hook="narrator-cantonese-voice"><span>Cantonese voice</span><select aria-describedby="narrator-status"><option value="auto">Choose automatically</option></select><small>The list prioritizes Cantonese and Hong Kong Chinese voices reported by this browser.</small></label>
+                <label data-contract-hook="narrator-rate"><span>Rate</span><input type="range" min="0.5" max="2" step="0.1" value="1" aria-describedby="narrator-rate-output narrator-status" /><output id="narrator-rate-output" aria-live="polite">1.0×</output></label>
+                <label data-contract-hook="narrator-pitch"><span>Pitch</span><input type="range" min="0" max="2" step="0.1" value="1" aria-describedby="narrator-pitch-output narrator-status" /><output id="narrator-pitch-output" aria-live="polite">1.0</output></label>
+              </div>
+              <div class="narrator-actions"><button type="button" data-mss-narrator-preview="true">Preview narrator</button><span>Browser-local speech only. A possibly network-backed browser voice may be silent while offline.</span></div>
+              <output id="narrator-status" data-mss-narrator-status="true" role="status" aria-live="polite">Checking this browser's speech-synthesis capability.</output>
+            </section>
+            <section class="narrator-schedule-card" data-contract-hook="scheduled-settings" data-mss-suppressed-by-school="true" aria-labelledby="scheduled-settings-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Browser-local schedule</p><h3 id="scheduled-settings-heading">Schedule language and appearance</h3></div><span class="preview-status">No network sources</span></div>
+              <p>Saved rules affect this public page in this browser only. They never start a desktop action, change an installed app, query an API, or contact Home Assistant.</p>
+              <p class="schedule-timezone" data-mss-schedule-timezone="true">Timezone: resolving this browser's local timezone.</p>
+              <form class="schedule-editor" data-mss-schedule-form="true" novalidate>
+                <div class="schedule-editor-grid">
+                  <label><span>Rule label</span><input type="text" maxlength="160" data-mss-schedule-label="true" value="Browser-local schedule" required /><small>Name what this rule changes.</small></label>
+                  <label><span>Source</span><select data-mss-schedule-source="true" aria-describedby="schedule-source-boundary"><option value="local">Browser-local schedule</option><option value="https" disabled>Validated HTTPS API — unavailable here</option><option value="home-assistant" disabled>Home Assistant boolean entity — unavailable here</option></select><small>Only browser-local rules are saved on this static page.</small></label>
+                  <label><span>Setting</span><select data-mss-schedule-setting="true"><option value="languageMode">Language mode</option><option value="appearance.theme">Theme</option><option value="appearance.density">Density</option><option value="appearance.accent">Accent color</option><option value="appearance.font.family">Font family</option><option value="appearance.font.scale">Font scale</option><option value="appearance.font.weight">Font weight</option></select></label>
+                  <div class="schedule-value-field" data-mss-schedule-value-field="true"></div>
+                  <label><span>Start date (optional)</span><input type="date" data-mss-schedule-start-date="true" /></label>
+                  <label><span>End date (optional)</span><input type="date" data-mss-schedule-end-date="true" /></label>
+                  <label><span>Start time (optional)</span><input type="time" data-mss-schedule-start-time="true" /><small>With an end time, the start is included.</small></label>
+                  <label><span>End time (optional)</span><input type="time" data-mss-schedule-end-time="true" /><small>The end is excluded. Equal start and end times leave the rule inactive.</small></label>
+                  <label><span>Priority</span><input type="number" min="0" max="999" step="1" value="0" data-mss-schedule-priority="true" /><small>Higher numbers win. Equal priorities use the stable rule identifier.</small></label>
+                  <label class="schedule-enabled"><span>Rule status</span><input type="checkbox" checked data-mss-schedule-enabled="true" /> Enabled</label>
+                </div>
+                <fieldset class="schedule-weekdays"><legend>Days</legend><label><input type="radio" name="schedule-days" value="every" checked data-mss-schedule-day-mode="true" /> Every day</label><label><input type="radio" name="schedule-days" value="selected" data-mss-schedule-day-mode="true" /> Selected weekdays</label><div data-mss-schedule-weekdays="true" hidden><label><input type="checkbox" value="0" /> Sun</label><label><input type="checkbox" value="1" /> Mon</label><label><input type="checkbox" value="2" /> Tue</label><label><input type="checkbox" value="3" /> Wed</label><label><input type="checkbox" value="4" /> Thu</label><label><input type="checkbox" value="5" /> Fri</label><label><input type="checkbox" value="6" /> Sat</label></div></fieldset>
+                <div class="schedule-editor-actions"><button type="submit" data-mss-schedule-save="true">Save browser-local rule</button><button type="button" data-mss-schedule-reset="true" hidden>Cancel editing</button><output data-mss-schedule-form-status="true" role="status" aria-live="polite">Choose a setting and save a local rule.</output></div>
+              </form>
+              <p id="schedule-source-boundary" class="schedule-source-boundary">Validated HTTPS and Home Assistant choices stay visible but unavailable: this static page has no privileged network adapter, endpoint validation path, or protected credential store. No request is made.</p>
+              <div class="preview-search" data-contract-hook="scheduled-settings-search-regex"><label><span>Find saved local rules</span><input type="search" placeholder="Search saved schedule rules" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+              <ol class="schedule-list" data-mss-schedule-list="true" aria-live="polite"></ol>
+              <output data-mss-schedule-status="true" role="status" aria-live="polite">No browser-local schedule rules are saved.</output>
+            </section>
             <div class="preview-search" data-contract-hook="settings-search-regex"><label><span>Find a setting</span><input type="search" placeholder="Search settings" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
           </article>
 

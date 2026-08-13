@@ -28,7 +28,20 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
   var state = {
     notifications: [],
     history: [],
-    settings: defaultSettings()
+    schedules: [],
+    baseSettings: defaultSettings(),
+    settings: defaultSettings(),
+    narratorCapabilities: { supported: false, voices: [] }
+  };
+  var narratorRuntime = {
+    queue: [],
+    speaking: false,
+    lastByCategory: Object.create(null),
+    pendingQueue: null,
+    pendingTimer: null,
+    voiceUnsubscribe: null,
+    scheduleTimer: null,
+    scheduleSignature: ""
   };
 
   var LOCALIZED_COPY = Object.freeze({
@@ -139,9 +152,11 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     var snapshot = safely(function () { return contract.getState(); }, null);
     var settings = safely(function () { return contract.getEffectiveSettings(); }, null);
     if (!snapshot || !settings) return;
+    state.baseSettings = snapshot.settings || defaultSettings();
     state.settings = settings;
     state.notifications = Array.isArray(snapshot.notifications) ? snapshot.notifications.slice() : [];
     state.history = Array.isArray(snapshot.audit) ? snapshot.audit.slice() : [];
+    state.schedules = Array.isArray(snapshot.schedules) ? snapshot.schedules.slice() : [];
   }
 
   function emit(name, detail) {
@@ -222,6 +237,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     renderNotifications();
     renderHistory();
     live(emoji(level) + message);
+    narrateNotice(level, message);
     emit("notification", notice);
   }
 
@@ -321,7 +337,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
   function syncSettingsControls(surface) {
     var scope = surface || one('[data-contract-surface="settings"]');
     if (!scope) return;
-    var settings = state.settings;
+    var settings = state.baseSettings || state.settings;
     var language = one('[data-contract-hook="language-mode"] select', scope);
     var englishTone = one('[data-contract-hook="english-funny-level"] input[type="range"]', scope);
     var cantoneseTone = one('[data-contract-hook="cantonese-funny-level"] input[type="range"]', scope);
@@ -371,7 +387,10 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     renderLocalizedCopy();
     renderSchoolModeControls();
     var output = one("[data-mss-settings-status]");
-    if (output) output.textContent = "Browser-local preferences are stored in this browser's local storage: " + languageLabel(settings.languageMode) + ", " + themeLabel(settings.appearance.theme) + " theme, " + settings.appearance.density + " density. Nothing is sent to a server or desktop application.";
+    if (output) {
+      var active = settings.scheduledOverrides && Object.keys(settings.scheduledOverrides).length;
+      output.textContent = "Browser-local preferences are stored in this browser's local storage: " + languageLabel(settings.languageMode) + ", " + themeLabel(settings.appearance.theme) + " theme, " + settings.appearance.density + " density." + (active ? " A local schedule is active for " + Object.keys(settings.scheduledOverrides).join(", ") + "." : "") + (settings.schedulePresentationSuppressed ? " Active local schedules are paused while " + schoolModeName() + " is enabled." : "") + " Nothing is sent to a server or desktop application.";
+    }
     renderAppearanceEditor();
     if (tabWorkspace && typeof tabWorkspace.render === "function") tabWorkspace.render();
     emit("settings-changed", settings);
@@ -390,6 +409,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     hydrateContractState();
     syncSettingsControls();
     applySettingsPresentation();
+    syncNarratorControls();
+    renderScheduleList();
     renderHistory();
     renderVocabularyStatus();
     if (message) notify("info", message);
@@ -677,6 +698,669 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     renderAppearanceEditor();
   }
 
+  function narratorElements() {
+    var surface = one('[data-contract-surface="settings"]');
+    if (!surface) return {};
+    return {
+      surface: surface,
+      enabled: one('[data-contract-hook="narrator-enabled"] input', surface),
+      language: one('[data-contract-hook="narrator-language"] select', surface),
+      englishVoice: one('[data-contract-hook="narrator-english-voice"] select', surface),
+      cantoneseVoice: one('[data-contract-hook="narrator-cantonese-voice"] select', surface),
+      rate: one('[data-contract-hook="narrator-rate"] input', surface),
+      rateOutput: one('#narrator-rate-output', surface),
+      pitch: one('[data-contract-hook="narrator-pitch"] input', surface),
+      pitchOutput: one('#narrator-pitch-output', surface),
+      preview: one('[data-mss-narrator-preview]', surface),
+      status: one('[data-mss-narrator-status]', surface)
+    };
+  }
+
+  function narratorBaseSettings() {
+    var settings = state.baseSettings || defaultSettings();
+    return settings.narrator || defaultSettings().narrator;
+  }
+
+  function narratorSpeechSynthesis() {
+    var synthesis = window.speechSynthesis;
+    if (!synthesis || typeof synthesis.getVoices !== "function" || typeof synthesis.speak !== "function" || typeof window.SpeechSynthesisUtterance !== "function") return null;
+    return synthesis;
+  }
+
+  function narratorVoices() {
+    var synthesis = narratorSpeechSynthesis();
+    if (!synthesis) return [];
+    var voices = safely(function () { return synthesis.getVoices(); }, []);
+    return Array.isArray(voices) ? voices.filter(function (voice) { return narratorVoiceId(voice); }) : [];
+  }
+
+  function narratorVoiceId(voice) {
+    return voice && typeof voice.voiceURI === "string" ? voice.voiceURI.trim() : "";
+  }
+
+  function narratorTrackLabel(track) {
+    return track === "cantonese" ? "Cantonese" : "English";
+  }
+
+  function isEnglishNarratorVoice(voice) {
+    return /^en(?:[-_]|$)/i.test(String(voice && voice.lang || ""));
+  }
+
+  function isCantoneseNarratorVoice(voice) {
+    return /^(?:yue|zh-hk|zh_hk)(?:[-_]|$)/i.test(String(voice && voice.lang || ""));
+  }
+
+  function narratorVoicesForTrack(track) {
+    var voices = narratorVoices();
+    if (track === "english") return voices.filter(isEnglishNarratorVoice);
+    var direct = voices.filter(isCantoneseNarratorVoice);
+    return direct.length ? direct : voices.filter(function (voice) { return /^zh(?:[-_]|$)/i.test(String(voice && voice.lang || "")); });
+  }
+
+  function resolveNarratorVoice(track) {
+    var narrator = narratorBaseSettings();
+    var configured = track === "cantonese" ? narrator.cantoneseVoice : narrator.englishVoice;
+    var matching = narratorVoicesForTrack(track);
+    if (!narratorSpeechSynthesis()) return { status: "unsupported", configured: configured, voice: null, matching: matching };
+    if (!matching.length) return { status: narratorVoices().length ? "unavailable" : "waiting", configured: configured, voice: null, matching: matching };
+    if (configured && configured !== "auto") {
+      var selected = matching.find(function (voice) { return narratorVoiceId(voice) === configured; });
+      if (selected) return { status: "selected", configured: configured, voice: selected, matching: matching };
+      return { status: "missing", configured: configured, voice: matching.find(function (voice) { return voice.default; }) || matching[0], matching: matching };
+    }
+    return { status: "automatic", configured: "auto", voice: matching.find(function (voice) { return voice.default; }) || matching[0], matching: matching };
+  }
+
+  function voiceDescription(voice) {
+    if (!voice) return "no matching voice";
+    return String(voice.name || narratorVoiceId(voice)) + " (" + String(voice.lang || "und") + ")";
+  }
+
+  function populateNarratorVoiceSelect(select, track, resolution) {
+    if (!select) return;
+    var configured = resolution.configured || "auto";
+    var previousFocus = document.activeElement === select;
+    select.replaceChildren();
+    var automatic = document.createElement("option");
+    automatic.value = "auto";
+    automatic.textContent = "Choose automatically";
+    select.appendChild(automatic);
+    resolution.matching.forEach(function (voice) {
+      var option = document.createElement("option");
+      option.value = narratorVoiceId(voice);
+      option.textContent = voiceDescription(voice) + (voice.localService === false ? " — may require network" : "");
+      select.appendChild(option);
+    });
+    if (configured !== "auto" && !resolution.matching.some(function (voice) { return narratorVoiceId(voice) === configured; })) {
+      var unavailable = document.createElement("option");
+      unavailable.value = configured;
+      unavailable.textContent = "Saved " + narratorTrackLabel(track).toLowerCase() + " voice is unavailable (choice kept)";
+      unavailable.disabled = true;
+      unavailable.selected = true;
+      select.appendChild(unavailable);
+    } else {
+      select.value = configured;
+    }
+    if (previousFocus) select.focus();
+  }
+
+  function narratorResolutionMessage(track, resolution) {
+    var label = narratorTrackLabel(track);
+    if (resolution.status === "unsupported") return label + " speech is unavailable because this browser does not expose a usable speech-synthesis API.";
+    if (resolution.status === "waiting") return label + " voices have not arrived from the browser yet. The picker will update when voiceschanged fires.";
+    if (resolution.status === "unavailable") return "No installed " + label.toLowerCase() + " voice is available. That track will remain silent rather than claiming a fallback.";
+    if (resolution.status === "missing") return "Saved " + label.toLowerCase() + " voice is not installed on this browser; its identity is kept and " + voiceDescription(resolution.voice) + " is the automatic fallback.";
+    return label + " uses " + voiceDescription(resolution.voice) + (resolution.voice && resolution.voice.localService === false ? "; this browser marks it as possibly network-backed and it may be silent offline." : ".");
+  }
+
+  function syncNarratorControls() {
+    var elements = narratorElements();
+    if (!elements.surface) return;
+    var narrator = narratorBaseSettings();
+    var supported = Boolean(narratorSpeechSynthesis());
+    var schoolActive = Boolean(state.settings && state.settings.schoolMode && state.settings.schoolMode.active);
+    var disabled = !supported || schoolActive;
+    var english = resolveNarratorVoice("english");
+    var cantonese = resolveNarratorVoice("cantonese");
+    if (elements.enabled) {
+      elements.enabled.checked = Boolean(narrator.enabled);
+      elements.enabled.disabled = disabled;
+    }
+    if (elements.language) {
+      elements.language.value = narrator.language;
+      elements.language.disabled = disabled;
+    }
+    populateNarratorVoiceSelect(elements.englishVoice, "english", english);
+    populateNarratorVoiceSelect(elements.cantoneseVoice, "cantonese", cantonese);
+    [elements.englishVoice, elements.cantoneseVoice].forEach(function (select) { if (select) select.disabled = disabled; });
+    if (elements.rate) {
+      if (document.activeElement !== elements.rate) elements.rate.value = Number(narrator.rate || 1).toFixed(1);
+      elements.rate.disabled = disabled;
+    }
+    if (elements.rateOutput) elements.rateOutput.textContent = Number(narrator.rate || 1).toFixed(1) + "×";
+    if (elements.pitch) {
+      if (document.activeElement !== elements.pitch) elements.pitch.value = Number(narrator.pitch || 1).toFixed(1);
+      elements.pitch.disabled = disabled;
+    }
+    if (elements.pitchOutput) elements.pitchOutput.textContent = Number(narrator.pitch || 1).toFixed(1);
+    if (elements.preview) elements.preview.disabled = disabled || !narrator.enabled;
+    if (elements.status) {
+      if (schoolActive) {
+        elements.status.textContent = schoolModeName() + " is active, so narrator controls and queued speech are paused. Your browser-local narrator preferences remain stored.";
+      } else if (!supported) {
+        elements.status.textContent = "This browser does not expose speech synthesis. The narrator remains off and no voice is claimed.";
+      } else {
+        elements.status.textContent = narratorResolutionMessage("english", english) + " " + narratorResolutionMessage("cantonese", cantonese) + " This page cannot reliably detect a screen reader, so narration stays opt-in and never starts until a page event occurs.";
+      }
+    }
+  }
+
+  function runNarratorQueue() {
+    if (narratorRuntime.speaking || !narratorRuntime.queue.length) return;
+    var synthesis = narratorSpeechSynthesis();
+    if (!synthesis || !narrationAllowed()) {
+      narratorRuntime.queue = [];
+      return;
+    }
+    var entry = narratorRuntime.queue.shift();
+    var utterance = new window.SpeechSynthesisUtterance(entry.text);
+    utterance.voice = entry.voice;
+    utterance.lang = (entry.voice && entry.voice.lang) || (entry.language === "cantonese" ? "yue-HK" : "en-US");
+    utterance.rate = entry.rate;
+    utterance.pitch = entry.pitch;
+    narratorRuntime.speaking = true;
+    var advance = function () {
+      narratorRuntime.speaking = false;
+      window.setTimeout(runNarratorQueue, 0);
+    };
+    utterance.onend = advance;
+    utterance.onerror = advance;
+    try {
+      synthesis.speak(utterance);
+    } catch (_) {
+      advance();
+    }
+  }
+
+  function clearPendingNarration() {
+    if (narratorRuntime.pendingTimer) window.clearTimeout(narratorRuntime.pendingTimer);
+    narratorRuntime.pendingTimer = null;
+    narratorRuntime.pendingQueue = null;
+    narratorRuntime.queue = [];
+  }
+
+  function replaceNarratorQueue(queue, debounced) {
+    var speak = function (nextQueue) {
+      narratorRuntime.queue = nextQueue;
+      runNarratorQueue();
+    };
+    if (!debounced) {
+      clearPendingNarration();
+      speak(queue);
+      return;
+    }
+    narratorRuntime.pendingQueue = queue;
+    if (narratorRuntime.pendingTimer) window.clearTimeout(narratorRuntime.pendingTimer);
+    narratorRuntime.pendingTimer = window.setTimeout(function () {
+      var nextQueue = narratorRuntime.pendingQueue;
+      narratorRuntime.pendingTimer = null;
+      narratorRuntime.pendingQueue = null;
+      if (nextQueue && nextQueue.length) speak(nextQueue);
+    }, 250);
+  }
+
+  function narrationAllowed() {
+    var narrator = narratorBaseSettings();
+    return Boolean(narrator.enabled && narratorSpeechSynthesis() && !(state.settings && state.settings.schoolMode && state.settings.schoolMode.active) && !document.hidden);
+  }
+
+  function narrateEvent(english, cantonese, category, bypassCooldown) {
+    if (!narrationAllowed()) return false;
+    var narrator = narratorBaseSettings();
+    var now = Date.now();
+    var bucket = String(category || "event").slice(0, 80);
+    if (!bypassCooldown && narratorRuntime.lastByCategory[bucket] && now - narratorRuntime.lastByCategory[bucket] < 2000) return false;
+    narratorRuntime.lastByCategory[bucket] = now;
+    var queue = [];
+    if (narrator.language === "english" || narrator.language === "bilingual") {
+      var englishResolution = resolveNarratorVoice("english");
+      if (englishResolution.voice) queue.push({ language: "english", text: String(english || "Browser-local event."), voice: englishResolution.voice, rate: Number(narrator.rate) || 1, pitch: Number(narrator.pitch) || 1 });
+    }
+    if (narrator.language === "cantonese" || narrator.language === "bilingual") {
+      var cantoneseResolution = resolveNarratorVoice("cantonese");
+      if (cantoneseResolution.voice) queue.push({ language: "cantonese", text: String(cantonese || english || "瀏覽器本機事件。"), voice: cantoneseResolution.voice, rate: Number(narrator.rate) || 1, pitch: Number(narrator.pitch) || 1 });
+    }
+    if (!queue.length) {
+      syncNarratorControls();
+      return false;
+    }
+    replaceNarratorQueue(queue, !bypassCooldown);
+    return true;
+  }
+
+  function narrateNotice(level, message) {
+    narrateEvent("Browser-local notice. " + message, "瀏覽器本機通知：" + message, "notice-" + String(level || "info"), level === "error");
+  }
+
+  function installNarrator() {
+    var elements = narratorElements();
+    if (!elements.surface || elements.surface.getAttribute("data-mss-narrator-ready") === "true") return;
+    elements.surface.setAttribute("data-mss-narrator-ready", "true");
+    if (elements.enabled) elements.enabled.addEventListener("change", function () {
+      updateSettings({ narrator: { enabled: elements.enabled.checked } }, "narrator-enabled", elements.enabled.checked ? "Browser-local event narration is enabled. Use Preview narrator to hear the selected browser voice." : "Browser-local event narration is disabled.");
+    });
+    if (elements.language) elements.language.addEventListener("change", function () {
+      updateSettings({ narrator: { language: elements.language.value } }, "narrator-language", "Narrated language updated for this browser-local page.");
+    });
+    [[elements.englishVoice, "englishVoice", "English"], [elements.cantoneseVoice, "cantoneseVoice", "Cantonese"]].forEach(function (definition) {
+      if (!definition[0]) return;
+      definition[0].addEventListener("change", function () {
+        var patch = {};
+        patch[definition[1]] = definition[0].value;
+        updateSettings({ narrator: patch }, "narrator-" + definition[1], definition[2] + " voice preference updated. The selected voice remains browser-local.");
+      });
+    });
+    [[elements.rate, elements.rateOutput, "rate", "×"], [elements.pitch, elements.pitchOutput, "pitch", ""]].forEach(function (definition) {
+      if (!definition[0]) return;
+      definition[0].addEventListener("input", function () { if (definition[1]) definition[1].textContent = Number(definition[0].value).toFixed(1) + definition[3]; });
+      definition[0].addEventListener("change", function () {
+        var patch = {};
+        patch[definition[2]] = Number(definition[0].value);
+        updateSettings({ narrator: patch }, "narrator-" + definition[2], "Narrator " + definition[2] + " updated for this browser-local page.");
+      });
+    });
+    if (elements.preview) elements.preview.addEventListener("click", function () {
+      var played = narrateEvent("Narrator preview. This is browser-local speech.", "旁白預覽：呢段語音只喺瀏覽器本機播放。", "preview", true);
+      if (!played && elements.status) elements.status.textContent = "No matching selected voice is currently available for the active narrated language. Nothing was spoken.";
+    });
+    if (hasContractMethod("observeNarratorVoices")) {
+      narratorRuntime.voiceUnsubscribe = safely(function () {
+        return contract.observeNarratorVoices(function (capabilities) {
+          state.narratorCapabilities = capabilities || { supported: false, voices: [] };
+          syncNarratorControls();
+        });
+      }, null);
+    }
+    window.addEventListener("pagehide", function () {
+      if (typeof narratorRuntime.voiceUnsubscribe === "function") narratorRuntime.voiceUnsubscribe();
+      narratorRuntime.voiceUnsubscribe = null;
+      clearPendingNarration();
+      if (window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") safely(function () { window.speechSynthesis.cancel(); });
+    }, { once: true });
+    syncNarratorControls();
+    if (hasContractMethod("registerCommand")) safely(function () {
+      contract.registerCommand({ id: "browser-local-narrator", title: "Browser-local narrator", description: "Configure optional local event narration and browser voices.", group: "Browser-local settings", elementId: "settings-preview", keywords: ["speech", "voice", "narrator"] });
+    });
+  }
+
+  function scheduleElements() {
+    var surface = one('[data-contract-surface="settings"]');
+    if (!surface) return {};
+    var form = one('[data-mss-schedule-form]', surface);
+    return {
+      surface: surface,
+      form: form,
+      label: one('[data-mss-schedule-label]', surface),
+      source: one('[data-mss-schedule-source]', surface),
+      setting: one('[data-mss-schedule-setting]', surface),
+      valueField: one('[data-mss-schedule-value-field]', surface),
+      startDate: one('[data-mss-schedule-start-date]', surface),
+      endDate: one('[data-mss-schedule-end-date]', surface),
+      startTime: one('[data-mss-schedule-start-time]', surface),
+      endTime: one('[data-mss-schedule-end-time]', surface),
+      priority: one('[data-mss-schedule-priority]', surface),
+      enabled: one('[data-mss-schedule-enabled]', surface),
+      dayModes: all('[data-mss-schedule-day-mode]', surface),
+      weekdays: one('[data-mss-schedule-weekdays]', surface),
+      reset: one('[data-mss-schedule-reset]', surface),
+      formStatus: one('[data-mss-schedule-form-status]', surface),
+      timezone: one('[data-mss-schedule-timezone]', surface),
+      list: one('[data-mss-schedule-list]', surface),
+      status: one('[data-mss-schedule-status]', surface)
+    };
+  }
+
+  function scheduleSettingLabel(setting) {
+    return {
+      languageMode: "Language mode",
+      "appearance.theme": "Theme",
+      "appearance.density": "Density",
+      "appearance.accent": "Accent color",
+      "appearance.font.family": "Font family",
+      "appearance.font.scale": "Font scale",
+      "appearance.font.weight": "Font weight"
+    }[setting] || setting;
+  }
+
+  function scheduleDefaultValue(setting) {
+    var base = state.baseSettings || defaultSettings();
+    if (setting === "languageMode") return base.languageMode;
+    if (setting === "appearance.theme") return base.appearance.theme;
+    if (setting === "appearance.density") return base.appearance.density;
+    if (setting === "appearance.accent") return base.appearance.accent;
+    if (setting === "appearance.font.family") return base.appearance.font.family;
+    if (setting === "appearance.font.scale") return base.appearance.font.scale;
+    if (setting === "appearance.font.weight") return base.appearance.font.weight;
+    return "";
+  }
+
+  function renderScheduleValueField(elements, selectedValue) {
+    if (!elements.valueField || !elements.setting) return;
+    var setting = elements.setting.value;
+    var value = selectedValue == null ? scheduleDefaultValue(setting) : selectedValue;
+    elements.valueField.replaceChildren();
+    var label = made("label");
+    var title = made("span");
+    title.textContent = scheduleSettingLabel(setting) + " value";
+    var input;
+    if (setting === "languageMode" || setting === "appearance.theme" || setting === "appearance.density" || setting === "appearance.font.family" || setting === "appearance.font.weight") {
+      input = made("select");
+      var choices = setting === "languageMode" ? [["english", "English"], ["cantonese", "Playful Hong Kong-style Cantonese"], ["bilingual", "Bilingual"]] : setting === "appearance.theme" ? [["system", "System default"], ["light", "Light"], ["dark", "Dark"]] : setting === "appearance.density" ? [["compact", "Compact"], ["comfortable", "Comfortable"], ["spacious", "Spacious"]] : setting === "appearance.font.family" ? [["system-ui", "System UI"], ["Inter, system-ui, sans-serif", "Inter fallback stack"], ["Arial, sans-serif", "Arial fallback stack"], ["Segoe UI, sans-serif", "Segoe UI fallback stack"], ["Georgia, serif", "Georgia fallback stack"], ["Cascadia Code, Consolas, monospace", "Cascadia Code fallback stack"]] : [["100", "100"], ["200", "200"], ["300", "300"], ["400", "400"], ["500", "500"], ["600", "600"], ["700", "700"], ["800", "800"], ["900", "900"]];
+      choices.forEach(function (pair) {
+        var option = document.createElement("option");
+        option.value = pair[0];
+        option.textContent = pair[1];
+        input.appendChild(option);
+      });
+      input.value = String(value);
+    } else if (setting === "appearance.accent") {
+      input = made("input");
+      input.type = "color";
+      input.value = /^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : "#3f7cff";
+    } else {
+      input = made("input");
+      input.type = "number";
+      input.min = "0.75";
+      input.max = "2";
+      input.step = "0.05";
+      input.value = String(value);
+    }
+    input.setAttribute("data-mss-schedule-value-input", "true");
+    label.append(title, input);
+    var help = made("small");
+    help.textContent = setting === "appearance.accent" ? "The saved local rule changes this page's accent only." : "This local override ends automatically when the rule no longer matches.";
+    label.appendChild(help);
+    elements.valueField.appendChild(label);
+  }
+
+  function localTimezoneLabel() {
+    return safely(function () { return Intl.DateTimeFormat().resolvedOptions().timeZone || "this browser's local timezone"; }, "this browser's local timezone");
+  }
+
+  function scheduleDayMode(elements) {
+    var selected = elements.dayModes.filter(function (input) { return input.checked; })[0];
+    return selected && selected.value === "selected" ? "selected" : "every";
+  }
+
+  function renderScheduleWeekdays(elements) {
+    if (!elements.weekdays) return;
+    var selected = scheduleDayMode(elements) === "selected";
+    elements.weekdays.hidden = !selected;
+    all('input[type="checkbox"]', elements.weekdays).forEach(function (input) { input.disabled = !selected; });
+  }
+
+  function scheduleWeekdaysFromForm(elements) {
+    if (scheduleDayMode(elements) !== "selected") return [];
+    return all('input[type="checkbox"]:checked', elements.weekdays).map(function (input) { return Number(input.value); }).filter(function (value) { return Number.isInteger(value) && value >= 0 && value <= 6; });
+  }
+
+  function scheduleValueFromForm(elements) {
+    var input = one('[data-mss-schedule-value-input]', elements.valueField);
+    if (!input) return null;
+    if (elements.setting.value === "appearance.font.scale" || elements.setting.value === "appearance.font.weight") return Number(input.value);
+    return input.value;
+  }
+
+  function validateScheduleForm(elements) {
+    if (!elements.label || !elements.label.value.trim()) return { error: "Give this browser-local rule a label." };
+    if (!elements.source || elements.source.value !== "local") return { error: "Only browser-local schedules are available on this static page." };
+    if (elements.startDate.value && elements.endDate.value && elements.startDate.value > elements.endDate.value) return { error: "The end date must be on or after the start date." };
+    var weekdays = scheduleWeekdaysFromForm(elements);
+    if (scheduleDayMode(elements) === "selected" && !weekdays.length) return { error: "Select at least one weekday, or choose Every day." };
+    var priority = Number(elements.priority.value);
+    if (!Number.isInteger(priority) || priority < 0 || priority > 999) return { error: "Priority must be a whole number from 0 through 999." };
+    var value = scheduleValueFromForm(elements);
+    if (value === null || value === "") return { error: "Choose a value for the scheduled setting." };
+    return {
+      value: {
+        id: elements.form.getAttribute("data-mss-schedule-editing-id") || undefined,
+        version: 1,
+        label: elements.label.value.trim(),
+        source: "local",
+        setting: elements.setting.value,
+        value: value,
+        enabled: Boolean(elements.enabled.checked),
+        startDate: elements.startDate.value,
+        endDate: elements.endDate.value,
+        startTime: elements.startTime.value,
+        endTime: elements.endTime.value,
+        weekdays: weekdays,
+        priority: priority
+      }
+    };
+  }
+
+  function scheduleTimeWindow(rule) {
+    if (!rule.startTime && !rule.endTime) return "all day";
+    if (rule.startTime && rule.endTime && rule.startTime === rule.endTime) return "inactive: equal start and end time";
+    if (rule.startTime && rule.endTime && rule.startTime > rule.endTime) return rule.startTime + "–" + rule.endTime + " (crosses midnight)";
+    if (rule.startTime && rule.endTime) return rule.startTime + "–" + rule.endTime;
+    if (rule.startTime) return "from " + rule.startTime;
+    return "until " + rule.endTime;
+  }
+
+  function scheduleDays(rule) {
+    if (!rule.weekdays || !rule.weekdays.length) return "every day";
+    return rule.weekdays.map(function (day) { return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]; }).join(", ");
+  }
+
+  function resetScheduleEditor(elements, message) {
+    if (!elements.form) return;
+    elements.form.removeAttribute("data-mss-schedule-editing-id");
+    if (elements.label) elements.label.value = "Browser-local schedule";
+    if (elements.source) elements.source.value = "local";
+    if (elements.setting) elements.setting.value = "languageMode";
+    if (elements.startDate) elements.startDate.value = "";
+    if (elements.endDate) elements.endDate.value = "";
+    if (elements.startTime) elements.startTime.value = "";
+    if (elements.endTime) elements.endTime.value = "";
+    if (elements.priority) elements.priority.value = "0";
+    if (elements.enabled) elements.enabled.checked = true;
+    elements.dayModes.forEach(function (input) { input.checked = input.value === "every"; });
+    if (elements.weekdays) all('input[type="checkbox"]', elements.weekdays).forEach(function (input) { input.checked = false; });
+    if (elements.reset) elements.reset.hidden = true;
+    renderScheduleWeekdays(elements);
+    renderScheduleValueField(elements);
+    if (elements.formStatus) elements.formStatus.textContent = message || "Choose a setting and save a local rule.";
+  }
+
+  function loadScheduleIntoEditor(elements, rule) {
+    if (!rule || !elements.form) return;
+    elements.form.setAttribute("data-mss-schedule-editing-id", rule.id);
+    elements.label.value = rule.label;
+    elements.source.value = "local";
+    elements.setting.value = rule.setting;
+    renderScheduleValueField(elements, rule.value);
+    elements.startDate.value = rule.startDate || "";
+    elements.endDate.value = rule.endDate || "";
+    elements.startTime.value = rule.startTime || "";
+    elements.endTime.value = rule.endTime || "";
+    elements.priority.value = String(rule.priority || 0);
+    elements.enabled.checked = rule.enabled !== false;
+    var dayMode = rule.weekdays && rule.weekdays.length ? "selected" : "every";
+    elements.dayModes.forEach(function (input) { input.checked = input.value === dayMode; });
+    if (elements.weekdays) all('input[type="checkbox"]', elements.weekdays).forEach(function (input) { input.checked = Boolean(rule.weekdays && rule.weekdays.indexOf(Number(input.value)) !== -1); });
+    if (elements.reset) elements.reset.hidden = false;
+    renderScheduleWeekdays(elements);
+    if (elements.formStatus) elements.formStatus.textContent = "Editing " + rule.label + ". Saving updates this browser-local rule.";
+    focus(elements.form);
+  }
+
+  function confirmScheduleRemoval(rule, origin) {
+    if (!rule) return;
+    showDialog("Remove browser-local schedule rule", function (content, instance) {
+      var description = made("p");
+      description.textContent = "This removes only the browser-local schedule rule '" + rule.label + "'. It does not change the installed application, a server, or another browser. The action cannot be undone from this page.";
+      var firstLabel = made("label");
+      var first = made("input");
+      first.type = "checkbox";
+      firstLabel.append(first, document.createTextNode(" I understand that this removes the selected browser-local rule."));
+      var secondLabel = made("label");
+      var second = made("input");
+      second.type = "checkbox";
+      secondLabel.append(second, document.createTextNode(" I understand that saved base settings are not being changed."));
+      var sliderLabel = made("label");
+      sliderLabel.textContent = "Confirm removal";
+      var slider = made("input");
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "100";
+      slider.value = "0";
+      slider.disabled = true;
+      sliderLabel.appendChild(slider);
+      var status = made("output");
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      var cancel = button("Emergency exit", function () { closeDialog(instance); });
+      var remove = button("Remove browser-local rule", function () {
+        var result = hasContractMethod("removeSchedule") ? safely(function () { return contract.removeSchedule(rule.id); }, null) : null;
+        if (!result || result.ok !== true) {
+          status.textContent = (result && result.error) || "The browser-local rule was not removed.";
+          return;
+        }
+        closeDialog(instance);
+        hydrateContractState();
+        refreshScheduledPresentation(false);
+        notify("info", "Browser-local schedule rule removed.");
+      });
+      remove.disabled = true;
+      function update() {
+        slider.disabled = !(first.checked && second.checked);
+        remove.disabled = slider.disabled || slider.value !== "100";
+        status.textContent = slider.disabled ? "Acknowledge both statements to enable the full confirmation slider." : slider.value === "100" ? "Removal is ready to be confirmed." : "Move the confirmation slider to 100 before removal is available.";
+      }
+      first.addEventListener("change", update);
+      second.addEventListener("change", update);
+      slider.addEventListener("input", update);
+      var onCancel = function (event) {
+        event.preventDefault();
+        closeDialog(instance);
+      };
+      instance.addEventListener("cancel", onCancel);
+      instance.addEventListener("close", function () {
+        instance.removeEventListener("cancel", onCancel);
+        if (origin) focus(origin);
+      }, { once: true });
+      content.append(description, firstLabel, secondLabel, sliderLabel, status, cancel, remove);
+      update();
+    });
+  }
+
+  function renderScheduleList() {
+    var elements = scheduleElements();
+    if (!elements.surface || !elements.list) return;
+    var activeValues = hasContractMethod("getActiveScheduleValues") ? safely(function () { return contract.getActiveScheduleValues(); }, {}) : {};
+    var rules = state.schedules.slice().sort(function (left, right) { return String(left.label).localeCompare(String(right.label)) || String(left.id).localeCompare(String(right.id)); });
+    elements.list.replaceChildren();
+    rules.forEach(function (rule) {
+      var item = made("li");
+      var active = activeValues && activeValues[rule.setting] && activeValues[rule.setting].ruleId === rule.id;
+      item.setAttribute("data-mss-schedule-active", String(Boolean(active)));
+      var details = made("div");
+      var title = made("strong");
+      title.textContent = rule.label + (active ? " — active" : rule.enabled === false ? " — disabled" : "");
+      var detail = made("small");
+      detail.textContent = scheduleSettingLabel(rule.setting) + " → " + String(rule.value) + "; " + scheduleDays(rule) + "; " + scheduleTimeWindow(rule) + "; priority " + rule.priority + ".";
+      var bounds = made("small");
+      bounds.textContent = rule.startDate || rule.endDate ? "Date bounds: " + (rule.startDate || "no start") + " to " + (rule.endDate || "no end") + ". Local timezone: " + localTimezoneLabel() + "." : "No date bounds. Local timezone: " + localTimezoneLabel() + ".";
+      details.append(title, detail, bounds);
+      var actions = made("div");
+      actions.className = "schedule-list-actions";
+      var edit = button("Edit", function () { loadScheduleIntoEditor(scheduleElements(), rule); }, "Edit " + rule.label);
+      var remove = button("Remove", function () { confirmScheduleRemoval(rule, remove); }, "Remove " + rule.label);
+      actions.append(edit, remove);
+      item.append(details, actions);
+      elements.list.appendChild(item);
+    });
+    if (!rules.length) {
+      var empty = made("li");
+      empty.textContent = "No browser-local schedule rules are saved.";
+      elements.list.appendChild(empty);
+    }
+    if (elements.timezone) elements.timezone.textContent = "Timezone: " + localTimezoneLabel() + ". Date and time windows use this browser's local clock; daylight-saving changes follow that clock.";
+    if (elements.status) {
+      var activeKeys = Object.keys(activeValues || {});
+      if (state.settings && state.settings.schedulePresentationSuppressed) elements.status.textContent = schoolModeName() + " is active, so saved browser-local schedule overrides are paused.";
+      else if (activeKeys.length) elements.status.textContent = "Active browser-local override" + (activeKeys.length === 1 ? "" : "s") + ": " + activeKeys.map(scheduleSettingLabel).join(", ") + ". Higher priority wins; equal priority uses the stable rule identifier.";
+      else elements.status.textContent = rules.length ? "No saved rule matches the current local date and time." : "No browser-local schedule rules are saved.";
+    }
+  }
+
+  function scheduledPresentationSignature() {
+    return JSON.stringify({ overrides: state.settings && state.settings.scheduledOverrides || {}, suppressed: Boolean(state.settings && state.settings.schedulePresentationSuppressed) });
+  }
+
+  function refreshScheduledPresentation(announce) {
+    var before = narratorRuntime.scheduleSignature;
+    hydrateContractState();
+    var after = scheduledPresentationSignature();
+    var changed = !before || before !== after;
+    if (changed) {
+      syncSettingsControls();
+      applySettingsPresentation();
+      syncNarratorControls();
+      renderScheduleList();
+    }
+    if (announce && before && before !== after && !(state.settings && state.settings.schoolMode && state.settings.schoolMode.active)) {
+      var active = state.settings && state.settings.scheduledOverrides && Object.keys(state.settings.scheduledOverrides).length;
+      narrateEvent(active ? "A browser-local schedule is now active." : "A browser-local scheduled override has ended.", active ? "瀏覽器本機排程而家生效。" : "瀏覽器本機排程覆寫已經結束。", "schedule-transition", true);
+    }
+    narratorRuntime.scheduleSignature = after;
+  }
+
+  function installSchedules() {
+    var elements = scheduleElements();
+    if (!elements.surface || !elements.form || elements.surface.getAttribute("data-mss-schedules-ready") === "true") return;
+    elements.surface.setAttribute("data-mss-schedules-ready", "true");
+    resetScheduleEditor(elements);
+    if (elements.source) elements.source.addEventListener("change", function () {
+      if (elements.source.value !== "local") {
+        elements.source.value = "local";
+        if (elements.formStatus) elements.formStatus.textContent = "Validated HTTPS and Home Assistant sources are unavailable on this static page. No request was made.";
+      }
+    });
+    if (elements.setting) elements.setting.addEventListener("change", function () { renderScheduleValueField(elements); });
+    elements.dayModes.forEach(function (input) { input.addEventListener("change", function () { renderScheduleWeekdays(elements); }); });
+    if (elements.reset) elements.reset.addEventListener("click", function () { resetScheduleEditor(elements, "Editing cancelled. No browser-local schedule rule changed."); });
+    elements.form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var prepared = validateScheduleForm(elements);
+      if (prepared.error) {
+        if (elements.formStatus) elements.formStatus.textContent = prepared.error;
+        return;
+      }
+      var result = hasContractMethod("createSchedule") ? safely(function () { return contract.createSchedule(prepared.value); }, null) : null;
+      if (!result || result.ok !== true) {
+        if (elements.formStatus) elements.formStatus.textContent = (result && result.error) || "The browser-local schedule rule could not be saved.";
+        return;
+      }
+      var equal = prepared.value.startTime && prepared.value.endTime && prepared.value.startTime === prepared.value.endTime;
+      resetScheduleEditor(elements, equal ? "Rule saved. Equal start and end times make it inactive until you edit it." : "Browser-local schedule rule saved.");
+      refreshScheduledPresentation(false);
+      notify("info", equal ? "Browser-local schedule rule saved with an equal-time inactive window." : "Browser-local schedule rule saved.");
+    });
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) refreshScheduledPresentation(true); });
+    narratorRuntime.scheduleTimer = window.setInterval(function () { refreshScheduledPresentation(true); }, 30000);
+    window.addEventListener("pagehide", function () {
+      if (narratorRuntime.scheduleTimer) window.clearInterval(narratorRuntime.scheduleTimer);
+      narratorRuntime.scheduleTimer = null;
+    }, { once: true });
+    refreshScheduledPresentation(false);
+    if (hasContractMethod("registerCommand")) safely(function () {
+      contract.registerCommand({ id: "browser-local-schedules", title: "Browser-local schedules", description: "Schedule language and appearance settings with local time only.", group: "Browser-local settings", elementId: "settings-preview", keywords: ["schedule", "timezone", "appearance", "language"] });
+    });
+  }
+
   function escapePattern(value) {
     return value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
   }
@@ -835,6 +1519,11 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       elements.reset.textContent = "Reset " + name + " lock";
     }
     all("[data-mss-suppressed-by-school]").forEach(function (element) { element.hidden = active; });
+    if (active && window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") {
+      clearPendingNarration();
+      safely(function () { window.speechSynthesis.cancel(); });
+      narratorRuntime.speaking = false;
+    }
     if (elements.boundary && hasContractMethod("getSchoolModeResetBoundary")) {
       var boundary = safely(function () { return contract.getSchoolModeResetBoundary(); }, null);
       if (boundary && boundary.message) elements.boundary.textContent = boundary.message;
@@ -843,7 +1532,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       if (!schoolCryptoAvailable()) {
         elements.status.textContent = "This browser does not provide the local cryptography needed to configure " + name + ".";
       } else if (active) {
-        elements.status.textContent = name + " is active in this browser. English is forced and the language, tone, and vocabulary controls are hidden until a local unlock-code check succeeds.";
+        elements.status.textContent = name + " is active in this browser. English is forced and the language, tone, vocabulary, narrator, and schedule controls are hidden until a local unlock-code check succeeds. Saved local schedules stay stored but do not override this mode.";
       } else if (state.settings && state.settings.schoolMode && state.settings.schoolMode.credentialConfigured) {
         elements.status.textContent = "A browser-local unlock-code verifier is ready. Configure and enable " + name + " when you are ready.";
       } else {
@@ -1224,11 +1913,13 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     all('input[type="search"]').filter(function (input) {
       return input !== globalInput && input.getAttribute(generated) !== "true";
     }).forEach(function (input) {
-      var surface = input.closest("[data-contract-surface]") || input.closest("section") || main;
+      var scheduleSearch = input.closest('[data-contract-hook="scheduled-settings-search-regex"]');
+      var surface = scheduleSearch ? input.closest('[data-contract-hook="scheduled-settings"]') : input.closest("[data-contract-surface]") || input.closest("section") || main;
       makeRegexBuilder(input, {
         label: (input.closest("label") && input.closest("label").textContent || "this surface").trim(),
         scope: surface,
         candidates: function () {
+          if (scheduleSearch) return all(".schedule-list > li", surface);
           return all("label, a, li, article, .auth-card, .format-catalog span, .ollama-state, .empty-state", surface).filter(function (item) {
             return item.getAttribute(generated) !== "true";
           });
@@ -3263,8 +3954,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       implementation: "in-progress",
       implementationReference: "site/index.html data-contract-surface hook",
       implementationDetail: "Static public preview and browser-local interaction only.",
-      documentation: "verified",
-      documentationReference: "site/README.md and site/CONTRACT.md",
+      documentation: "in-progress",
+      documentationReference: "site/README.md, site/CONTRACT.md, and site/NARRATOR_AND_SCHEDULE.md",
       persistence: "not-applicable",
       persistenceReason: "This static preview does not own a desktop application record.",
       test: "missing",
@@ -3340,6 +4031,25 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       capture: "missing",
       captureDetail: "No real built-site capture is recorded."
     };
+
+    var narratorAndSchedules = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, and site/contract.js",
+      implementationDetail: "Optional browser speech, late voice enumeration, serialized event queue, and bounded local schedule records are implemented without a network source.",
+      documentation: "verified",
+      documentationReference: "site/README.md and site/CONTRACT.md",
+      localization: "in-progress",
+      localizationDetail: "The controls expose English baseline copy; page-wide localization remains incomplete.",
+      persistence: "in-progress",
+      persistenceReference: "browser localStorage key minecraft-server-studio.site.contract.v2, schema version 4, schedule rule version 1",
+      persistenceDetail: "Voice identities and schedule rules persist only in this browser and only after bounded validation.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-artifact interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-artifact capture is recorded."
+    };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
         inventoryFeature("marketing-copy", "Marketing content and direct installer boundary", "in-progress", "The page exposes a static verified installer anchor and must not simulate a transfer.", staticHook),
@@ -3348,6 +4058,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       { id: "settings", label: "Settings and appearance preview", route: "#settings-preview", features: [
         inventoryFeature("settings-controls", "Visible browser-local language, independently persisted funny-level, and notice-emoji controls", "in-progress", "These controls operate this public page rather than delegating to the installed application.", universalControlsCore),
         inventoryFeature("appearance-tab-foundation", "Browser-local appearance and feature-tab foundation", "in-progress", "Theme, density, accent, safe generic typography, docked feature tabs, groups, pins, order, searches, and bounded appearance targets are wired locally. The full per-element and proof contract remains incomplete.", universalControlsCore),
+        inventoryFeature("event-narrator", "Optional browser-local event narrator", "in-progress", "Uses actual browser speechSynthesis voices only after opt-in; browser screen-reader activity cannot be reliably detected.", narratorAndSchedules),
+        inventoryFeature("scheduled-settings", "Browser-local language and appearance schedules", "in-progress", "Local date, time, weekday, priority, and tie-break rules are wired; HTTPS and Home Assistant options remain explicitly unavailable.", narratorAndSchedules),
         inventoryFeature("personal-vocabulary", "Personal vocabulary JSON loader", "in-progress", "Strict version-1 parser and revalidation protect the local cache; no file name, path, upload, or telemetry.", universalControlsCore),
         inventoryFeature("renamed-presentation-mode", "Renamed browser-local presentation mode", "in-progress", "The local one-way verifier controls English-only presentation and suppression; it is a user-experience lock, not security protection.", universalControlsCore)
       ] },
@@ -3384,9 +4096,12 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     if (!hasContractMethod("setCompletenessInventory")) return;
     var current = safely(function () { return contract.getCompletenessInventory(); }, null);
     var desired = handWrittenInventory();
-    var expectedIds = desired.surfaces.map(function (surface) { return surface.id; }).sort().join(",");
-    var currentIds = current && Array.isArray(current.surfaces) ? current.surfaces.map(function (surface) { return surface.id; }).sort().join(",") : "";
-    if (currentIds !== expectedIds) {
+    var signature = function (inventory) {
+      return inventory && Array.isArray(inventory.surfaces) ? inventory.surfaces.map(function (surface) {
+        return surface.id + ":" + (Array.isArray(surface.features) ? surface.features.map(function (feature) { return feature.id; }).sort().join(",") : "");
+      }).sort().join("|") : "";
+    };
+    if (signature(current) !== signature(desired)) {
       safely(function () { contract.setCompletenessInventory(desired); });
     }
     renderCompletenessStatus();
@@ -3506,6 +4221,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     seedStatusModel();
     seedCompletenessInventory();
     installSettings();
+    installNarrator();
+    installSchedules();
     installSchoolMode();
     installTabsAndArticles();
     installAppearanceEditor();
@@ -3526,6 +4243,8 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
           hydrateContractState();
           syncSettingsControls();
           applySettingsPresentation();
+          syncNarratorControls();
+          renderScheduleList();
           renderVocabularyStatus();
           renderNotifications();
           renderHistory();
