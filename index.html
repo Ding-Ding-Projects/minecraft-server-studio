@@ -3,163 +3,223 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="A local-first Minecraft server planning dashboard for Minecraft Server Studio." />
+    <meta name="description" content="Minecraft Server Studio is a Windows desktop app for creating, configuring, and operating Paper and Spigot Minecraft servers." />
     <meta name="theme-color" content="#101827" />
-    <title>Minecraft Server Studio · Operations dashboard</title>
+    <title>Minecraft Server Studio · Paper and Spigot server management</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="top-app-bar">
-        <a class="brand" href="#overview" aria-label="Minecraft Server Studio overview">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="site-shell">
+      <header class="top-bar" id="top">
+        <a class="brand" href="#top" aria-label="Minecraft Server Studio home">
           <span class="brand-mark" aria-hidden="true">MS</span>
-          <span><strong>Minecraft Server Studio</strong><small>Operations dashboard</small></span>
+          <span><strong>Minecraft Server Studio</strong><small>Desktop server management</small></span>
         </a>
-        <div class="connection-state" aria-label="Connection state">
-          <span class="status-dot status-dot--idle" aria-hidden="true"></span>
-          Desktop service not connected
-        </div>
-        <div class="top-actions">
-          <button class="icon-button" id="theme-toggle" type="button" aria-pressed="false" aria-label="Use light theme">◐</button>
-          <button class="text-button boundary-trigger" type="button">Local-only boundary</button>
-        </div>
+        <nav class="primary-navigation" aria-label="Primary navigation">
+          <a href="#features">Features</a>
+          <a href="#story">Product story</a>
+          <a href="#feature-destinations">Local feature previews</a>
+          <a href="#install">Install</a>
+        </nav>
       </header>
 
-      <div class="workspace">
-        <aside class="navigation-rail" aria-label="Dashboard sections">
-          <p class="rail-label">Workspace</p>
-          <div class="tab-list" role="tablist" aria-orientation="vertical">
-            <button class="nav-tab is-active" type="button" role="tab" aria-selected="true" data-target="overview"><span aria-hidden="true">◫</span><span>Overview</span></button>
-            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="create-server"><span aria-hidden="true">＋</span><span>Create server</span></button>
-            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="configure"><span aria-hidden="true">⚙</span><span>Configure</span></button>
-            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="console"><span aria-hidden="true">›_</span><span>Console</span></button>
-            <button class="nav-tab" type="button" role="tab" aria-selected="false" data-target="plugins"><span aria-hidden="true">⌘</span><span>Plugins</span></button>
+      <main id="main-content">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Windows desktop app</p>
+            <h1>Bring a Minecraft server to life without a terminal obstacle course.</h1>
+            <p>
+              Minecraft Server Studio guides people from an empty folder to a configured Paper or Spigot server, with the controls they need close at hand and the technical work explained in plain language.
+            </p>
+            <div class="hero-actions">
+              <button class="download-button" type="button" disabled aria-describedby="download-status">Desktop installer not published yet</button>
+              <a class="secondary-button" href="#feature-destinations">Explore feature previews</a>
+            </div>
+            <p class="availability-note" id="download-status">A download action will appear here only after a verified installer release is published.</p>
           </div>
-          <div class="rail-footer">
-            <span class="eyebrow">Execution mode</span>
-            <strong>Planning only</strong>
-            <p>Connect the desktop app to install, create, or start anything.</p>
+
+          <figure class="illustration-card">
+            <div class="illustration-window" role="img" aria-label="Illustrative preview of a Minecraft server setup flow; not a product screenshot.">
+              <div class="illustration-titlebar"><span></span><span></span><span></span><strong>New server</strong></div>
+              <div class="illustration-body">
+                <div class="illustration-step is-complete"><span>1</span><strong>Choose server software</strong><small>Paper selected</small></div>
+                <div class="illustration-step is-active"><span>2</span><strong>Set up prerequisites</strong><small>Java and Git checks</small></div>
+                <div class="illustration-step"><span>3</span><strong>Review configuration</strong><small>Ready when you are</small></div>
+              </div>
+            </div>
+            <figcaption>Illustrative interface preview — not a product screenshot.</figcaption>
+          </figure>
+        </section>
+
+        <section class="trust-strip" aria-label="Product highlights">
+          <article><strong>Paper and Spigot</strong><span>Choose the server software that fits your world and plugins.</span></article>
+          <article><strong>Local desktop control</strong><span>Management happens on your Windows computer, not through a hosted control panel.</span></article>
+          <article><strong>Guided setup</strong><span>Every step explains what will happen before files or processes change.</span></article>
+        </section>
+
+        <section class="story-section section-grid" id="story">
+          <div class="section-heading"><p class="eyebrow">Product story</p><h2>A focused desktop workspace for your own server.</h2></div>
+          <div class="story-copy">
+            <p>Running a Minecraft server should not require translating a dozen command-line instructions into a fragile personal checklist. Minecraft Server Studio keeps server creation, configuration, lifecycle controls, logs, and plugin preparation in one installed desktop app.</p>
+            <p>The public site explains the product and previews its browser-local controls. Real server management happens only in the installed desktop app, where it can inspect local paths, download verified server files, control the server process, and report the actual result.</p>
           </div>
-        </aside>
+        </section>
 
-        <main class="dashboard" id="main-content">
-          <section class="hero section-anchor" id="overview" tabindex="-1">
-            <div>
-              <p class="eyebrow">Local server workspace</p>
-              <h1>Shape the server before it touches your computer.</h1>
-              <p class="hero-copy">Choose Paper or Spigot, set resources and gameplay rules, then hand a complete plan to Minecraft Server Studio.</p>
-              <div class="hero-actions">
-                <button class="primary-button focus-target" type="button" data-target="create-server">Build a server plan <span aria-hidden="true">→</span></button>
-                <button class="secondary-button focus-target" type="button" data-target="dependency-panel">Review automatic setup</button>
-              </div>
+        <section class="feature-section" id="features">
+          <div class="section-heading section-heading--wide"><div><p class="eyebrow">What it helps with</p><h2>Build a server plan, then make it real locally.</h2></div><a class="text-link" href="#feature-destinations">Open local feature previews <span aria-hidden="true">→</span></a></div>
+          <div class="feature-grid">
+            <article class="feature-card"><span class="feature-icon" aria-hidden="true">P/S</span><h3>Paper and Spigot support</h3><p>Start from a clear software choice, compatible Minecraft release, and a setup path designed around each server distribution.</p><a href="#paper-spigot">How software selection works</a></article>
+            <article class="feature-card"><span class="feature-icon" aria-hidden="true">↓</span><h3>Automatic prerequisite setup</h3><p>When enabled in the desktop app, setup checks the Java runtime and Git, then installs missing supported prerequisites before creating the server.</p><a href="#automatic-setup">Read the automatic setup story</a></article>
+            <article class="feature-card"><span class="feature-icon" aria-hidden="true">⚙</span><h3>Configuration with context</h3><p>Adjust memory, player limits, ports, world settings, and server properties with controls that explain their effect.</p><a href="#settings-preview">See settings preview</a></article>
+            <article class="feature-card"><span class="feature-icon" aria-hidden="true">›_</span><h3>Lifecycle and console visibility</h3><p>Prepare, start, stop, and observe server activity from the desktop app while preserving a clear view of what is running.</p><a href="#downloads-preview">See availability states</a></article>
+          </div>
+        </section>
+
+        <section class="detail-section" id="paper-spigot">
+          <div class="detail-copy">
+            <p class="eyebrow">Paper or Spigot</p>
+            <h2>Choose your server foundation with the trade-offs in view.</h2>
+            <p>Paper is the performance-oriented default for most plugin servers. Spigot is available for people who need its conventional plugin-server baseline. Minecraft Server Studio keeps the choice visible and saves it with the server recipe.</p>
+            <ul class="check-list"><li>Choose a supported Minecraft version from the installed desktop app.</li><li>Keep server software, version, and configuration together in one local recipe.</li><li>Review the plan before the desktop app downloads or writes anything.</li></ul>
+          </div>
+          <figure class="illustration-card illustration-card--compact">
+            <div class="illustration-window illustration-window--split" role="img" aria-label="Illustrative comparison of Paper and Spigot options; not a product screenshot."><div><span class="mini-badge mini-badge--paper">P</span><strong>Paper</strong><small>Performance-oriented default</small></div><div><span class="mini-badge mini-badge--spigot">S</span><strong>Spigot</strong><small>Conventional plugin baseline</small></div></div>
+            <figcaption>Illustrative option preview — not a product screenshot.</figcaption>
+          </figure>
+        </section>
+
+        <section class="automatic-section" id="automatic-setup">
+          <div><p class="eyebrow">Automatic Java and Git setup</p><h2>Let the desktop app handle the prerequisites it can verify.</h2></div>
+          <div class="automatic-steps">
+            <article><span>1</span><h3>Inspect</h3><p>The desktop app checks whether the supported Java runtime and Git are already available.</p></article>
+            <article><span>2</span><h3>Install when missing</h3><p>With automatic setup enabled, it uses its supported local installation route for prerequisites it needs.</p></article>
+            <article><span>3</span><h3>Create with evidence</h3><p>It validates the selected server distribution and reports the real setup result before it offers lifecycle controls.</p></article>
+          </div>
+          <p class="boundary-copy">This public landing page does not install software, download server files, or run a server. Those actions are limited to the installed desktop app.</p>
+        </section>
+
+        <section class="preview-intro" id="feature-destinations" data-contract-surface="browser-local-feature-shell">
+          <div><p class="eyebrow">Browser-local feature previews</p><h2>Explore the product architecture without connecting to a server.</h2><p>Every destination below is a static, browser-local preview and a source hook for the product contract engine. The public page does not submit forms, keep credentials, call a backend, or perform desktop actions.</p></div>
+          <aside class="local-boundary-card"><strong>Static local-only page</strong><span>No account, analytics, network operation, installer, server process, or file upload happens here.</span></aside>
+        </section>
+
+        <nav class="feature-tabs" aria-label="Feature preview destinations">
+          <a class="feature-tab" href="#status-preview">Status</a>
+          <a class="feature-tab" href="#settings-preview">Settings</a>
+          <a class="feature-tab" href="#docs-preview">Docs</a>
+          <a class="feature-tab" href="#converter-preview">Converter</a>
+          <a class="feature-tab" href="#authenticator-preview">Authenticator</a>
+          <a class="feature-tab" href="#ollama-preview">Ollama</a>
+          <a class="feature-tab" href="#history-preview">History</a>
+          <a class="feature-tab" href="#notifications-preview">Notifications</a>
+          <a class="feature-tab" href="#downloads-preview">Downloads</a>
+        </nav>
+
+        <section class="preview-grid" aria-label="Browser-local feature previews">
+          <article class="preview-panel" id="status-preview" data-contract-id="status-preview" data-contract-surface="status" tabindex="-1" aria-labelledby="status-preview-heading">
+            <div class="panel-heading"><div><p class="eyebrow">Browser-local status</p><h2 id="status-preview-heading">Current public-page state</h2></div><span class="preview-status">No host connection</span></div>
+            <p data-contract-hook="status-summary">This status panel reports only browser-local page state. It does not inspect a server, desktop app, release workflow, installer, local runtime, or user account.</p>
+            <div class="download-state-grid" aria-label="Browser-local status summary">
+              <article data-contract-hook="status-current-state"><strong>Current state</strong><output role="status" aria-live="polite" aria-atomic="true">Idle — no host-owned operation is running from this page.</output></article>
+              <article data-contract-hook="status-last-updated"><strong>Last updated</strong><span>Not yet updated by a browser-local interaction.</span></article>
+              <article data-contract-hook="status-no-bridge"><strong>No chat bridge</strong><span>No chat bridge or backend is connected. Nothing on this page can send status outside this browser.</span></article>
             </div>
-            <div class="hero-status-card" aria-label="Current server plan">
-              <div class="status-card-heading"><span class="status-dot status-dot--idle" aria-hidden="true"></span><span>Awaiting a desktop connection</span></div>
-              <dl class="summary-list">
-                <div><dt>Server software</dt><dd id="summary-software">Paper</dd></div>
-                <div><dt>Minecraft version</dt><dd id="summary-version">1.21.8</dd></div>
-                <div><dt>Automatic setup</dt><dd id="summary-install">Enabled</dd></div>
-              </dl>
-              <p class="muted-copy">This page stores no server credentials, files, or commands outside your browser session.</p>
+            <div class="auth-layout">
+              <div class="auth-card" data-contract-hook="status-local-evidence"><strong>Local evidence</strong><span>Marketing copy, static feature previews, and disabled installer availability are visible in this page source.</span></div>
+              <div class="auth-card" data-contract-hook="status-active-interactions"><strong>Active local interactions</strong><span>No browser-local interaction is currently active. The public page does not run desktop actions.</span></div>
             </div>
-          </section>
+            <div class="local-boundary-card" data-contract-hook="status-next-steps"><strong>Next step</strong><span>Install the verified desktop app when a public installer release exists; server creation and management remain desktop-app tasks.</span></div>
+          </article>
 
-          <section class="metric-grid" aria-label="Workspace readiness">
-            <article class="metric-card"><span class="metric-label">Setup plan</span><strong id="setup-progress-text">4 tasks selected</strong><div class="progress-track"><span class="progress-bar" id="setup-progress-bar" style="width:64%"></span></div><span class="metric-detail">Java, server JAR, files, launch profile</span></article>
-            <article class="metric-card"><span class="metric-label">Lifecycle</span><strong>Not created</strong><span class="metric-detail">No local server process is running</span></article>
-            <article class="metric-card"><span class="metric-label">Plugin staging</span><strong id="plugin-count">No files selected</strong><span class="metric-detail">Choose local JAR files to prepare a hand-off</span></article>
-          </section>
-
-          <section class="dashboard-grid section-anchor" id="create-server" tabindex="-1">
-            <article class="surface-card server-recipe-card">
-              <div class="section-heading"><div><p class="eyebrow">New server recipe</p><h2>Create a server</h2></div><span class="status-chip">Plan is editable</span></div>
-              <form id="server-recipe-form" class="recipe-form">
-                <fieldset>
-                  <legend>Server software</legend>
-                  <div class="choice-grid" role="radiogroup" aria-label="Server software">
-                    <label class="choice-card is-selected"><input type="radio" name="software" value="Paper" checked /><span class="choice-mark" aria-hidden="true">P</span><span><strong>Paper</strong><small>Recommended performance and plugin API</small></span><span class="choice-check" aria-hidden="true">✓</span></label>
-                    <label class="choice-card"><input type="radio" name="software" value="Spigot" /><span class="choice-mark choice-mark--spigot" aria-hidden="true">S</span><span><strong>Spigot</strong><small>Conventional plugin server baseline</small></span><span class="choice-check" aria-hidden="true">✓</span></label>
-                  </div>
-                </fieldset>
-
-                <div class="field-grid">
-                  <label class="field-control"><span>Release channel</span><select id="minecraft-version"><option value="1.21.8" selected>1.21.8 · Latest stable</option><option value="1.21.7">1.21.7 · Stable</option><option value="1.21.6">1.21.6 · Stable</option><option value="1.20.6">1.20.6 · Long-term compatibility</option></select><small>The desktop app verifies the chosen build before download.</small></label>
-                  <label class="field-control"><span>Server profile</span><select id="server-profile"><option value="Small friends server">Small friends server · 2–8 players</option><option value="Community survival">Community survival · 8–30 players</option><option value="Creative workshop">Creative workshop · building tools</option><option value="Custom">Custom · keep current controls</option></select><small>Choosing a profile updates the related resource controls.</small></label>
-                </div>
-
-                <div class="name-builder"><span class="field-label">Server folder</span><div class="composed-input"><span aria-hidden="true">servers/</span><input id="server-name" type="text" value="weekend-world" maxlength="40" aria-describedby="server-name-help" /><button id="generate-server-name" type="button" class="inline-action">Generate</button></div><small id="server-name-help">Letters, numbers, hyphens, and underscores only. The desktop app checks availability.</small></div>
-                <label class="switch-row" for="auto-install"><span><strong>Automatically install required server dependencies</strong><small>When the desktop app creates this server, it resolves Java, the selected server JAR, starter files, and a launch profile automatically.</small></span><input id="auto-install" type="checkbox" checked /><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="switch-row" for="auto-start"><span><strong>Start after setup completes</strong><small>Requires EULA acknowledgement and a connected desktop application.</small></span><input id="auto-start" type="checkbox" /><span class="switch-control" aria-hidden="true"></span></label>
-                <div class="form-actions"><button class="primary-button" type="submit">Save server plan <span aria-hidden="true">→</span></button><span class="action-note">No server is created from this standalone page.</span></div>
-              </form>
-            </article>
-
-            <aside class="surface-card dependency-card" id="dependency-panel" tabindex="-1">
-              <div class="section-heading"><div><p class="eyebrow">Automatic setup</p><h2>Dependencies to resolve</h2></div><span class="status-chip status-chip--enabled">Enabled</span></div>
-              <ol class="dependency-list">
-                <li><span class="step-index">1</span><span><strong>Java runtime</strong><small>Temurin 21, selected automatically for current Paper and Spigot builds.</small></span><span class="state-label">Automatic</span></li>
-                <li><span class="step-index">2</span><span><strong>Server distribution</strong><small id="distribution-detail">Paper 1.21.8 will be verified before it is retrieved.</small></span><span class="state-label">Automatic</span></li>
-                <li><span class="step-index">3</span><span><strong>Initial server files</strong><small>Configuration, world folders, and a safe launch profile.</small></span><span class="state-label">Automatic</span></li>
-                <li><span class="step-index">4</span><span><strong>Optional plugin files</strong><small>Only local JARs you explicitly choose are staged.</small></span><span class="state-label state-label--optional">Optional</span></li>
-              </ol>
-              <div class="notice notice--info"><strong>Why this is a plan</strong><p>Automatic installation happens in the connected desktop app, with its own local paths and download checks. This page has no installer, shell access, or remote backend.</p></div>
-            </aside>
-          </section>
-
-          <section class="surface-card configuration-card section-anchor" id="configure" tabindex="-1">
-            <div class="section-heading"><div><p class="eyebrow">Live plan controls</p><h2>Configure gameplay and resources</h2></div><button class="secondary-button compact-button" id="reset-config" type="button">Restore profile defaults</button></div>
-            <div class="configuration-layout">
-              <div class="control-stack">
-                <div class="range-control"><div class="range-label"><label for="memory">Memory allocation</label><output id="memory-output" for="memory">4 GB</output></div><input id="memory" type="range" min="2" max="16" value="4" step="1" /><div class="range-bounds"><span>2 GB</span><span>16 GB</span></div></div>
-                <div class="range-control"><div class="range-label"><label for="max-players">Maximum players</label><output id="max-players-output" for="max-players">12</output></div><input id="max-players" type="range" min="2" max="100" value="12" step="1" /><div class="range-bounds"><span>2 players</span><span>100 players</span></div></div>
-                <div class="range-control"><div class="range-label"><label for="view-distance">View distance</label><output id="view-distance-output" for="view-distance">10 chunks</output></div><input id="view-distance" type="range" min="4" max="32" value="10" step="1" /><div class="range-bounds"><span>4 chunks</span><span>32 chunks</span></div></div>
-              </div>
-              <div class="field-grid configuration-fields">
-                <label class="field-control"><span>Game mode</span><select id="gamemode"><option value="survival" selected>Survival</option><option value="creative">Creative</option><option value="adventure">Adventure</option><option value="spectator">Spectator</option></select></label>
-                <label class="field-control"><span>Difficulty</span><select id="difficulty"><option value="normal" selected>Normal</option><option value="easy">Easy</option><option value="hard">Hard</option><option value="peaceful">Peaceful</option></select></label>
-                <label class="field-control"><span>Server port</span><input id="server-port" type="number" inputmode="numeric" min="1024" max="65535" value="25565" /><small>The desktop app checks whether the local port is available.</small></label>
-                <label class="field-control"><span>World seed</span><div class="composed-input seed-input"><input id="world-seed" type="text" value="" placeholder="Random on first launch" /><button id="randomize-seed" type="button" class="inline-action">Randomize</button></div><small>Leave blank to let Minecraft create a random seed.</small></label>
-              </div>
-              <div class="toggle-group">
-                <label class="switch-row" for="online-mode"><span><strong>Verify player accounts</strong><small>Uses Minecraft account authentication when the server runs.</small></span><input id="online-mode" type="checkbox" checked /><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="switch-row" for="allow-flight"><span><strong>Allow flight</strong><small>Useful for creative or modded environments.</small></span><input id="allow-flight" type="checkbox" /><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="switch-row" for="eula"><span><strong>I acknowledge the Minecraft EULA</strong><small>Required before the desktop app can launch the server.</small></span><input id="eula" type="checkbox" /><span class="switch-control" aria-hidden="true"></span></label>
-              </div>
-              <aside class="plan-preview" aria-label="Generated configuration preview"><div class="preview-heading"><span>Generated plan</span><button id="copy-plan" type="button" class="text-button compact-text-button">Copy</button></div><pre id="plan-preview">software=paper&#10;version=1.21.8&#10;memory=4G&#10;max-players=12&#10;view-distance=10&#10;gamemode=survival&#10;difficulty=normal&#10;server-port=25565&#10;online-mode=true&#10;allow-flight=false&#10;eula=false</pre></aside>
+          <article class="preview-panel" id="settings-preview" data-contract-surface="settings" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Settings and appearance</p><h2>Personalize the installed app</h2></div><span class="preview-status">Browser-local preview</span></div>
+            <p>These visible source hooks model settings that belong to the installed desktop app. No selection on this page is saved or sent.</p>
+            <div class="control-grid">
+              <label data-contract-hook="language-mode"><span>Language mode</span><select><option>English</option><option>Playful Hong Kong-style Cantonese</option><option>Bilingual</option></select></label>
+              <label data-contract-hook="english-funny-level"><span>English tone</span><input type="range" min="1" max="5" value="3" /><output>3 of 5</output></label>
+              <label data-contract-hook="cantonese-funny-level"><span>Cantonese tone</span><input type="range" min="1" max="5" value="3" /><output>3 of 5</output></label>
+              <label data-contract-hook="appearance-theme"><span>Theme</span><select><option>System default</option><option>Light</option><option>Dark</option></select></label>
+              <label data-contract-hook="app-logo-upload"><span>Custom app logo</span><input type="file" accept="image/*" /><small>Preview input only; no image leaves this page.</small></label>
+              <label data-contract-hook="personal-vocabulary-upload"><span>Personal vocabulary JSON</span><input type="file" accept="application/json,.json" /><small>Preview input only; no vocabulary is loaded here.</small></label>
             </div>
-          </section>
+            <div class="inline-controls" data-contract-hook="scheduled-settings"><button type="button" disabled>Schedule a setting in the desktop app</button><button type="button" disabled>Open appearance editor in the desktop app</button><span>All actions are unavailable on this static page.</span></div>
+            <div class="preview-search" data-contract-hook="settings-search-regex"><label><span>Find a setting</span><input type="search" placeholder="Search settings" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+          </article>
 
-          <section class="console-layout section-anchor" id="console" tabindex="-1">
-            <article class="surface-card command-card">
-              <div class="section-heading"><div><p class="eyebrow">Command composer</p><h2>Prepare a console command</h2></div><span class="status-chip">Not connected</span></div>
-              <p class="muted-copy">Choose an action and fill optional arguments. The connected desktop app is the only component that can send it to a server.</p>
-              <div class="quick-command-row" role="group" aria-label="Quick commands"><button class="command-chip is-selected" type="button" data-command="list">List players</button><button class="command-chip" type="button" data-command="say">Broadcast message</button><button class="command-chip" type="button" data-command="whitelist add">Add to whitelist</button><button class="command-chip" type="button" data-command="save-all">Save world</button></div>
-              <label class="field-control command-arguments"><span>Command arguments</span><input id="command-arguments" type="text" placeholder="Optional value or player name" /></label>
-              <div class="command-preview" aria-live="polite"><span>Prepared command</span><code id="command-preview">/list</code></div>
-              <div class="form-actions"><button id="copy-command" class="secondary-button" type="button">Copy command</button><button class="primary-button" type="button" disabled aria-describedby="send-command-help">Send from desktop app</button></div><small id="send-command-help" class="blocked-copy">Unavailable until the desktop application connects to a running server.</small>
-            </article>
-            <article class="surface-card event-card" aria-label="Local activity log"><div class="section-heading"><div><p class="eyebrow">Activity</p><h2>Local hand-off log</h2></div><button id="clear-log" type="button" class="text-button compact-text-button">Clear</button></div><ul id="event-log" class="event-log" aria-live="polite"><li><time>Now</time><span>Dashboard opened in planning-only mode.</span></li><li><time>Now</time><span>Automatic setup is enabled for the current server recipe.</span></li></ul></article>
-          </section>
-
-          <section class="surface-card plugins-card section-anchor" id="plugins" tabindex="-1">
-            <div class="section-heading"><div><p class="eyebrow">Optional extensions</p><h2>Stage plugin JAR files</h2></div><span class="status-chip">Local chooser</span></div>
-            <div class="plugin-layout">
-              <label class="drop-zone" id="plugin-drop-zone" for="plugin-files"><input id="plugin-files" type="file" accept=".jar,application/java-archive" multiple /><span class="drop-zone-icon" aria-hidden="true">⇪</span><strong>Choose plugin JAR files</strong><span>or drag them here to prepare a local-only hand-off</span><em>No files are uploaded by this page.</em></label>
-              <div class="plugin-staging"><label class="field-control"><span>Destination server</span><select id="plugin-destination"><option selected>weekend-world (planned)</option><option>Choose after desktop connection</option></select></label><ul id="plugin-list" class="plugin-list" aria-live="polite"><li class="empty-plugin-state">No plugin JAR files selected.</li></ul><button id="queue-plugins" class="secondary-button" type="button" disabled>Queue for desktop installation</button></div>
+          <article class="preview-panel" id="docs-preview" data-contract-surface="offline-documentation" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Documentation browser</p><h2>Find the next local step</h2></div><span class="preview-status">Static preview</span></div>
+            <p>The installed desktop app bundles its own offline documentation. This preview shows the documentation, command-palette, and tab destination hooks without loading remote content.</p>
+            <div class="document-layout">
+              <nav aria-label="Documentation article list" class="mini-list" data-contract-hook="documentation-tabs"><a href="#paper-spigot">Paper or Spigot</a><a href="#automatic-setup">Automatic setup</a><a href="#converter-preview">Local conversion</a><a href="#downloads-preview">Downloads and releases</a></nav>
+              <div class="document-card"><h3>Start a server safely</h3><p>Choose software, inspect the setup plan, acknowledge the EULA in the desktop app, and review the result before starting a process.</p><a href="#automatic-setup">Suggested article: automatic setup</a></div>
             </div>
-            <div class="notice notice--warn"><strong>Compatibility is verified by the desktop app.</strong><p>Files selected here are only named in the local browser session. The desktop app validates JAR metadata and target compatibility before copying anything into a server.</p></div>
-          </section>
-        </main>
-      </div>
+            <div class="preview-search" data-contract-hook="documentation-search-regex"><label><span>Search documentation</span><input type="search" placeholder="Search article titles and text" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+          </article>
+
+          <article class="preview-panel" id="converter-preview" data-contract-surface="file-converter" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Local file converter</p><h2>Conversion remains on the computer</h2></div><span class="preview-status">No file processing</span></div>
+            <p>The installed app presents compatible local adapters after it inspects a selected file. This public preview does not read, upload, convert, or retain selected files.</p>
+            <div class="converter-layout">
+              <label class="file-picker" data-contract-hook="converter-file-picker"><input type="file" /><strong>Choose a local source file</strong><small>Preview only — no file leaves your browser.</small></label>
+              <div class="format-catalog" data-contract-hook="converter-adapter-catalog"><strong>Adapter categories</strong><div><span>Documents / PDF</span><span>Images</span><span>Audio</span><span>Video</span><span>Archives</span><span>Structured data</span><span>Code / text</span><span>Binary encodings</span></div></div>
+            </div>
+            <div class="inline-controls" data-contract-hook="converter-bulk-controls"><button type="button" disabled>Choose output in the desktop app</button><button type="button" disabled>Open conversion history in the desktop app</button></div>
+          </article>
+
+          <article class="preview-panel" id="authenticator-preview" data-contract-surface="authenticator" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Authenticator and toy locks</p><h2>Keep secret handling in the installed app</h2></div><span class="preview-status">No credential storage</span></div>
+            <p>Authenticator entries, TOTP setup, element locks, and recovery are implemented locally in the desktop app. This site never asks for, stores, or exposes a secret.</p>
+            <div class="auth-layout">
+              <div class="auth-card" data-contract-hook="authenticator-import"><strong>Add an authenticator entry</strong><span>URI, QR, camera, and manual entry routes belong to the installed app.</span><button type="button" disabled>Open authenticator in desktop app</button></div>
+              <div class="auth-card" data-contract-hook="toy-locks"><strong>Element and tab locks</strong><span>Per-element password or TOTP controls remain local to the desktop app.</span><button type="button" disabled>Open lock manager in desktop app</button></div>
+            </div>
+            <p class="annotation">There is no user account or browser-based recovery route on this static page.</p>
+          </article>
+
+          <article class="preview-panel" id="ollama-preview" data-contract-surface="ollama-manager" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Local Ollama suite manager</p><h2>Discover the local runtime in the installed app</h2></div><span class="preview-status">No runtime queried</span></div>
+            <p>The desktop app can inspect a locally running Ollama service and its models through an allowed local boundary. This static page makes no request to localhost or any model service.</p>
+            <div class="ollama-state" data-contract-hook="ollama-status"><span class="state-indicator" aria-hidden="true"></span><div><strong>No runtime checked from this page</strong><small>Open the installed app to inspect local availability, model storage, hardware fit, pulls, chats, and harness profiles.</small></div><button type="button" disabled>Inspect local runtime in desktop app</button></div>
+            <div class="preview-search" data-contract-hook="ollama-catalog-search-regex"><label><span>Search model catalog</span><input type="search" placeholder="Local app catalog search" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+          </article>
+
+          <article class="preview-panel" id="history-preview" data-contract-surface="local-history" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Local version history</p><h2>Revisions belong beside local app data</h2></div><span class="preview-status">Empty static preview</span></div>
+            <p>The installed app records local configuration and user-managed data changes in its own history. The public page cannot view, create, restore, or export those records.</p>
+            <div class="history-controls" data-contract-hook="history-filters"><label><span>Date range</span><input type="date" /></label><label><span>Action</span><select><option>All actions</option><option>Created</option><option>Updated</option><option>Restored</option></select></label><label><span>Search history</span><input type="search" placeholder="Search local history" /></label><button type="button" disabled aria-label="Open regular expression builder">.*</button></div>
+            <div class="empty-state">No browser-local history exists on this public page.</div>
+          </article>
+
+          <article class="preview-panel" id="notifications-preview" data-contract-surface="notification-center" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Notification center</p><h2>See status without a blocking prompt</h2></div><span class="preview-status">Preview only</span></div>
+            <p>The desktop app maintains its notification center locally. This static page only documents its non-blocking notification behavior.</p>
+            <ul class="notification-list" data-contract-hook="notification-history"><li><span class="notification-dot notification-dot--info"></span><div><strong>Installer status is honest</strong><small>A release link stays unavailable until a verified installer exists.</small></div></li><li><span class="notification-dot notification-dot--quiet"></span><div><strong>No server activity is connected</strong><small>This browser page does not start, stop, or observe a server.</small></div></li></ul>
+            <div class="inline-controls" data-contract-hook="notification-bulk-actions"><button type="button" disabled>Manage notifications in desktop app</button><span>Nothing is dismissed or saved here.</span></div>
+          </article>
+
+          <article class="preview-panel" id="downloads-preview" data-contract-surface="download-flow" tabindex="-1">
+            <div class="panel-heading"><div><p class="eyebrow">Downloads and releases</p><h2>Installer status stays factual</h2></div><span class="preview-status">No verified asset</span></div>
+            <p>A start, progress, and completion flow belongs to the installed app and its browser-extension integration. The public landing page never simulates a transfer or offers an installer that does not exist.</p>
+            <div class="download-state-grid" data-contract-hook="download-states"><article><strong>Start</strong><span>Unavailable until a verified release provides an installer.</span></article><article><strong>Progress</strong><span>No transfer is in progress on this static page.</span></article><article><strong>Completion</strong><span>No installer has been downloaded or completed.</span></article></div>
+            <a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases" rel="noopener">View release status</a>
+          </article>
+        </section>
+
+        <section class="install-section" id="install">
+          <div><p class="eyebrow">Installer availability</p><h2>The desktop installer is not available yet.</h2><p>A download button will be enabled only after a verified public installer release exists. Until then, the release page is an honest record of availability rather than a pretend download route.</p></div>
+          <div class="install-actions"><button class="download-button" type="button" disabled aria-describedby="release-status">Installer not published</button><a class="secondary-button" href="https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases" rel="noopener">View release status</a><p id="release-status">No verified installer is linked from this page.</p></div>
+        </section>
+      </main>
+
+      <footer>
+        <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">MS</span><span><strong>Minecraft Server Studio</strong><small>Paper and Spigot server management</small></span></a>
+        <p>Local desktop server management for Minecraft worlds you control.</p>
+        <a href="https://github.com/Ding-Ding-Projects/minecraft-server-studio" rel="noopener">Project documentation</a>
+      </footer>
     </div>
-
-    <dialog id="boundary-dialog" aria-labelledby="boundary-title">
-      <div class="dialog-header"><div><p class="eyebrow">Execution boundary</p><h2 id="boundary-title">This dashboard is intentionally local-only.</h2></div><button class="icon-button close-boundary" type="button" aria-label="Close boundary notice">×</button></div>
-      <p>It can organize a server recipe, select local files, and prepare commands in your current browser session. It cannot install Java, download a server JAR, create files, send console commands, or start Minecraft.</p>
-      <p>Those actions belong to the connected Minecraft Server Studio desktop application, where local paths, downloads, and process status can be checked safely.</p>
-      <button class="primary-button close-boundary" type="button">Understood</button>
-    </dialog>
-    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <div data-mss-live-region role="status" aria-live="polite" aria-atomic="true"></div>
+    <script src="contract.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
