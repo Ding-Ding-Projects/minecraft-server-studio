@@ -66,10 +66,17 @@ commands.
 
 Paper accepts a plugin *directory* through `-P`; it does not accept one plugin
 JAR per CLI argument. The Paper profile therefore exposes only a typed plugin
-directory. Local plugin JAR selection, bounded archive inspection, descriptor
-analysis, staging, promotion, and rollback records stay in the Plugins tab.
-This avoids treating a descriptor or a JAR filename as proof that a plugin
-command exists or is permitted.
+directory. When a custom directory is selected, the local Plugins tab uses that
+same validated inside-server directory for inspection, planning, direct
+promotion, and staged promotion. Local plugin JAR selection, bounded archive
+inspection, descriptor analysis, staging, promotion, and rollback records stay
+in the Plugins tab. This avoids treating a descriptor or a JAR filename as
+proof that a plugin command exists or is permitted.
+
+Likewise, a custom `-c` properties path is the one the managed properties
+writer updates. Leaving it empty retains the normal `server.properties` path
+at the server root. The other configuration-path flags remain direct Paper
+arguments and are not silently rewritten by the desktop app.
 
 ## World-changing flags
 

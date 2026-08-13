@@ -23,6 +23,7 @@ be authorized by the existing two-key destructive-confirmation component.
 - `src/main/main.cjs`
 - `src/main/preload.cjs`
 - `src/main/java-runtime-manager.cjs`
+- `src/main/config-plugin-safety.cjs`
 - `src/renderer/index.html`
 - `src/renderer/renderer.js`
 - `src/renderer/styles.css`
