@@ -104,6 +104,8 @@ latest-release path; a visitor or desktop user cannot provide another feed URL.
 See [Unsigned automatic updates](unsigned-automatic-updates.md) for the state
 and recovery contract.
 
+The settings-appearance-and-localization record also includes the local app-logo manager: shipped presets, byte/signature/dimension/static-image validation for a selected PNG or JPEG, a private derived cache, renderer-only display data, and reset back to the shipped mark. It makes no network request, stores no selected source path, and never changes package, executable, installer, updater, or application-data identity. Its dedicated documentation and inventory proof fields remain pending rather than verified.
+
 ## Local Ollama inventory boundary
 
 The `ollama` row currently covers a narrow, main-process-only local foundation:
@@ -169,5 +171,6 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
 - [Local file-converter foundation](file-converter.md)
+- [App-logo customization](app-logo-customization.md)
 - [Appearance and tab-navigation foundation](appearance-and-tabs.md)
 - [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)

@@ -20,6 +20,7 @@ Minecraft Server Studio is a Windows desktop control center for creating, config
 - Review an independent in-app Local status destination that reports local operations, evidence, next steps, and an honest completeness inventory. An optional main-process Status Hub bridge can be configured separately; it keeps the local destination as the fallback and never reports registration, update, inbox-poll, or reply delivery without an accepted transport response.
 - Browse the bundled in-app feature documentation without a network request. The documentation destination reads a fixed packaged inventory, renders Markdown through an isolated escaped renderer, resolves listed feature links inside the app, and keeps plain-text search plus a bounded local regex-builder route.
 - Set persisted language mode, independent English/Cantonese message-playfulness levels, dialog/message emoji decoration, and a display name through Studio preferences; use the shared local School-mode control for a live English-only user-experience state with protected unlock credentials.
+- Choose a shipped app-logo preset or a bounded local PNG/JPEG in Studio preferences. The renderer receives only a validated private display asset; the custom mark never changes the package, executable, installer, update, or application-data identity.
 - Configure a local appearance and navigation foundation with persisted system/light/dark theme, density, seed color, bounded typography, direct shell/tab/action targets, and a browser-style server tab strip that docks on any edge, keeps keyboard orientation correct, persists selection, searches locally, and exposes an all-tabs overflow list. Every-element editing, tab pinning/grouping/reordering, and full command-palette coverage remain explicitly unavailable.
 - Inspect the fixed local Ollama service through main-process-only reads for version, installed models, and running models. The Local Ollama destination keeps Model Store catalog, pull, chat, and harness controls visibly disabled until their full local workflows exist; it never sends requests to a cloud endpoint or accepts an arbitrary shell command.
 - Optionally enable a local event narrator with independently selected English and Cantonese platform voices, rate and pitch controls, serialized speech, and a screen-reader yield boundary; add bounded local-time language schedules without a network schedule source.
@@ -104,6 +105,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [BuildTools plan-only orchestration](docs/features/buildtools-orchestration.md)
 - [Command Center](docs/features/command-center.md)
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
+- [App-logo customization](docs/features/app-logo-customization.md)
 - [Appearance and tab-navigation foundation](docs/features/appearance-and-tabs.md)
 - [Event narrator and scheduled language settings](docs/features/narrator-and-scheduled-settings.md)
 - [Local authenticator and toy-lock foundation](docs/features/authenticator-and-toy-locks.md)

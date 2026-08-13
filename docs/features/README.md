@@ -11,6 +11,7 @@
 - [Command Center](command-center.md)
 - [RCON response safety](rcon-response-safety.md)
 - [Presentation settings and shared School mode](experience-settings.md)
+- [App-logo customization](app-logo-customization.md)
 - [Appearance and tab-navigation foundation](appearance-and-tabs.md)
 - [Event narrator and scheduled language settings](narrator-and-scheduled-settings.md)
 - [CLI RCON gateway](cli-rcon-gateway.md)
