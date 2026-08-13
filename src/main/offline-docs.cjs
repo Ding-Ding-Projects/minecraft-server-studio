@@ -55,6 +55,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('site-logo-customization', 'site-logo-customization.md', 'Browser-local companion-site logo customization', 'Choose a shipped browser-rendered mark or a bounded local PNG/JPEG display representation for the companion site.'),
   entry('local-status-and-completeness', 'local-status-and-completeness.md', 'Local status and desktop completeness', 'Read the local status surface and evidence inventory.'),
   entry('local-history-and-safe-exports', 'local-history-and-safe-exports.md', 'Local history and safe exports', 'Browse bounded redacted event metadata and create safe structured exports.'),
+  entry('desktop-notifications-and-destructive-confirmation', 'desktop-notifications-and-destructive-confirmation.md', 'Desktop notifications and destructive confirmation', 'Review bounded local notification history and the two-control, full-slider destructive-action decision boundary.'),
   entry('external-editor-integration', 'external-editor-integration.md', 'External editor integration', 'Choose a validated local editor and open a selected server root or safe app-private record.'),
   entry('changelog-viewer', 'changelog-viewer.md', 'Offline changelog viewer', 'Browse bundled version records, filter them locally, and copy or export the current view.'),
   entry('shared-status-hub-bridge', 'shared-status-hub-bridge.md', 'Shared Status Hub bridge', 'Understand the optional external bridge and local fallback.'),
