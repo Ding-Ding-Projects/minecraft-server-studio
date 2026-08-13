@@ -95,6 +95,8 @@ When the workflow reaches publication, it creates one non-draft GitHub Release w
 
 The `site/` directory contains a Pages-ready public marketing landing page with browser-local interaction equivalents and a separate local Status destination. Its browser state remains local to the visitor and it never claims to install, create, launch, operate, or contact a Minecraft server. Its narrow Ollama observer is idle until a visitor explicitly refreshes it; it can read only `GET /api/version`, `GET /api/tags`, and `GET /api/ps` from the fixed `http://127.0.0.1:11434` origin, retains only a bounded non-secret browser-session snapshot, and leaves catalog, pull, chat, delete, copy, hardware-fit, and harness features visibly unavailable. It loads `contract.js` before `app.js` and keeps unavailable desktop-only operations visibly unavailable until an installed app or verified release provides them.
 
+The companion site also independently provides a deliberately bounded local converter for selected files: UTF-8 text, validated JSON/CSV/TSV, a limited YAML-style text target, and Base64/hex encodings. It accepts no more than 12 files at a time, each up to 1 MiB, detects eligible routes from bounded local bytes/content rather than an extension, and stores no file path or raw source/output bytes in browser storage. PDF, image, audio, video, archive, and native workbook conversion remain visibly unavailable because the site does not bundle a suitable local parser/encoder. This public browser feature is separate from the desktop file-converter foundation and never calls the desktop application.
+
 ## Documentation
 
 - [Server lifecycle and Paper/Spigot setup](docs/features/server-orchestration.md)
@@ -115,6 +117,7 @@ The `site/` directory contains a Pages-ready public marketing landing page with 
 - [Browser-local Ollama observer](docs/features/browser-local-ollama-observer.md)
 - [Windows release packaging metadata](docs/features/release-packaging.md)
 - [Local file-converter foundation](docs/features/file-converter.md)
+- [Browser-local companion-site file converter](docs/features/browser-local-file-converter.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Local history and safe exports](docs/features/local-history-and-safe-exports.md)
 - [Shared Status Hub bridge](docs/features/shared-status-hub-bridge.md)

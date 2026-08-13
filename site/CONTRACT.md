@@ -140,7 +140,11 @@ The payload must be at most 64 KiB measured as UTF-8 bytes; contain no duplicate
 
 ## Conversion, logo, toy-lock, and TOTP metadata
 
-`getFileAdapters()` returns the catalog categories Documents/PDF, Images, Audio, Video, Archives, Structured Data/Spreadsheets, Code/Text, and Binary Encodings. Every current adapter is intentionally `enabled: false` and `bundled: false` because the static site does not ship an isolated offline converter. `getFileAdapterAvailability()` provides the exact visible reason. `planConversion()` can record an unavailable local plan but must not present it as a conversion result.
+`getFileAdapters()` returns the catalog categories Documents/PDF, Images, Audio, Video, Archives, Structured Data/Spreadsheets, Code/Text, and Binary Encodings. `getFileAdapterAvailability()` exposes an exact enabled/disabled reason for each card. The browser-local converter is intentionally limited to UTF-8 text, validated JSON/CSV/TSV, a deliberately limited YAML-style output, and Base64/hex encodings. It does not turn an extension or MIME label into an eligibility decision: JSON/CSV/TSV must pass bounded byte/content validation first.
+
+The host accepts at most 12 user-selected sources per action, each no larger than 1 MiB, and inspects at most the first 512 bytes before creating a queue record. It keeps at most 24 selected files in the current-page queue. The supported host methods are `recordBrowserConversionJob()`, `updateBrowserConversionJob()`, `getBrowserConversionJobs()`, and `removeBrowserConversionJob()`; `planConversion()` remains only as a compatibility path. A persistent record is metadata only, with bounded `id`, sanitized `sourceName`, `sourceType`, `sourceBytes`, `detectedKind`, `category`, `targetType`, `targetFormat`, `targetName`, `status`, `adapterId`, `createdAt`, `updatedAt`, `downloadRequestedAt`, and `reason` fields. `downloadRequestedAt` records only that this page asked the browser to download an in-memory output; it never implies that the page knows a destination or completion result. The contract limits this history to 100 records and rejects raw source/output bytes, preview text, browser file handles, source paths, and download locations.
+
+PDF, image, audio, video, and archive entries remain disabled because no safe browser-local parser/encoder is bundled. Native spreadsheet/workbook entries remain disabled because no local workbook parser is bundled. Base64 and hex are representations of bounded bytes, never an assertion that another binary format was parsed or converted. `planConversion()` or a browser conversion record must never be shown as a desktop-app conversion, upload, or server action.
 
 `setLogoMetadata()` persists bounded rendering metadata only: preset or custom source selection, format, dimensions, fit, background color, and normalized crop. It does not decode, save, upload, convert, or export image bytes. A host that implements image selection and conversion must validate actual bytes and keep raw local assets out of exports, history, and telemetry.
 
@@ -206,13 +210,13 @@ Use `setCompletenessInventory(input)` for a complete authoritative replacement o
 
 ## Limits and unavailable capability boundary
 
-In addition to the limits documented above, the engine caps command-palette entries at 600, tab groups at 40, lock metadata at 250, TOTP metadata records at 250, schedules at 100, conversion jobs at 100, and notification actions at four per notification. The browser-local presentation-mode code must be 4–64 Unicode code points; its code value is never persisted, only its SHA-256 verifier and fresh 16-byte salt. Text fields are normalized to the documented per-field bounds before persistence.
+In addition to the limits documented above, the engine caps command-palette entries at 600, tab groups at 40, lock metadata at 250, TOTP metadata records at 250, schedules at 100, browser conversion history at 100, and notification actions at four per notification. The browser-local presentation-mode code must be 4–64 Unicode code points; its code value is never persisted, only its SHA-256 verifier and fresh 16-byte salt. Text fields are normalized to the documented per-field bounds before persistence.
 
 The following capabilities are intentionally unavailable from this file:
 
 - Server creation, configuration writes, EULA acceptance, dependency installation, Paper downloads, Spigot BuildTools execution, process control, RCON, plugin installation, filesystem browsing, and terminal commands.
 - Network requests, remote configuration, remote fonts, analytics, telemetry, cloud model services, non-loopback Ollama access, and a chat/status delivery bridge.
-- Real document, image, audio, video, archive, spreadsheet, code, or binary conversion.
+- PDF, image, audio, video, archive, and native-workbook conversion. The bounded browser-local text/structured-data/encoding routes above are the only exception; they do not create a general document, media, archive, or spreadsheet converter.
 - Raw password, token, TOTP secret, current TOTP code, or credential storage and display.
 - Browser-local data synchronization across browsers, accounts, devices, or desktop applications.
 

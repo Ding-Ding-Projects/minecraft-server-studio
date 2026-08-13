@@ -6,7 +6,7 @@
   }
 
   const STORAGE_KEY = "minecraft-server-studio.site.contract.v2";
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
   const LIMITS = Object.freeze({
     stateBytes: 1024 * 1024,
     notifications: 200,
@@ -20,6 +20,11 @@
     locks: 250,
     totpEntries: 250,
     conversionJobs: 100,
+    conversionInputBytes: 1024 * 1024,
+    conversionSniffBytes: 512,
+    conversionSelectionFiles: 12,
+    conversionSessionQueue: 24,
+    conversionOutputBytes: 2 * 1024 * 1024,
     commandPaletteEntries: 600,
     statusEvidence: 160,
     statusInteractions: 100,
@@ -46,20 +51,23 @@
   const SCHEDULE_SOURCES = Object.freeze(["local"]);
   const STATUS_STATES = Object.freeze(["idle", "running", "waiting", "blocked", "verified", "failed"]);
   const EVIDENCE_STATES = Object.freeze(["missing", "planned", "in-progress", "verified", "not-applicable"]);
+  const CONVERSION_STATUSES = Object.freeze(["planned", "queued", "ready", "converting", "converted", "download-requested", "unsupported", "unavailable", "cancelled", "failed", "removed"]);
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
   const SAFE_COLOR = /^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/;
   const BASE64_SALT = /^[A-Za-z0-9+/]{22}==$/;
   const BASE64_SHA256 = /^[A-Za-z0-9+/]{43}=$/;
 
   const FILE_ADAPTERS = Object.freeze([
-    { id: "documents-pdf", category: "Documents/PDF", label: "PDF tools", sourceFormats: ["application/pdf"], targetFormats: ["application/pdf"], bundled: false, enabled: false, reason: "No bundled offline PDF adapter is available in the static site." },
-    { id: "images", category: "Images", label: "Image conversion", sourceFormats: ["image/*"], targetFormats: ["image/png", "image/jpeg", "image/webp"], bundled: false, enabled: false, reason: "No bundled offline image adapter is available in the static site." },
-    { id: "audio", category: "Audio", label: "Audio conversion", sourceFormats: ["audio/*"], targetFormats: ["audio/wav", "audio/mpeg"], bundled: false, enabled: false, reason: "No bundled offline audio adapter is available in the static site." },
-    { id: "video", category: "Video", label: "Video conversion", sourceFormats: ["video/*"], targetFormats: ["video/mp4", "video/webm"], bundled: false, enabled: false, reason: "No bundled offline video adapter is available in the static site." },
-    { id: "archives", category: "Archives", label: "Archive conversion", sourceFormats: ["application/zip", "application/x-7z-compressed"], targetFormats: ["application/zip", "application/x-7z-compressed"], bundled: false, enabled: false, reason: "No bundled offline archive adapter is available in the static site." },
-    { id: "structured-data", category: "Structured Data/Spreadsheets", label: "Structured data conversion", sourceFormats: ["application/json", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"], targetFormats: ["application/json", "text/csv", "text/tab-separated-values"], bundled: false, enabled: false, reason: "No bundled offline structured-data adapter is available in the static site." },
-    { id: "code-text", category: "Code/Text", label: "Text conversion", sourceFormats: ["text/*"], targetFormats: ["text/plain", "text/markdown", "application/json"], bundled: false, enabled: false, reason: "No bundled offline code or text adapter is available in the static site." },
-    { id: "binary-encodings", category: "Binary Encodings", label: "Binary encoding conversion", sourceFormats: ["application/octet-stream"], targetFormats: ["application/octet-stream", "text/plain"], bundled: false, enabled: false, reason: "No bundled offline binary-encoding adapter is available in the static site." }
+    { id: "documents-pdf", category: "Documents/PDF", label: "PDF inspect and conversion", sourceFormats: ["PDF bytes"], targetFormats: ["PDF operations"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a PDF parser, renderer, or writer." },
+    { id: "images", category: "Images", label: "Image conversion", sourceFormats: ["Image bytes"], targetFormats: ["PNG, JPEG, WebP"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle an image decoder or encoder." },
+    { id: "audio", category: "Audio", label: "Audio conversion", sourceFormats: ["Audio bytes"], targetFormats: ["WAV, MP3"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle an audio decoder or encoder." },
+    { id: "video", category: "Video", label: "Video conversion", sourceFormats: ["Video bytes"], targetFormats: ["MP4, WebM"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a video decoder or encoder." },
+    { id: "archives", category: "Archives", label: "Archive conversion", sourceFormats: ["ZIP, 7z, RAR bytes"], targetFormats: ["Archive operations"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle an archive reader or writer." },
+    { id: "structured-spreadsheet", category: "Structured Data/Spreadsheets", label: "Workbook conversion", sourceFormats: ["Workbook container bytes"], targetFormats: ["Spreadsheet formats"], bundled: false, enabled: false, reason: "Unavailable: this static page does not bundle a workbook parser or writer." },
+    { id: "structured-utf8", category: "Structured Data/Spreadsheets", label: "UTF-8 JSON, CSV, and TSV", sourceFormats: ["UTF-8 JSON, CSV, TSV"], targetFormats: ["JSON, CSV, TSV, YAML-style text"], bundled: true, enabled: true, reason: "Available locally after byte inspection and bounded parsing." },
+    { id: "code-text-utf8", category: "Code/Text", label: "UTF-8 text", sourceFormats: ["UTF-8 text"], targetFormats: ["UTF-8 text"], bundled: true, enabled: true, reason: "Available locally after UTF-8 validation." },
+    { id: "binary-base64", category: "Binary Encodings", label: "Base64 encoding", sourceFormats: ["Bounded source bytes"], targetFormats: ["Base64 text"], bundled: true, enabled: true, reason: "Available locally; this is an encoding, not a media, archive, or PDF conversion." },
+    { id: "binary-hex", category: "Binary Encodings", label: "Hex encoding", sourceFormats: ["Bounded source bytes"], targetFormats: ["Hex text"], bundled: true, enabled: true, reason: "Available locally; this is an encoding, not a media, archive, or PDF conversion." }
   ]);
 
   const listeners = new Set();
@@ -122,6 +130,15 @@
   function safeColor(value, fallback) {
     const candidate = trimString(value, 9, "");
     return SAFE_COLOR.test(candidate) ? candidate.toLowerCase() : fallback;
+  }
+
+  function safeFileName(value, fallback) {
+    if (typeof value !== "string") {
+      return fallback;
+    }
+    const withoutControls = value.replace(/[\u0000-\u001f\u007f]/g, "");
+    const basename = withoutControls.split(/[\\/]/).pop().trim();
+    return basename.slice(0, 160) || fallback;
   }
 
   function hasUnsafeKeys(value) {
@@ -542,28 +559,47 @@
     };
   }
 
+  function normalizeConversionJob(raw) {
+    if (!isPlainObject(raw) || hasUnsafeKeys(raw)) {
+      return null;
+    }
+    const id = safeId(raw.id, "");
+    if (!id) {
+      return null;
+    }
+    const sourceName = safeFileName(raw.sourceName || raw.sourceLabel, "");
+    const sourceType = trimString(raw.sourceType || raw.detectedKind, 120, "unknown") || "unknown";
+    const targetType = trimString(raw.targetType || raw.targetFormat, 120, "unknown") || "unknown";
+    return {
+      id,
+      sourceName,
+      sourceType,
+      sourceBytes: boundedInteger(raw.sourceBytes, 0, 2 * 1024 * 1024 * 1024, 0),
+      detectedKind: trimString(raw.detectedKind, 120, sourceType) || sourceType,
+      category: trimString(raw.category, 120, "Unknown") || "Unknown",
+      targetType,
+      targetFormat: trimString(raw.targetFormat, 120, targetType) || targetType,
+      targetName: safeFileName(raw.targetName, ""),
+      status: raw.status === "downloaded" ? "download-requested" : enumValue(raw.status, CONVERSION_STATUSES, "queued"),
+      adapterId: safeId(raw.adapterId, ""),
+      createdAt: trimString(raw.createdAt, 48, now()),
+      updatedAt: trimString(raw.updatedAt, 48, trimString(raw.createdAt, 48, now())),
+      downloadRequestedAt: trimString(raw.downloadRequestedAt || raw.downloadedAt, 48, ""),
+      reason: boundedText(raw.reason, 600, "")
+    };
+  }
+
   function normalizeConversion(raw) {
     const value = isPlainObject(raw) && !hasUnsafeKeys(raw) ? raw : {};
     const jobs = [];
     const seen = new Set();
     (Array.isArray(value.jobs) ? value.jobs : []).some((job) => {
-      if (!isPlainObject(job) || hasUnsafeKeys(job)) {
+      const normalized = normalizeConversionJob(job);
+      if (!normalized || seen.has(normalized.id)) {
         return false;
       }
-      const id = safeId(job.id, "");
-      if (!id || seen.has(id)) {
-        return false;
-      }
-      seen.add(id);
-      jobs.push({
-        id,
-        sourceType: trimString(job.sourceType, 120, "unknown"),
-        targetType: trimString(job.targetType, 120, "unknown"),
-        status: enumValue(job.status, ["planned", "unavailable", "cancelled", "completed", "failed"], "planned"),
-        adapterId: safeId(job.adapterId, ""),
-        createdAt: trimString(job.createdAt, 48, now()),
-        reason: boundedText(job.reason, 600, "")
-      });
+      seen.add(normalized.id);
+      jobs.push(normalized);
       return jobs.length >= LIMITS.conversionJobs;
     });
     return { jobs };
@@ -1621,23 +1657,113 @@
     return FILE_ADAPTERS.map((adapter) => ({ id: adapter.id, category: adapter.category, label: adapter.label, enabled: adapter.enabled, bundled: adapter.bundled, reason: adapter.reason }));
   }
 
-  function planConversion(input) {
+  function conversionJobId(raw) {
+    return safeId(raw && raw.id, `conversion-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  }
+
+  function getBrowserConversionJobs() {
+    return clone(state.conversion.jobs);
+  }
+
+  function recordBrowserConversionJob(input) {
     const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
     const adapter = FILE_ADAPTERS.find((item) => item.id === safeId(raw.adapterId, ""));
-    const job = {
-      id: safeId(raw.id, `conversion-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
-      sourceType: trimString(raw.sourceType, 120, "unknown") || "unknown",
-      targetType: trimString(raw.targetType, 120, "unknown") || "unknown",
-      adapterId: adapter ? adapter.id : "",
-      status: adapter && adapter.enabled && adapter.bundled ? "planned" : "unavailable",
+    const sourceName = safeFileName(raw.sourceName || raw.sourceLabel, "");
+    if (!sourceName) {
+      return { ok: false, error: "A browser-local conversion record needs a source file name." };
+    }
+    const requestedStatus = enumValue(raw.status, CONVERSION_STATUSES, "queued");
+    const job = normalizeConversionJob({
+      id: conversionJobId(raw),
+      sourceName,
+      sourceType: trimString(raw.sourceType || raw.detectedKind, 120, "unknown") || "unknown",
+      sourceBytes: raw.sourceBytes,
+      detectedKind: trimString(raw.detectedKind, 120, raw.sourceType || "unknown") || "unknown",
+      category: trimString(raw.category, 120, adapter ? adapter.category : "Unknown") || "Unknown",
+      targetType: trimString(raw.targetType || raw.targetFormat, 120, "unknown") || "unknown",
+      targetFormat: trimString(raw.targetFormat, 120, raw.targetType || "unknown") || "unknown",
+      targetName: trimString(raw.targetName, 180, ""),
+      adapterId: adapter ? adapter.id : safeId(raw.adapterId, ""),
+      status: adapter && adapter.enabled && adapter.bundled ? requestedStatus : (raw.status ? requestedStatus : "unavailable"),
       createdAt: now(),
-      reason: adapter && adapter.enabled && adapter.bundled ? "Awaiting a host-owned local conversion." : (adapter ? adapter.reason : "No matching adapter is registered.")
-    };
+      updatedAt: now(),
+      reason: boundedText(raw.reason, 600, adapter && adapter.enabled && adapter.bundled ? "Queued in this browser; source bytes are not persisted." : (adapter ? adapter.reason : "No matching adapter is registered."))
+    });
+    if (!job) {
+      return { ok: false, error: "The browser-local conversion record could not be validated." };
+    }
+    const duplicate = state.conversion.jobs.some((item) => item.id === job.id);
+    if (duplicate) {
+      return { ok: false, error: "A browser-local conversion record already uses that identifier." };
+    }
     state.conversion.jobs.unshift(job);
     state.conversion.jobs = state.conversion.jobs.slice(0, LIMITS.conversionJobs);
-    writeAudit("Conversion planned", job.id, job.reason);
-    persist({ type: "conversion" });
-    return clone(job);
+    writeAudit("Browser-local conversion queued", job.id, job.reason);
+    persist({ type: "browser-conversion-recorded", jobId: job.id });
+    return { ok: true, job: clone(job) };
+  }
+
+  function updateBrowserConversionJob(id, patch) {
+    const jobId = safeId(id, "");
+    const index = state.conversion.jobs.findIndex((job) => job.id === jobId);
+    if (index < 0) {
+      return { ok: false, error: "The browser-local conversion record was not found." };
+    }
+    const raw = isPlainObject(patch) && !hasUnsafeKeys(patch) ? patch : {};
+    const previous = state.conversion.jobs[index];
+    const next = normalizeConversionJob(Object.assign({}, previous, {
+      sourceType: hasOwn(raw, "sourceType") ? raw.sourceType : previous.sourceType,
+      sourceBytes: hasOwn(raw, "sourceBytes") ? raw.sourceBytes : previous.sourceBytes,
+      detectedKind: hasOwn(raw, "detectedKind") ? raw.detectedKind : previous.detectedKind,
+      category: hasOwn(raw, "category") ? raw.category : previous.category,
+      targetType: hasOwn(raw, "targetType") ? raw.targetType : previous.targetType,
+      targetFormat: hasOwn(raw, "targetFormat") ? raw.targetFormat : previous.targetFormat,
+      targetName: hasOwn(raw, "targetName") ? raw.targetName : previous.targetName,
+      status: hasOwn(raw, "status") ? raw.status : previous.status,
+      adapterId: hasOwn(raw, "adapterId") ? raw.adapterId : previous.adapterId,
+      downloadRequestedAt: hasOwn(raw, "downloadRequestedAt") ? raw.downloadRequestedAt : previous.downloadRequestedAt,
+      reason: hasOwn(raw, "reason") ? raw.reason : previous.reason,
+      updatedAt: now()
+    }));
+    if (!next) {
+      return { ok: false, error: "The browser-local conversion update could not be validated." };
+    }
+    state.conversion.jobs[index] = next;
+    writeAudit("Browser-local conversion updated", next.id, next.reason || next.status);
+    persist({ type: "browser-conversion-updated", jobId: next.id });
+    return { ok: true, job: clone(next) };
+  }
+
+  function removeBrowserConversionJob(id) {
+    const jobId = safeId(id, "");
+    const index = state.conversion.jobs.findIndex((job) => job.id === jobId);
+    if (index < 0) {
+      return { ok: false, error: "The browser-local conversion record was not found." };
+    }
+    const removed = state.conversion.jobs.splice(index, 1)[0];
+    writeAudit("Browser-local conversion record removed", removed.id, "Only metadata was removed. No source or output file was changed.");
+    persist({ type: "browser-conversion-removed", jobId: removed.id });
+    return { ok: true, job: clone(removed) };
+  }
+
+  function planConversion(input) {
+    const raw = isPlainObject(input) && !hasUnsafeKeys(input) ? input : {};
+    const result = recordBrowserConversionJob(Object.assign({}, raw, {
+      sourceName: raw.sourceName || raw.sourceType || "planned-source",
+      status: raw.status || "planned"
+    }));
+    if (!result.ok) {
+      return {
+        id: "",
+        sourceType: trimString(raw.sourceType, 120, "unknown") || "unknown",
+        targetType: trimString(raw.targetType, 120, "unknown") || "unknown",
+        status: "failed",
+        adapterId: safeId(raw.adapterId, ""),
+        createdAt: now(),
+        reason: result.error
+      };
+    }
+    return result.job;
   }
 
   function setLogoMetadata(input) {
@@ -1929,6 +2055,10 @@
     applyPersonalVocabulary,
     getFileAdapters,
     getFileAdapterAvailability,
+    getBrowserConversionJobs,
+    recordBrowserConversionJob,
+    updateBrowserConversionJob,
+    removeBrowserConversionJob,
     planConversion,
     setLogoMetadata,
     createToyLock,

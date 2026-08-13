@@ -4,14 +4,14 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
   "use strict";
 
   /*
-   * Browser-local marketing interactions plus one explicit read-only Ollama
-   * observer. No request starts until a visitor chooses Refresh; that observer
-   * accepts only fixed-loopback version, installed-model, and running-model
-   * responses. No server control, installer action, credential storage, proxy,
-   * cloud fallback, model mutation, chat, or conversion occurs here. A
-   * user-selected personal-vocabulary JSON file is read locally only so the
-   * contract can validate and store its bounded payload in this browser's local
-   * storage.
+   * Browser-local marketing interactions plus two narrow exceptions: one
+   * visitor-triggered fixed-loopback Ollama observer and explicitly selected,
+   * bounded browser-local file conversions. No server control, installer action,
+   * credential storage, proxy, cloud fallback, model mutation, chat, upload, or
+   * remote conversion occurs here. The converter never persists source/output
+   * bytes or learns a browser download destination. A user-selected
+   * personal-vocabulary JSON file is also read locally only so the contract can
+   * validate and store its bounded payload in this browser's local storage.
    */
 
   var root = document.documentElement;
@@ -832,7 +832,7 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
     var candidates = options.candidates || function () { return []; };
     var globalResults = options.globalResults;
     var labelText = options.label || "this search";
-    var host = input.closest(".preview-search, .history-controls") || input.parentElement || scope;
+    var host = input.closest(".preview-search, .history-controls, .converter-category-search") || input.parentElement || scope;
     var existing = one('button[aria-label*="regular expression builder"]', host);
     var opener = existing || button(".*", function () {});
     opener.disabled = false;
@@ -1109,7 +1109,6 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
 
   function installCollapsibleLists() {
     makeListInteractive(one('[data-contract-hook="documentation-tabs"]'), "documentation articles");
-    makeListInteractive(one('[data-contract-hook="converter-adapter-catalog"]'), "adapter categories");
     makeListInteractive(one('[data-contract-hook="notification-history"]'), "notification examples");
   }
 
@@ -1123,50 +1122,783 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
   function installConverterPlanner() {
     var surface = one('[data-contract-surface="file-converter"]');
     var picker = one('[data-contract-hook="converter-file-picker"] input[type="file"]', surface);
-    if (!surface || !picker || one("[data-mss-converter-plan]", surface)) return;
-    var plan = made("section");
-    plan.setAttribute("data-mss-converter-plan", "true");
-    var heading = made("h3");
-    heading.textContent = "Browser-local conversion planner";
-    var note = made("p");
-    note.textContent = "This planner only records the browser-provided file label and your intended category for this open tab. It does not inspect bytes, select a real adapter, convert a file, upload a file, or write output.";
-    var categoryLabel = made("label");
-    categoryLabel.textContent = "Plan category";
-    var category = made("select");
-    ["Documents / PDF", "Images", "Audio", "Video", "Archives", "Structured data", "Code / text", "Binary encodings"].forEach(function (name) {
-      var option = document.createElement("option");
-      option.textContent = name;
-      category.appendChild(option);
+    var queueHost = one("[data-mss-converter-queue]", surface);
+    var catalogHost = one("[data-mss-converter-catalog]", surface);
+    var historyHost = one("[data-mss-converter-history]", surface);
+    var statusHost = one("[data-mss-converter-status]", surface);
+    var queueCountHost = one("[data-mss-converter-queue-count]", surface);
+    var clearHistory = one("[data-mss-converter-clear-history]", surface);
+    if (!surface || !picker || !queueHost || !catalogHost || !historyHost || one("[data-mss-converter-ready]", surface)) return;
+    surface.setAttribute("data-mss-converter-ready", "true");
+
+    var limits = contract && contract.limits ? contract.limits : {};
+    var inputLimit = Number(limits.conversionInputBytes) || (1024 * 1024);
+    var sniffLimit = Number(limits.conversionSniffBytes) || 512;
+    var selectionLimit = Number(limits.conversionSelectionFiles) || 12;
+    var sessionLimit = Number(limits.conversionSessionQueue) || 24;
+    var outputLimit = Number(limits.conversionOutputBytes) || (2 * 1024 * 1024);
+    var rowLimit = 5000;
+    var columnLimit = 80;
+    var depthLimit = 16;
+    var catalogCategories = ["Documents/PDF", "Images", "Audio", "Video", "Archives", "Structured Data/Spreadsheets", "Code/Text", "Binary Encodings"];
+    var queue = [];
+    var selecting = false;
+
+    var targetDefinitions = Object.freeze({
+      text: { id: "text", label: "UTF-8 text", targetType: "text/plain", targetFormat: "UTF-8 text", extension: "txt", mime: "text/plain;charset=utf-8", adapterId: "code-text-utf8" },
+      json: { id: "json", label: "JSON", targetType: "application/json", targetFormat: "JSON", extension: "json", mime: "application/json;charset=utf-8", adapterId: "structured-utf8" },
+      csv: { id: "csv", label: "CSV", targetType: "text/csv", targetFormat: "CSV", extension: "csv", mime: "text/csv;charset=utf-8", adapterId: "structured-utf8" },
+      tsv: { id: "tsv", label: "TSV", targetType: "text/tab-separated-values", targetFormat: "TSV", extension: "tsv", mime: "text/tab-separated-values;charset=utf-8", adapterId: "structured-utf8" },
+      yaml: { id: "yaml", label: "YAML-style text", targetType: "text/yaml", targetFormat: "YAML-style text", extension: "yaml", mime: "text/yaml;charset=utf-8", adapterId: "structured-utf8" },
+      base64: { id: "base64", label: "Base64 text (encoding)", targetType: "text/plain", targetFormat: "Base64 text", extension: "base64.txt", mime: "text/plain;charset=utf-8", adapterId: "binary-base64" },
+      hex: { id: "hex", label: "Hex text (encoding)", targetType: "text/plain", targetFormat: "Hex text", extension: "hex.txt", mime: "text/plain;charset=utf-8", adapterId: "binary-hex" }
     });
-    categoryLabel.appendChild(category);
-    var targetLabel = made("label");
-    targetLabel.textContent = "Intended output note";
-    var target = made("select");
-    ["Choose later in the desktop app", "Review compatible adapters locally", "Keep source unchanged"].forEach(function (name) {
-      var option = document.createElement("option");
-      option.textContent = name;
-      target.appendChild(option);
-    });
-    targetLabel.appendChild(target);
-    var summary = made("output");
-    summary.setAttribute("aria-live", "polite");
-    function render() {
-      var file = picker.files && picker.files[0];
-      summary.textContent = (file ? "Selected in this browser only: " + file.name + " (" + humanSize(file.size) + "). " : "No source file selected. ") + "Plan: " + category.value + ". " + target.value + ".";
+
+    function setStatus(message) {
+      if (statusHost) statusHost.textContent = message;
     }
-    picker.addEventListener("change", function () {
-      render();
-      notify("info", "A local file selection is visible only to this browser page. No file bytes were read, uploaded, converted, or retained.");
+
+    function safeFileLabel(value) {
+      var text = String(value || "").replace(/[\u0000-\u001f\u007f]/g, "");
+      var parts = text.split(/[\\/]/);
+      return (parts[parts.length - 1] || "local-file").trim().slice(0, 160) || "local-file";
+    }
+
+    function currentAdapters() {
+      if (hasContractMethod("getFileAdapters")) {
+        var result = safely(function () { return contract.getFileAdapters(); }, []);
+        if (Array.isArray(result)) return result;
+      }
+      return [];
+    }
+
+    function adapterById(id) {
+      return currentAdapters().find(function (adapter) { return adapter.id === id; }) || null;
+    }
+
+    function adapterAvailable(id) {
+      var adapter = adapterById(id);
+      return Boolean(adapter && adapter.enabled === true && adapter.bundled === true);
+    }
+
+    function sourceBytes(file) {
+      return Number(file && file.size) || 0;
+    }
+
+    function hasPrefix(bytes, prefix, offset) {
+      var start = offset || 0;
+      if (!bytes || bytes.length < start + prefix.length) return false;
+      return prefix.every(function (value, index) { return bytes[start + index] === value; });
+    }
+
+    function ascii(bytes, start, length) {
+      var result = "";
+      var stop = Math.min(bytes.length, start + length);
+      for (var index = start; index < stop; index += 1) result += String.fromCharCode(bytes[index]);
+      return result;
+    }
+
+    function decodeUtf8(bytes) {
+      if (typeof window.TextDecoder !== "function") throw new Error("Text decoding is unavailable in this browser.");
+      return new window.TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    }
+
+    function looksLikeText(text) {
+      if (text.indexOf("\u0000") !== -1) return false;
+      var controls = 0;
+      for (var index = 0; index < text.length; index += 1) {
+        var code = text.charCodeAt(index);
+        if (code < 32 && code !== 9 && code !== 10 && code !== 13) controls += 1;
+      }
+      return !text.length || controls / text.length < 0.02;
+    }
+
+    function nativeClassification(kind, category, reason) {
+      return { kind: kind, sourceType: kind, category: category, mode: "native-unavailable", reason: reason };
+    }
+
+    function classifySniff(bytes) {
+      if (hasPrefix(bytes, [37, 80, 68, 70, 45])) return nativeClassification("PDF document", "Documents/PDF", "PDF conversion is unavailable: this static page does not bundle a PDF parser, renderer, or writer. Base64 or hex encoding remains available.");
+      if (hasPrefix(bytes, [137, 80, 78, 71, 13, 10, 26, 10]) || hasPrefix(bytes, [255, 216, 255]) || ascii(bytes, 0, 6) === "GIF87a" || ascii(bytes, 0, 6) === "GIF89a" || (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP")) return nativeClassification("Image bytes", "Images", "Image conversion is unavailable: this static page does not bundle an image decoder or encoder. Base64 or hex encoding remains available.");
+      if ((ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WAVE") || ascii(bytes, 0, 3) === "ID3" || ascii(bytes, 0, 4) === "OggS" || ascii(bytes, 0, 4) === "fLaC" || hasPrefix(bytes, [255, 251]) || hasPrefix(bytes, [255, 243])) return nativeClassification("Audio bytes", "Audio", "Audio conversion is unavailable: this static page does not bundle an audio decoder or encoder. Base64 or hex encoding remains available.");
+      if (ascii(bytes, 4, 4) === "ftyp" || hasPrefix(bytes, [26, 69, 223, 163])) return nativeClassification("Video bytes", "Video", "Video conversion is unavailable: this static page does not bundle a video decoder or encoder. Base64 or hex encoding remains available.");
+      if (hasPrefix(bytes, [80, 75, 3, 4]) || hasPrefix(bytes, [80, 75, 5, 6]) || hasPrefix(bytes, [80, 75, 7, 8]) || hasPrefix(bytes, [55, 122, 188, 175, 39, 28]) || ascii(bytes, 0, 7) === "Rar!\x1A\x07") return nativeClassification("Archive container bytes", "Archives", "Archive conversion is unavailable: this static page does not bundle an archive reader or writer. Base64 or hex encoding remains available.");
+      if (hasPrefix(bytes, [208, 207, 17, 224, 161, 177, 26, 225])) return nativeClassification("Legacy workbook container bytes", "Structured Data/Spreadsheets", "Native workbook conversion is unavailable: this static page does not bundle a workbook parser or writer. Base64 or hex encoding remains available.");
+      try {
+        var decoded = decodeUtf8(bytes);
+        if (looksLikeText(decoded)) return { kind: "UTF-8 text candidate", sourceType: "UTF-8 text", category: "Code/Text", mode: "text-candidate", reason: "The first " + bytes.length + " bytes look like UTF-8 text. Full bounded local inspection determines whether structured routes are available." };
+      } catch (_) {
+        // The binary-encoding route remains the honest fallback.
+      }
+      return { kind: "Unknown binary bytes", sourceType: "binary", category: "Binary Encodings", mode: "binary", reason: "The byte sniff found no bundled native converter. Base64 or hex encoding is available locally." };
+    }
+
+    function valueWithinBounds(value, depth, tracker) {
+      if (depth > depthLimit || tracker.count > rowLimit * columnLimit) return false;
+      if (value === null || typeof value === "boolean" || typeof value === "number") return Number.isFinite(value) || value === null;
+      if (typeof value === "string") return value.length <= 32768;
+      if (Array.isArray(value)) {
+        tracker.count += value.length;
+        return value.every(function (entry) { return valueWithinBounds(entry, depth + 1, tracker); });
+      }
+      if (value && Object.getPrototypeOf(value) === Object.prototype) {
+        var keys = Object.keys(value);
+        tracker.count += keys.length;
+        return keys.length <= columnLimit && keys.every(function (key) { return key.length <= 160 && valueWithinBounds(value[key], depth + 1, tracker); });
+      }
+      return false;
+    }
+
+    function parseDelimited(text, delimiter) {
+      var rows = [];
+      var row = [];
+      var cell = "";
+      var quoted = false;
+      var afterQuote = false;
+      function pushCell() {
+        if (cell.length > 32768) throw new Error("A delimited cell exceeds the local safety limit.");
+        row.push(cell);
+        cell = "";
+      }
+      function pushRow() {
+        pushCell();
+        if (row.length > columnLimit) throw new Error("A delimited row exceeds the local column limit.");
+        if (rows.length >= rowLimit) throw new Error("The delimited file exceeds the local row limit.");
+        rows.push(row);
+        row = [];
+      }
+      for (var index = 0; index < text.length; index += 1) {
+        var character = text[index];
+        if (quoted) {
+          if (character === '"') {
+            if (text[index + 1] === '"') {
+              cell += '"';
+              index += 1;
+            } else {
+              quoted = false;
+              afterQuote = true;
+            }
+          } else {
+            cell += character;
+          }
+          continue;
+        }
+        if (afterQuote) {
+          if (character === delimiter) {
+            pushCell();
+            afterQuote = false;
+          } else if (character === "\n" || character === "\r") {
+            if (character === "\r" && text[index + 1] === "\n") index += 1;
+            pushRow();
+            afterQuote = false;
+          } else if (character !== " " && character !== "\t") {
+            throw new Error("A quoted delimited field has unexpected content after its closing quote.");
+          }
+          continue;
+        }
+        if (character === '"') {
+          if (cell.length) throw new Error("A quote may start only at the beginning of a delimited field.");
+          quoted = true;
+        } else if (character === delimiter) {
+          pushCell();
+        } else if (character === "\n" || character === "\r") {
+          if (character === "\r" && text[index + 1] === "\n") index += 1;
+          pushRow();
+        } else {
+          cell += character;
+        }
+      }
+      if (quoted) throw new Error("The delimited file ends inside a quoted field.");
+      if (cell.length || row.length || text.length === 0 || afterQuote) pushRow();
+      while (rows.length && rows[rows.length - 1].every(function (entry) { return entry === ""; })) rows.pop();
+      if (!rows.length) return { headers: [], records: [] };
+      var rawHeaders = rows.shift();
+      if (!rawHeaders.length) throw new Error("The delimited file has no columns.");
+      var seen = Object.create(null);
+      var headers = rawHeaders.map(function (header, column) {
+        var base = String(header || "").trim().slice(0, 160) || "column" + (column + 1);
+        seen[base] = (seen[base] || 0) + 1;
+        return seen[base] === 1 ? base : base + "_" + seen[base];
+      });
+      var records = rows.map(function (cells) {
+        if (cells.length > headers.length) throw new Error("A delimited row has more values than the header row, so no values were dropped.");
+        var record = {};
+        headers.forEach(function (header, column) { record[header] = cells[column] == null ? "" : cells[column]; });
+        return record;
+      });
+      return { headers: headers, records: records };
+    }
+
+    function likelyDelimited(text, delimiter) {
+      var lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(function (line) { return line.trim().length; });
+      return lines.length >= 2 && lines[0].indexOf(delimiter) !== -1;
+    }
+
+    function classifyText(text) {
+      var compact = text.replace(/^\uFEFF/, "").trim();
+      if (compact && (compact[0] === "{" || compact[0] === "[")) {
+        try {
+          var json = JSON.parse(compact);
+          if (valueWithinBounds(json, 0, { count: 0 })) return { kind: "JSON", sourceType: "UTF-8 JSON", category: "Structured Data/Spreadsheets", mode: "structured-json", value: json, reason: "Validated JSON is available for bounded local structured-data conversion." };
+        } catch (_) {
+          // Continue as text; an invalid JSON-looking file is not treated as structured data.
+        }
+      }
+      if (likelyDelimited(text, ",")) {
+        try {
+          var csv = parseDelimited(text, ",");
+          return { kind: "CSV", sourceType: "UTF-8 CSV", category: "Structured Data/Spreadsheets", mode: "structured-delimited", delimiter: ",", headers: csv.headers, records: csv.records, reason: "Validated CSV is available for bounded local structured-data conversion." };
+        } catch (_) {
+          // A malformed CSV remains text rather than a guessed table.
+        }
+      }
+      if (likelyDelimited(text, "\t")) {
+        try {
+          var tsv = parseDelimited(text, "\t");
+          return { kind: "TSV", sourceType: "UTF-8 TSV", category: "Structured Data/Spreadsheets", mode: "structured-delimited", delimiter: "\t", headers: tsv.headers, records: tsv.records, reason: "Validated TSV is available for bounded local structured-data conversion." };
+        } catch (_) {
+          // A malformed TSV remains text rather than a guessed table.
+        }
+      }
+      return { kind: "UTF-8 text", sourceType: "UTF-8 text", category: "Code/Text", mode: "text", reason: "Validated UTF-8 text is available for a local text-to-text conversion." };
+    }
+
+    function inspectionFromBytes(bytes, sniff) {
+      if (sniff.mode === "native-unavailable" || sniff.mode === "binary") return sniff;
+      try {
+        var text = decodeUtf8(bytes);
+        if (!looksLikeText(text)) return { kind: "Unknown binary bytes", sourceType: "binary", category: "Binary Encodings", mode: "binary", reason: "Full bounded inspection found binary control bytes. Base64 or hex encoding is available locally." };
+        return classifyText(text);
+      } catch (_) {
+        return { kind: "Unknown binary bytes", sourceType: "binary", category: "Binary Encodings", mode: "binary", reason: "Full bounded inspection could not validate UTF-8 text. Base64 or hex encoding is available locally." };
+      }
+    }
+
+    function targetsFor(inspection) {
+      var binary = [targetDefinitions.base64, targetDefinitions.hex].filter(function (target) { return adapterAvailable(target.adapterId); });
+      if (!inspection) return [];
+      if (inspection.mode === "structured-json" || inspection.mode === "structured-delimited") return [targetDefinitions.json, targetDefinitions.csv, targetDefinitions.tsv, targetDefinitions.yaml].filter(function (target) { return adapterAvailable(target.adapterId); }).concat(binary);
+      if (inspection.mode === "text") return [targetDefinitions.text].filter(function (target) { return adapterAvailable(target.adapterId); }).concat(binary);
+      return binary;
+    }
+
+    function displayStatus(status) {
+      var labels = {
+        queued: "queued",
+        ready: "ready",
+        converting: "converting locally",
+        converted: "output ready",
+        "download-requested": "download requested",
+        unsupported: "unsupported",
+        unavailable: "unavailable",
+        failed: "not converted"
+      };
+      return labels[status] || status || "queued";
+    }
+
+    function targetNameFor(item, target) {
+      var name = safeFileLabel(item.sourceName || "converted-file");
+      var dot = name.lastIndexOf(".");
+      var stem = dot > 0 ? name.slice(0, dot) : name;
+      return (stem || "converted-file").slice(0, 120) + "." + target.extension;
+    }
+
+    function textByteLength(value) {
+      if (typeof window.TextEncoder === "function") return new window.TextEncoder().encode(value).byteLength;
+      return new Blob([value]).size;
+    }
+
+    function bytesToBase64(bytes) {
+      var chunks = [];
+      for (var offset = 0; offset < bytes.length; offset += 32768) {
+        var part = bytes.subarray(offset, Math.min(bytes.length, offset + 32768));
+        var text = "";
+        for (var index = 0; index < part.length; index += 1) text += String.fromCharCode(part[index]);
+        chunks.push(text);
+      }
+      return window.btoa(chunks.join(""));
+    }
+
+    function bytesToHex(bytes) {
+      var pieces = new Array(bytes.length);
+      for (var index = 0; index < bytes.length; index += 1) pieces[index] = bytes[index].toString(16).padStart(2, "0");
+      return pieces.join("");
+    }
+
+    function scalarForTable(value) {
+      if (value === null) return "";
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+      throw new Error("Tabular conversion is available only for arrays of records with scalar values, so no nested value was flattened or dropped.");
+    }
+
+    function recordsFromJson(value) {
+      if (!Array.isArray(value) || value.length > rowLimit) throw new Error("CSV and TSV output requires a bounded top-level JSON array of records.");
+      var keys = [];
+      var seen = Object.create(null);
+      value.forEach(function (entry) {
+        if (!entry || Object.getPrototypeOf(entry) !== Object.prototype) throw new Error("CSV and TSV output requires each JSON array entry to be a record object.");
+        Object.keys(entry).forEach(function (key) {
+          if (!seen[key]) {
+            if (keys.length >= columnLimit) throw new Error("The JSON records exceed the local column limit.");
+            seen[key] = true;
+            keys.push(key);
+          }
+        });
+      });
+      value.forEach(function (entry) { keys.forEach(function (key) { scalarForTable(Object.prototype.hasOwnProperty.call(entry, key) ? entry[key] : null); }); });
+      return { headers: keys, records: value };
+    }
+
+    function escapeDelimited(value) {
+      var text = String(value == null ? "" : value);
+      return /["\n\r,\t]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+    }
+
+    function tableToDelimited(table, delimiter) {
+      if (!table.headers.length) return "";
+      var lines = [table.headers.map(escapeDelimited).join(delimiter)];
+      table.records.forEach(function (record) {
+        lines.push(table.headers.map(function (header) { return escapeDelimited(scalarForTable(Object.prototype.hasOwnProperty.call(record, header) ? record[header] : null)); }).join(delimiter));
+      });
+      return lines.join("\r\n") + "\r\n";
+    }
+
+    function yamlScalar(value) {
+      if (value === null) return "null";
+      if (typeof value === "boolean" || typeof value === "number") return String(value);
+      if (typeof value === "string") return JSON.stringify(value);
+      throw new Error("YAML-style export cannot silently flatten a nested value at this position.");
+    }
+
+    function yamlStyle(value, depth, indent) {
+      if (depth > depthLimit) throw new Error("YAML-style export exceeds the local nesting limit.");
+      var padding = new Array(indent + 1).join(" ");
+      if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") return yamlScalar(value);
+      if (Array.isArray(value)) {
+        if (!value.length) return "[]";
+        return value.map(function (entry) {
+          if (entry === null || typeof entry === "boolean" || typeof entry === "number" || typeof entry === "string") return padding + "- " + yamlScalar(entry);
+          return padding + "-\n" + yamlStyle(entry, depth + 1, indent + 2);
+        }).join("\n");
+      }
+      if (value && Object.getPrototypeOf(value) === Object.prototype) {
+        var keys = Object.keys(value);
+        if (!keys.length) return "{}";
+        return keys.map(function (key) {
+          var entry = value[key];
+          var quotedKey = JSON.stringify(key);
+          if (entry === null || typeof entry === "boolean" || typeof entry === "number" || typeof entry === "string") return padding + quotedKey + ": " + yamlScalar(entry);
+          return padding + quotedKey + ":\n" + yamlStyle(entry, depth + 1, indent + 2);
+        }).join("\n");
+      }
+      throw new Error("YAML-style export received an unsupported value.");
+    }
+
+    function outputFrom(item, target, bytes) {
+      if (target.id === "base64") return bytesToBase64(bytes);
+      if (target.id === "hex") return bytesToHex(bytes);
+      var text = decodeUtf8(bytes);
+      if (!looksLikeText(text)) throw new Error("The selected output needs valid UTF-8 text, but the source contains binary control bytes.");
+      var inspection = inspectionFromBytes(bytes, item.sniff);
+      if (target.id === "text") {
+        if (inspection.mode !== "text") throw new Error("Plain UTF-8 text output is available only after the source is validated as text.");
+        return text;
+      }
+      if (inspection.mode !== "structured-json" && inspection.mode !== "structured-delimited") throw new Error("Structured output is available only for validated JSON, CSV, or TSV; the source was left unchanged.");
+      var value = inspection.mode === "structured-json" ? inspection.value : inspection.records;
+      if (target.id === "json") return JSON.stringify(value, null, 2) + "\n";
+      if (target.id === "yaml") return yamlStyle(value, 0, 0) + "\n";
+      var table = inspection.mode === "structured-json" ? recordsFromJson(inspection.value) : { headers: inspection.headers, records: inspection.records };
+      return tableToDelimited(table, target.id === "tsv" ? "\t" : ",");
+    }
+
+    function updateRecord(item, patch) {
+      if (!item.jobId || !hasContractMethod("updateBrowserConversionJob")) return;
+      safely(function () { contract.updateBrowserConversionJob(item.jobId, patch); });
+    }
+
+    function recordItem(item) {
+      if (!hasContractMethod("recordBrowserConversionJob")) return;
+      var result = safely(function () {
+        return contract.recordBrowserConversionJob({
+          sourceName: item.sourceName,
+          sourceType: item.sniff.sourceType,
+          sourceBytes: item.sourceBytes,
+          detectedKind: item.sniff.kind,
+          category: item.sniff.category,
+          targetType: "",
+          targetFormat: "",
+          targetName: "",
+          status: item.status,
+          adapterId: "",
+          reason: item.reason
+        });
+      }, null);
+      if (result && result.ok && result.job) item.jobId = result.job.id;
+    }
+
+    function releaseOutput(item) {
+      if (item.output && item.output.url) safely(function () { window.URL.revokeObjectURL(item.output.url); });
+      item.output = null;
+    }
+
+    function renderQueue() {
+      queueHost.replaceChildren();
+      if (queueCountHost) queueCountHost.textContent = queue.length + " active file" + (queue.length === 1 ? "" : "s");
+      if (!queue.length) {
+        var empty = made("p");
+        empty.className = "converter-empty";
+        empty.textContent = "No source file is active. Choose a local file to create a bounded browser-only queue entry.";
+        queueHost.appendChild(empty);
+        return;
+      }
+      var list = made("ol");
+      list.className = "converter-job-list";
+      queue.forEach(function (item) {
+        var row = made("li");
+        row.className = "converter-job";
+        var header = made("div");
+        header.className = "converter-job-header";
+        var title = made("div");
+        var strong = made("strong");
+        strong.textContent = item.sourceName;
+        var metadata = made("span");
+        metadata.className = "converter-job-meta";
+        metadata.textContent = humanSize(item.sourceBytes) + " · " + item.inspection.kind + " · " + item.inspection.category;
+        title.append(strong, metadata);
+        var stateBadge = made("span");
+        stateBadge.className = "converter-state";
+        stateBadge.setAttribute("data-state", item.status);
+        stateBadge.textContent = displayStatus(item.status);
+        header.append(title, stateBadge);
+        row.appendChild(header);
+
+        var controls = made("div");
+        controls.className = "converter-job-controls";
+        var targetLabel = made("label");
+        targetLabel.textContent = "Local output";
+        var target = made("select");
+        var options = targetsFor(item.inspection);
+        if (!options.length) {
+          var pending = made("option");
+          pending.value = "";
+          pending.textContent = item.status === "unsupported" ? "No safe output for this queue entry" : "Inspecting local compatibility…";
+          target.appendChild(pending);
+          target.disabled = true;
+        } else {
+          options.forEach(function (definition) {
+            var option = made("option");
+            option.value = definition.id;
+            option.textContent = definition.label;
+            target.appendChild(option);
+          });
+          if (!item.targetId || !options.some(function (definition) { return definition.id === item.targetId; })) item.targetId = options[0].id;
+          target.value = item.targetId;
+          target.disabled = item.busy || item.status === "unsupported";
+        }
+        target.addEventListener("change", function () {
+          item.targetId = target.value;
+          releaseOutput(item);
+          var definition = targetDefinitions[item.targetId];
+          item.status = "ready";
+          item.reason = "Ready for an explicit browser-local " + definition.label + " conversion. Source bytes are not persisted.";
+          updateRecord(item, { targetType: definition.targetType, targetFormat: definition.targetFormat, targetName: targetNameFor(item, definition), status: item.status, adapterId: definition.adapterId, reason: item.reason });
+          renderQueue();
+          renderConverterHistory();
+        });
+        targetLabel.appendChild(target);
+        var convert = button(item.output ? "Re-create output" : "Create local output", function () { convertItem(item); });
+        convert.disabled = !options.length || item.busy || item.status === "unsupported";
+        var remove = button("Remove active file", function () {
+          releaseOutput(item);
+          queue = queue.filter(function (entry) { return entry !== item; });
+          item.file = null;
+          setStatus("Removed an active source from memory. Its metadata-only record remains in browser-local history until you remove that record.");
+          renderQueue();
+        });
+        controls.append(targetLabel, convert, remove);
+        row.appendChild(controls);
+        var reason = made("p");
+        reason.className = "converter-job-reason";
+        reason.textContent = item.reason;
+        row.appendChild(reason);
+        if (item.output && item.output.preview) {
+          var preview = made("pre");
+          preview.className = "converter-preview";
+          preview.setAttribute("aria-label", "In-memory output preview; it is not stored in history");
+          preview.textContent = item.output.preview;
+          row.appendChild(preview);
+          var download = button("Request browser download", function () { requestDownload(item); });
+          download.setAttribute("aria-label", "Request a browser download for " + item.output.name);
+          row.appendChild(download);
+        }
+        list.appendChild(row);
+      });
+      queueHost.appendChild(list);
+    }
+
+    function renderCatalog() {
+      catalogHost.replaceChildren();
+      var adapters = currentAdapters();
+      var categories = made("div");
+      categories.className = "converter-category-list";
+      catalogCategories.forEach(function (categoryName) {
+        var details = made("details");
+        details.className = "converter-category";
+        details.open = true;
+        var summary = made("summary");
+        var inCategory = adapters.filter(function (adapter) { return adapter.category === categoryName; });
+        var enabledCount = inCategory.filter(function (adapter) { return adapter.enabled && adapter.bundled; }).length;
+        summary.textContent = categoryName;
+        var compact = made("span");
+        compact.textContent = enabledCount + " available · " + (inCategory.length - enabledCount) + " unavailable";
+        summary.appendChild(compact);
+        var search = made("div");
+        search.className = "converter-category-search";
+        var label = made("label");
+        label.textContent = "Filter " + categoryName;
+        var input = made("input");
+        input.type = "search";
+        input.placeholder = "Search this category";
+        label.appendChild(input);
+        var builder = button(".*", function () {});
+        builder.setAttribute("aria-label", "Open regular expression builder for " + categoryName + " adapters");
+        search.append(label, builder);
+        var list = made("ul");
+        list.className = "converter-adapter-list";
+        if (!inCategory.length) {
+          var absent = made("li");
+          absent.className = "converter-adapter";
+          absent.textContent = "No adapter registry entry is available for this category.";
+          list.appendChild(absent);
+        } else {
+          inCategory.forEach(function (adapter) {
+            var entry = made("li");
+            entry.className = "converter-adapter";
+            entry.setAttribute("data-mss-converter-adapter", "true");
+            entry.setAttribute("data-enabled", String(Boolean(adapter.enabled && adapter.bundled)));
+            var title = made("strong");
+            title.textContent = adapter.label;
+            var formats = made("span");
+            formats.textContent = "Source: " + adapter.sourceFormats.join(", ") + " → Output: " + adapter.targetFormats.join(", ");
+            var reason = made("em");
+            reason.textContent = adapter.reason;
+            var badge = made("span");
+            badge.className = "converter-adapter-badge";
+            badge.textContent = adapter.enabled && adapter.bundled ? "Available locally" : "Unavailable";
+            entry.append(title, formats, reason, badge);
+            list.appendChild(entry);
+          });
+        }
+        details.append(summary, search, list);
+        categories.appendChild(details);
+        makeRegexBuilder(input, {
+          label: categoryName + " adapters",
+          scope: details,
+          candidates: function () { return all("[data-mss-converter-adapter]", list); }
+        });
+      });
+      catalogHost.appendChild(categories);
+    }
+
+    function renderConverterHistory() {
+      historyHost.replaceChildren();
+      var records = hasContractMethod("getBrowserConversionJobs") ? safely(function () { return contract.getBrowserConversionJobs(); }, []) : [];
+      if (!Array.isArray(records) || !records.length) {
+        var empty = made("p");
+        empty.className = "converter-empty";
+        empty.textContent = "No conversion metadata has been recorded in this browser.";
+        historyHost.appendChild(empty);
+        return;
+      }
+      var list = made("ol");
+      list.className = "converter-history-list";
+      records.forEach(function (record) {
+        var entry = made("li");
+        entry.className = "converter-history-item";
+        var copy = made("div");
+        var title = made("strong");
+        title.textContent = safeFileLabel(record.sourceName || "local-file") + " · " + displayStatus(record.status);
+        var detail = made("span");
+        detail.textContent = humanSize(record.sourceBytes) + " · " + (record.detectedKind || record.sourceType || "unknown") + " · " + (record.targetFormat || "no output selected") + ". " + (record.reason || "No additional detail.");
+        copy.append(title, detail);
+        var remove = button("Remove metadata", function () {
+          if (!window.confirm("Remove this browser-local conversion metadata record? Source files, output files, and browser downloads are not changed.")) return;
+          if (hasContractMethod("removeBrowserConversionJob")) safely(function () { contract.removeBrowserConversionJob(record.id); });
+          renderConverterHistory();
+          setStatus("A browser-local metadata record was removed. No source or output file changed.");
+        });
+        remove.setAttribute("aria-label", "Remove browser-local metadata for " + safeFileLabel(record.sourceName || "local-file"));
+        entry.append(copy, remove);
+        list.appendChild(entry);
+      });
+      historyHost.appendChild(list);
+    }
+
+    async function inspectItem(item) {
+      if (!item.file || item.busy || item.status === "unsupported") return;
+      item.busy = true;
+      item.status = "converting";
+      item.reason = "Inspecting this selected file locally within the 1 MiB bound.";
+      updateRecord(item, { status: item.status, reason: item.reason });
+      renderQueue();
+      try {
+        var buffer = await item.file.arrayBuffer();
+        if (buffer.byteLength > inputLimit) throw new Error("The selected file exceeds the 1 MiB local input bound.");
+        item.inspection = inspectionFromBytes(new Uint8Array(buffer), item.sniff);
+        var targets = targetsFor(item.inspection);
+        item.targetId = targets.length ? targets[0].id : "";
+        item.status = targets.length ? "ready" : "unavailable";
+        item.reason = item.inspection.reason;
+        var target = item.targetId ? targetDefinitions[item.targetId] : null;
+        updateRecord(item, { sourceType: item.inspection.sourceType, sourceBytes: item.sourceBytes, detectedKind: item.inspection.kind, category: item.inspection.category, targetType: target ? target.targetType : "", targetFormat: target ? target.targetFormat : "", targetName: target ? targetNameFor(item, target) : "", adapterId: target ? target.adapterId : "", status: item.status, reason: item.reason });
+      } catch (_) {
+        item.status = "unsupported";
+        item.inspection = { kind: "Unreadable local source", sourceType: "unknown", category: "Binary Encodings", mode: "binary", reason: "This page could not inspect the selected file within the local safety bounds. No source bytes were retained; Base64 and hex were not offered without a successful bounded read." };
+        item.reason = item.inspection.reason;
+        updateRecord(item, { status: item.status, detectedKind: item.inspection.kind, category: item.inspection.category, reason: item.reason });
+      } finally {
+        item.busy = false;
+        renderQueue();
+        renderConverterHistory();
+      }
+    }
+
+    async function convertItem(item) {
+      var target = targetDefinitions[item.targetId];
+      if (!item.file || !target || item.busy) return;
+      item.busy = true;
+      releaseOutput(item);
+      item.status = "converting";
+      item.reason = "Creating a bounded browser-local output. Nothing is uploaded or written until you request a browser download.";
+      updateRecord(item, { status: item.status, targetType: target.targetType, targetFormat: target.targetFormat, targetName: targetNameFor(item, target), adapterId: target.adapterId, reason: item.reason });
+      renderQueue();
+      try {
+        var buffer = await item.file.arrayBuffer();
+        if (buffer.byteLength > inputLimit) throw new Error("The source file exceeds the 1 MiB local input bound.");
+        var bytes = new Uint8Array(buffer);
+        var output = outputFrom(item, target, bytes);
+        if (textByteLength(output) > outputLimit) throw new Error("The converted output exceeds the 2 MiB local output bound.");
+        var blob = new Blob([output], { type: target.mime });
+        item.output = { blob: blob, url: window.URL.createObjectURL(blob), name: targetNameFor(item, target), preview: output.slice(0, 1400) + (output.length > 1400 ? "\n… preview truncated in memory …" : "") };
+        item.status = "converted";
+        item.reason = "A local output is ready in memory. Request a browser download to choose the next step; this page cannot know the destination or completion result.";
+        updateRecord(item, { sourceType: item.inspection.sourceType, detectedKind: item.inspection.kind, category: item.inspection.category, targetType: target.targetType, targetFormat: target.targetFormat, targetName: item.output.name, status: item.status, adapterId: target.adapterId, reason: item.reason });
+        setStatus("Local output ready. It remains in this browser's memory until you remove it, replace it, or leave the page.");
+      } catch (_) {
+        item.status = "failed";
+        item.reason = "The requested conversion could not be completed within this page's bounded local format rules. The source file was not changed and no output was written.";
+        updateRecord(item, { status: item.status, reason: item.reason });
+        setStatus("A local conversion did not produce output. The source file was not changed.");
+      } finally {
+        item.busy = false;
+        renderQueue();
+        renderConverterHistory();
+      }
+    }
+
+    function requestDownload(item) {
+      if (!item.output || !item.output.url) return;
+      var anchor = made("a");
+      anchor.href = item.output.url;
+      anchor.download = item.output.name;
+      anchor.hidden = true;
+      (body || document.documentElement).appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      item.status = "download-requested";
+      item.reason = "A browser download was requested. This page does not receive the browser destination or completion result.";
+      updateRecord(item, { status: item.status, downloadRequestedAt: new Date().toISOString(), reason: item.reason });
+      setStatus("Browser download requested. Its destination and completion are not available to this page.");
+      renderQueue();
+      renderConverterHistory();
+    }
+
+    async function addFile(file) {
+      if (queue.length >= sessionLimit) {
+        notify("warning", "The current browser-local converter queue is full. Remove an active file before adding another.");
+        return;
+      }
+      var item = {
+        file: file,
+        sourceName: safeFileLabel(file && file.name),
+        sourceBytes: sourceBytes(file),
+        sniff: { kind: "Waiting for byte sniff", sourceType: "unknown", category: "Unknown", mode: "pending", reason: "Waiting for a bounded local byte sniff." },
+        inspection: { kind: "Waiting for byte sniff", sourceType: "unknown", category: "Unknown", mode: "pending", reason: "Waiting for a bounded local byte sniff." },
+        targetId: "",
+        status: "queued",
+        reason: "Waiting for a bounded local byte sniff.",
+        busy: true,
+        jobId: "",
+        output: null
+      };
+      queue.push(item);
+      if (item.sourceBytes > inputLimit) {
+        item.busy = false;
+        item.status = "unsupported";
+        item.sniff = { kind: "Oversized local source", sourceType: "unknown", category: "Unknown", mode: "oversized", reason: "The selected file exceeds the 1 MiB input bound, so this page did not read its bytes." };
+        item.inspection = item.sniff;
+        item.reason = item.sniff.reason;
+        recordItem(item);
+        renderQueue();
+        renderConverterHistory();
+        return;
+      }
+      renderQueue();
+      try {
+        var buffer = await file.slice(0, Math.min(sourceBytes(file), sniffLimit)).arrayBuffer();
+        item.sniff = classifySniff(new Uint8Array(buffer));
+        item.inspection = item.sniff;
+        item.reason = item.sniff.reason;
+        item.busy = false;
+        recordItem(item);
+        renderQueue();
+        await inspectItem(item);
+      } catch (_) {
+        item.busy = false;
+        item.status = "unsupported";
+        item.sniff = { kind: "Unreadable local source", sourceType: "unknown", category: "Unknown", mode: "unreadable", reason: "The page could not read the bounded byte sniff. No source bytes were retained." };
+        item.inspection = item.sniff;
+        item.reason = item.sniff.reason;
+        recordItem(item);
+        renderQueue();
+        renderConverterHistory();
+      }
+    }
+
+    picker.addEventListener("change", async function () {
+      if (selecting) return;
+      selecting = true;
+      var files = Array.prototype.slice.call(picker.files || []);
+      var accepted = files.slice(0, selectionLimit);
+      if (files.length > selectionLimit) notify("warning", "Only the first " + selectionLimit + " selected files were admitted to this browser-local queue. The remaining selections were not read.");
+      for (var index = 0; index < accepted.length; index += 1) {
+        if (queue.length >= sessionLimit) {
+          notify("warning", "The browser-local queue reached its " + sessionLimit + " file limit. Remaining selections were not read.");
+          break;
+        }
+        await addFile(accepted[index]);
+      }
+      picker.value = "";
+      selecting = false;
+      setStatus(queue.length ? "Local compatibility inspection completed for the active queue. Choose an output only where the registry says it is available." : "No active local source file is queued.");
     });
-    category.addEventListener("change", function () {
-      render();
-      addHistory("Conversion plan changed", "Planner category set to " + category.value + ".");
+
+    if (clearHistory) clearHistory.addEventListener("click", function () {
+      var records = hasContractMethod("getBrowserConversionJobs") ? safely(function () { return contract.getBrowserConversionJobs(); }, []) : [];
+      if (!Array.isArray(records) || !records.length) return;
+      if (!window.confirm("Remove " + records.length + " browser-local conversion metadata record" + (records.length === 1 ? "?" : "s?") + " Source files, output files, and browser downloads are not changed.")) return;
+      records.forEach(function (record) {
+        if (hasContractMethod("removeBrowserConversionJob")) safely(function () { contract.removeBrowserConversionJob(record.id); });
+      });
+      renderConverterHistory();
+      setStatus("Browser-local conversion metadata history was cleared. No source or output file changed.");
     });
-    target.addEventListener("change", render);
-    plan.append(heading, note, categoryLabel, targetLabel, summary);
-    var layout = one(".converter-layout", surface) || surface;
-    insertAfter(layout, plan);
-    render();
+
+    renderCatalog();
+    renderQueue();
+    renderConverterHistory();
+    setStatus("Ready for up to " + selectionLimit + " selected local files at a time; each file is bounded to " + humanSize(inputLimit) + ".");
   }
 
   function installOllamaPreview() {
@@ -1937,7 +2669,7 @@ import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
         inventoryFeature("renamed-presentation-mode", "Renamed browser-local presentation mode", "in-progress", "The local one-way verifier controls English-only presentation and suppression; it is a user-experience lock, not security protection.", universalControlsCore)
       ] },
       { id: "documentation", label: "Offline documentation preview", route: "#docs-preview", features: [inventoryFeature("documentation-preview", "Static documentation and search preview", "in-progress", "The page links static content but does not prove a packaged offline documentation browser.", staticHook)] },
-      { id: "converter", label: "File converter preview", route: "#converter-preview", features: [inventoryFeature("converter-boundary", "Unavailable browser conversion boundary", "in-progress", "The static page does not read bytes, select an adapter, or write output.", staticHook)] },
+      { id: "converter", label: "Browser-local file converter", route: "#converter-preview", features: [inventoryFeature("converter-local-routes", "Bounded browser-local text, structured-data, and encoding conversions", "in-progress", "The page byte-sniffs selected bounded files, enables only bundled browser-local adapters, and never persists source/output bytes or claims a browser download completed.", localContract)] },
       { id: "authenticator", label: "Authenticator and toy-lock preview", route: "#authenticator-preview", features: [inventoryFeature("authenticator-boundary", "Credential-free public preview", "in-progress", "No secret, password, QR, or recovery data is accepted by the public page.", staticHook)] },
       { id: "ollama", label: "Local Ollama suite preview", route: "#ollama-preview", features: [
         inventoryFeature("ollama-local-observer", "User-triggered fixed-loopback Ollama observer", "in-progress", "The browser reads only the documented local version, installed-model, and running-model endpoints after explicit Refresh, with no proxy, redirect, token, cloud fallback, or background request.", ollamaBrowserObserver),

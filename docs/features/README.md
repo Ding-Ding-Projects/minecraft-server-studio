@@ -20,6 +20,7 @@
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
 - [Windows release packaging metadata](release-packaging.md)
 - [Local file-converter foundation](file-converter.md)
+- [Browser-local companion-site file converter](browser-local-file-converter.md)
 - [Local authenticator and toy-lock foundation](authenticator-and-toy-locks.md)
 - [Support Tickets recovery desk](support-tickets.md)
 - [Local status and completeness](local-status-and-completeness.md)
