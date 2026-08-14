@@ -128,6 +128,7 @@ The companion site's installer handoff accepts only an embedded fixed, immutable
 - [Presentation settings and shared School mode](docs/features/experience-settings.md)
 - [Personal vocabulary upload](docs/features/personal-vocabulary-upload.md)
 - [App-logo customization](docs/features/app-logo-customization.md)
+- [Dim sum startup surprise](docs/features/dim-sum-surprise.md)
 - [Appearance and tab-navigation foundation](docs/features/appearance-and-tabs.md)
 - [Desktop command palette foundation](docs/features/desktop-command-palette.md)
 - [Event narrator and scheduled language settings](docs/features/narrator-and-scheduled-settings.md)

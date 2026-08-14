@@ -1,5 +1,54 @@
 # Handoff
 
+## Desktop dim-sum startup-surprise candidate
+
+The desktop source now has a main-process-only, cache-first dim-sum startup
+surprise. It keeps four revision-pinned bilingual public-catalog metadata
+records and never tracks a photo in this repository or a consumer release.
+After the window is ready, it may silently warm an app-private cache through
+strictly allowlisted public release-asset HTTPS redirects, a bounded response,
+PNG signature/decoder/dimension checks, an atomic cache write, and retained
+digest/size/dimension metadata. The renderer receives an in-memory PNG data
+URL only from a revalidated cache entry; it makes no network request and never
+receives a public source URL. The window is created before cache photo bytes
+are read or decoded, so cache validation cannot delay the application becoming
+usable.
+
+The first feature launch does not show a surprise. Later launches use one fresh
+cryptographic 1-in-10 draw only when School mode is inactive, no update or
+update failure is active, startup produced no error, no unsaved application
+draft exists, no modal is open, and a cache entry is valid. The corner surface
+does not take focus, offers a labelled close control, auto-dismisses after
+seven seconds, respects reduced motion, and renders the catalog's bilingual
+dish name and text alternative according to the current language mode. It does
+not create a notification, history, export, server, or log record.
+
+### Directly related paths
+
+- `src/main/dim-sum-surprise.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/main/offline-docs.cjs`
+- `src/main/server-manager.cjs`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/dim-sum-surprise.md`
+- `docs/features/README.md`
+- `README.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+
+### Policy and verification boundary
+
+The implementation follows the public-catalog/cache exception instead of
+claiming a bundled local photo. Bundling a public catalog asset in the consumer
+repository would violate the no-vendoring policy, so a future sanctioned
+offline distribution mechanism is needed to satisfy both forms of the broader
+contract. No tests, linting, review, packaging, runtime interaction,
+accessibility validation, cache-download exercise, screen capture, release, or
+deployment verification ran in this fast-delivery lane. The completeness row
+and feature article leave all of those facts pending.
+
 ## Minecraft Server Studio expanded candidate
 
 The application source provides a Windows Electron control center, shared CLI, structured Paper/Spigot settings, local lifecycle control, version-aware Java planning, persistent app-managed Java runtime recovery, BuildTools preflight planning, plugin metadata discovery, a capability-first Command Center, management-protocol discovery, protected credential storage, and automatic Java/Git detection and installation fallback. The companion site is a public marketing surface with browser-local controls only; it does not claim to operate a server.

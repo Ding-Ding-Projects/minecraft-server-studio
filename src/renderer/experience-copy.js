@@ -10,6 +10,7 @@
     'nav.commandPalette': { english: 'Command palette (Ctrl+Shift+F)', cantonese: '指令面板（Ctrl+Shift+F）' },
     'nav.changelog': { english: 'Offline changelog', cantonese: '離線更新記錄' },
     'nav.preferences': { english: 'Studio preferences', cantonese: 'Studio 偏好設定' },
+    'dimSum.dismiss': { english: 'Dismiss dim sum surprise', cantonese: '關閉點心驚喜' },
     'palette.eyebrow': { english: 'LOCAL NAVIGATION', cantonese: '本機導覽' },
     'palette.title': { english: 'Command palette', cantonese: '指令面板' },
     'palette.description': { english: 'Find an implemented destination, bundled article, server tab, or safe local control. Press Ctrl+Shift+F from anywhere in this desktop app.', cantonese: '搵已實作嘅位置、內置文章、伺服器分頁或者安全本機控制項。喺桌面程式任何位置按 Ctrl+Shift+F。' },
@@ -334,6 +335,20 @@
     '本機方塊指揮站',
     '本機方塊派對總部'
   ]);
+  const ENGLISH_DIM_SUM_HEADINGS = Object.freeze([
+    'Dim sum surprise',
+    'Dim sum says hello',
+    'Steamer-basket cameo',
+    'Steamer-basket plot twist',
+    'Maximum steamer-basket cameo'
+  ]);
+  const CANTONESE_DIM_SUM_HEADINGS = Object.freeze([
+    '點心驚喜',
+    '點心同你打個招呼',
+    '蒸籠小彩蛋',
+    '蒸籠突襲',
+    '蒸籠派對彩蛋'
+  ]);
 
   function projectedCopy(value, language, key) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -383,5 +398,13 @@
     return english;
   }
 
-  window.StudioExperienceCopy = Object.freeze({ COPY, brandingEyebrow, format, tone, toastPrefix });
+  function dimSumHeading(mode, levels) {
+    const english = ENGLISH_DIM_SUM_HEADINGS[Math.max(1, Math.min(5, Number(levels?.english) || 1)) - 1];
+    const cantonese = CANTONESE_DIM_SUM_HEADINGS[Math.max(1, Math.min(5, Number(levels?.cantonese) || 1)) - 1];
+    if (mode === 'cantonese') return cantonese;
+    if (mode === 'bilingual') return `${english} · ${cantonese}`;
+    return english;
+  }
+
+  window.StudioExperienceCopy = Object.freeze({ COPY, brandingEyebrow, dimSumHeading, format, tone, toastPrefix });
 })();

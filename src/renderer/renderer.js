@@ -78,6 +78,9 @@ const state = {
   toyLockStatus: null,
   supportTickets: null,
   supportTicketStatus: null,
+  startupPhase: 'loading',
+  startupError: false,
+  dimSumSurprise: null,
   activeAuthenticatorTab: 'codes',
   activeToyLockId: null,
   pendingToyLockAction: null,
@@ -1220,12 +1223,107 @@ function toast(message, kind = 'info') {
   }
 }
 
+function dimSumSurpriseIsSafe() {
+  if (state.startupPhase !== 'ready' || state.startupError) return false;
+  if (Boolean(currentSchoolMode().effectiveSchoolMode)) return false;
+  if (Object.values(state.unsaved || {}).some(Boolean)) return false;
+  if (document.querySelector('dialog[open]')) return false;
+  const updateState = String(state.applicationUpdate?.state || '').toLowerCase();
+  return !['checking', 'available', 'downloading', 'ready', 'offline', 'failed', 'unconfigured'].includes(updateState);
+}
+
+function dimSumLanguageValue(values) {
+  const language = effectiveLanguage();
+  const english = String(values?.en || '').slice(0, 160);
+  const cantonese = String(values?.zhHant || values?.yue || '').slice(0, 160);
+  if (language === 'cantonese') return cantonese || english;
+  if (language === 'bilingual') return [english, cantonese].filter(Boolean).join(' · ');
+  return english || cantonese;
+}
+
+function dimSumAltValue(values) {
+  const language = effectiveLanguage();
+  const english = String(values?.en || '').slice(0, 240);
+  const cantonese = String(values?.yue || values?.zhHant || '').slice(0, 240);
+  if (language === 'cantonese') return cantonese || english;
+  if (language === 'bilingual') return [english, cantonese].filter(Boolean).join(' · ');
+  return english || cantonese;
+}
+
+function dimSumSurpriseHeading() {
+  const copy = window.StudioExperienceCopy;
+  return copy?.dimSumHeading
+    ? copy.dimSumHeading(effectiveLanguage(), currentExperienceLocal().funnyLevels)
+    : 'Dim sum surprise';
+}
+
+function dismissDimSumSurprise() {
+  const active = state.dimSumSurprise;
+  if (!active) return;
+  clearTimeout(active.timer);
+  active.element.remove();
+  state.dimSumSurprise = null;
+}
+
+function renderDimSumSurprise(candidate) {
+  if (!dimSumSurpriseIsSafe() || !candidate || typeof candidate !== 'object') return;
+  const imageDataUrl = String(candidate.imageDataUrl || '');
+  const title = dimSumLanguageValue(candidate.name);
+  const alt = dimSumAltValue(candidate.alt);
+  if (!title || !alt || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(imageDataUrl) || imageDataUrl.length > 4_194_368) return;
+  dismissDimSumSurprise();
+  const element = document.createElement('aside');
+  element.className = 'dim-sum-surprise';
+  element.setAttribute('role', 'status');
+  element.setAttribute('aria-live', 'polite');
+  element.setAttribute('aria-atomic', 'true');
+  element.setAttribute('aria-label', `${dimSumSurpriseHeading()}: ${title}`);
+  const image = document.createElement('img');
+  image.src = imageDataUrl;
+  image.alt = alt;
+  image.decoding = 'async';
+  const copy = document.createElement('div');
+  copy.className = 'dim-sum-surprise-copy';
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = dimSumSurpriseHeading();
+  const name = document.createElement('strong');
+  name.textContent = title;
+  copy.append(eyebrow, name);
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'dim-sum-surprise-dismiss';
+  dismiss.setAttribute('aria-label', copyText('dimSum.dismiss'));
+  dismiss.textContent = '×';
+  dismiss.addEventListener('click', dismissDimSumSurprise);
+  element.append(image, copy, dismiss);
+  document.body.append(element);
+  narrator?.narrate({
+    category: 'dim-sum-surprise',
+    english: `Dim sum surprise: ${String(candidate.name?.en || '').slice(0, 160)}`,
+    cantonese: `點心驚喜：${String(candidate.name?.zhHant || candidate.name?.en || '').slice(0, 160)}`
+  });
+  const timer = setTimeout(dismissDimSumSurprise, 7_000);
+  state.dimSumSurprise = { element, timer };
+}
+
+async function showStartupDimSumSurprise() {
+  if (!dimSumSurpriseIsSafe() || typeof window.studio?.startupDimSumSurprise !== 'function') return;
+  try {
+    const candidate = await window.studio.startupDimSumSurprise();
+    if (dimSumSurpriseIsSafe()) renderDimSumSurprise(candidate);
+  } catch {
+    // The non-blocking surprise must never create an error path or a toast.
+  }
+}
+
 async function safely(work, successMessage) {
   try {
     const result = await work();
     if (successMessage) toast(successMessage, 'success');
     return result;
   } catch (error) {
+    if (state.startupPhase === 'loading') state.startupError = true;
     toast(error?.message || String(error), 'error');
     return null;
   }
@@ -1991,6 +2089,11 @@ function changeTabDock() {
 function applyExperienceSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return;
   state.experience = snapshot;
+  if (currentSchoolMode().effectiveSchoolMode && SCHOOL_MODE_SUPPRESSED_DOCUMENT_IDS.has(state.offlineDocument?.id)) {
+    state.offlineDocument = null;
+    state.documentationPendingAnchor = '';
+    if (state.workspaceDestination === 'documentation') state.workspaceDestination = 'servers';
+  }
   state.narrationSchedule = snapshot.narrationSchedule || state.narrationSchedule;
   state.narratorRuntime = snapshot.narratorRuntime || state.narratorRuntime;
   const narratorSnapshot = narrator?.configure(
@@ -2009,6 +2112,7 @@ function applyExperienceSnapshot(snapshot) {
   renderConsole();
   renderDocumentationDestination();
   renderChangelogDestination();
+  if (!dimSumSurpriseIsSafe()) dismissDimSumSurprise();
 }
 
 function openExperienceSettings() {
@@ -4729,9 +4833,12 @@ const DOCUMENTATION_REGEX_TOKENS = Object.freeze({
   alternation: 'left|right',
   quantifier: '+'
 });
+const SCHOOL_MODE_SUPPRESSED_DOCUMENT_IDS = new Set(['dim-sum-surprise']);
 
 function documentationDocuments() {
-  return Array.isArray(state.offlineDocumentation?.documents) ? state.offlineDocumentation.documents : [];
+  const documents = Array.isArray(state.offlineDocumentation?.documents) ? state.offlineDocumentation.documents : [];
+  if (!currentSchoolMode().effectiveSchoolMode) return documents;
+  return documents.filter((record) => !SCHOOL_MODE_SUPPRESSED_DOCUMENT_IDS.has(record?.id));
 }
 
 function documentationSearchText(record) {
@@ -4988,6 +5095,7 @@ async function refreshOfflineDocumentation() {
 
 async function readOfflineDocument(id) {
   if (typeof id !== 'string' || !id) return;
+  if (!documentationDocuments().some((document) => document.id === id)) return;
   const article = await safely(() => window.studio.offlineDoc(id));
   if (!article?.document) return;
   state.offlineDocument = article.document;
@@ -8642,6 +8750,7 @@ function logEvent(event) {
     state.applicationUpdate = event.update || null;
     renderApplicationUpdate();
     renderCommandPalette();
+    if (!dimSumSurpriseIsSafe()) dismissDimSumSurprise();
     return;
   }
   const prefix = new Date(event.at || Date.now()).toLocaleTimeString();
@@ -8770,6 +8879,13 @@ function bindOllamaSuiteEvents() {
 function bindEvents() {
   const commandPaletteDialog = $('#command-palette-dialog');
   const commandPaletteSearch = $('#command-palette-search');
+  const dismissDimSumForActivity = () => {
+    if (state.dimSumSurprise) dismissDimSumSurprise();
+  };
+  document.addEventListener('pointerdown', dismissDimSumForActivity, { capture: true, passive: true });
+  document.addEventListener('click', dismissDimSumForActivity, { capture: true });
+  document.addEventListener('keydown', dismissDimSumForActivity, { capture: true });
+  document.addEventListener('input', dismissDimSumForActivity, { capture: true });
   $('#open-command-palette-button')?.addEventListener('click', openCommandPalette);
   $('#close-command-palette-button')?.addEventListener('click', () => closeCommandPalette());
   commandPaletteDialog?.addEventListener('cancel', (event) => {
@@ -9501,6 +9617,8 @@ async function initialize() {
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
   await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshNotificationCenter({ quiet: true }), refreshAccessRecords(), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshOfflineChangelog(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
   renderCommandCenter();
+  state.startupPhase = 'ready';
+  await showStartupDimSumSurprise();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });
     if (state.workspaceDestination === 'notifications') refreshNotificationCenter({ quiet: true });

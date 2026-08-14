@@ -15,6 +15,7 @@ const { ExternalEditorService } = require('./external-editor-service.cjs');
 const { OfflineDocumentationLibrary } = require('./offline-docs.cjs');
 const { LogoManager } = require('./logo-manager.cjs');
 const { PersonalVocabularyManager } = require('./personal-vocabulary-manager.cjs');
+const { DimSumSurprise } = require('./dim-sum-surprise.cjs');
 const { CANONICAL_COMMIT_BASE_URL, LocalChangelogLibrary } = require('./changelog-library.cjs');
 const { UpdateController } = require('./update-controller.cjs');
 const { LocalOllamaSuiteManager } = require('./ollama-suite-manager.cjs');
@@ -107,6 +108,7 @@ let buildToolsController;
 let offlineDocumentation;
 let logoManager;
 let personalVocabularyManager;
+let dimSumSurprise;
 let offlineChangelog;
 let scheduleTickTimer;
 let authenticatorService;
@@ -410,7 +412,17 @@ function createWindow() {
     }
   });
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    const timer = setTimeout(() => {
+      const snapshot = experienceSnapshot();
+      dimSumSurprise?.warmCache({
+        schoolModeActive: Boolean(snapshot.shared?.effectiveSchoolMode),
+        updateState: updateController?.status?.().state || ''
+      }).catch(() => {});
+    }, 20_000);
+    timer.unref?.();
+  });
 }
 
 app.whenReady().then(async () => {
@@ -453,6 +465,17 @@ app.whenReady().then(async () => {
     dataDir: path.join(app.getPath('userData'), 'personal-vocabulary')
   });
   personalVocabularyManager.initialize();
+  try {
+    dimSumSurprise = new DimSumSurprise({
+      dataDir: path.join(app.getPath('userData'), 'dim-sum-surprise'),
+      nativeImage
+    });
+    await dimSumSurprise.initialize();
+  } catch {
+    // A non-blocking delight must never prevent the desktop control center
+    // from opening when its private cache directory is unavailable.
+    dimSumSurprise = null;
+  }
   credentialVault = CredentialVault ? new CredentialVault({
     dataDir: path.join(app.getPath('userData'), 'credential-vault'),
     safeStorage
@@ -531,6 +554,12 @@ app.whenReady().then(async () => {
     downloadsPath: app.getPath('downloads')
   });
   await updateController.initialize();
+  if (dimSumSurprise) {
+    await dimSumSurprise.prepareStartup({
+      schoolModeActive: Boolean(experienceSnapshot().shared?.effectiveSchoolMode),
+      updateState: updateController.status().state
+    });
+  }
   createWindow();
   ollamaSuite.refresh().catch(() => {});
   serverManager.revalidateManagedJavaInventory().catch((error) => {
@@ -727,6 +756,14 @@ ipcMain.handle('studio:remove-access-record', async (_event, serverId, request) 
   return result;
 });
 ipcMain.handle('studio:experience-settings', () => experienceSnapshot());
+ipcMain.handle('studio:startup-dim-sum-surprise', async () => {
+  if (!dimSumSurprise) return null;
+  const snapshot = experienceSnapshot();
+  return dimSumSurprise.consumeStartupCandidate({
+    schoolModeActive: Boolean(snapshot.shared?.effectiveSchoolMode),
+    updateState: updateController?.status?.().state || ''
+  });
+});
 ipcMain.handle('studio:update-experience-settings', async (_event, patch) => {
   requireStudioSettings().updateLocal(patch);
   await recordLocalHistory({
