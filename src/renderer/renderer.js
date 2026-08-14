@@ -241,32 +241,75 @@ const COMMAND_PALETTE_DESTINATIONS = Object.freeze([
   Object.freeze({ id: 'destination-private-vocabulary', title: 'Private vocabulary', detail: 'Reveal the local validated replacement-map picker, status, clear control, and its attached regex builder.', titleCopyKey: 'settings.personalVocabularyPaletteTitle', detailCopyKey: 'settings.personalVocabularyPaletteDetail', route: 'preferences', targetId: 'pick-personal-vocabulary-button', schoolSuppressed: true }),
   Object.freeze({ id: 'destination-preferences', title: 'Studio preferences', detail: 'Open local presentation, appearance, narrator, and scheduled-setting controls.', route: 'preferences', targetId: 'experience-settings-search' })
 ]);
+const APPEARANCE_PROFILE_TARGETS = Object.freeze([
+  Object.freeze({ id: 'shell', label: 'App shell', description: 'The application background, shell typography, and surrounding chrome.' }),
+  Object.freeze({ id: 'tabStrip', label: 'Settings-tab strip', description: 'The current server-settings tab navigation surface and tab labels.' }),
+  Object.freeze({ id: 'primaryAction', label: 'Primary actions', description: 'Filled primary-action buttons in this desktop shell.' }),
+  Object.freeze({ id: 'secondaryAction', label: 'Secondary actions', description: 'Outlined and text action controls in this desktop shell.' }),
+  Object.freeze({ id: 'settingsCard', label: 'Preference cards', description: 'The current Studio preferences cards and target-editor panels.' }),
+  Object.freeze({ id: 'statusCard', label: 'Status cards', description: 'Local status summary, detail, and record cards.' }),
+  Object.freeze({ id: 'dialogSurface', label: 'Dialog surfaces', description: 'Native desktop dialog surfaces and their contained forms.' })
+]);
+const APPEARANCE_PROFILE_IDS = Object.freeze(APPEARANCE_PROFILE_TARGETS.map((target) => target.id));
+const APPEARANCE_PROFILE_FIELDS = Object.freeze(['surface', 'onSurface', 'radius', 'fontFamily', 'fontScale', 'fontWeight', 'density', 'motion']);
+const APPEARANCE_PROFILE_CSS_PREFIXES = Object.freeze({
+  shell: 'shell',
+  tabStrip: 'tab-strip',
+  primaryAction: 'primary-action',
+  secondaryAction: 'secondary-action',
+  settingsCard: 'settings-card',
+  statusCard: 'status-card',
+  dialogSurface: 'dialog-surface'
+});
+
+function emptyAppearanceProfile() {
+  return {
+    surface: null,
+    onSurface: null,
+    radius: null,
+    fontFamily: null,
+    fontScale: null,
+    fontWeight: null,
+    density: null,
+    motion: null
+  };
+}
+
+function defaultAppearanceProfiles() {
+  return Object.freeze(Object.fromEntries(APPEARANCE_PROFILE_IDS.map((target) => [target, Object.freeze(emptyAppearanceProfile())])));
+}
+
 const DEFAULT_APPEARANCE_NAVIGATION = Object.freeze({
   state: 'unavailable',
   detail: 'Appearance and tab-navigation settings have not loaded.',
   settings: Object.freeze({
+    version: 3,
     theme: 'system',
     density: 'comfortable',
     seedColor: '#6750A4',
     typography: Object.freeze({ family: 'system-ui', scale: 1, weight: 400 }),
     tabs: Object.freeze({ dock: 'left', activeTab: 'general', order: Object.freeze([...SERVER_TAB_IDS]), pinned: Object.freeze([]), groups: Object.freeze([]), closed: Object.freeze([]) }),
-    elementOverrides: Object.freeze({
-      shell: Object.freeze({ surface: null, onSurface: null, radius: null }),
-      tabStrip: Object.freeze({ surface: null, onSurface: null, radius: null }),
-      primaryAction: Object.freeze({ surface: null, onSurface: null, radius: null })
-    })
+    elementOverrides: defaultAppearanceProfiles()
   })
 });
 const APPEARANCE_TARGET_DEFAULTS = Object.freeze({
   dark: Object.freeze({
     shell: Object.freeze({ surface: '#10131A', onSurface: '#E0E5F0', radius: 0 }),
     tabStrip: Object.freeze({ surface: '#181C25', onSurface: '#C1C7D7', radius: 18 }),
-    primaryAction: Object.freeze({ surface: '#9CCAFF', onSurface: '#003258', radius: 999 })
+    primaryAction: Object.freeze({ surface: '#9CCAFF', onSurface: '#003258', radius: 999 }),
+    secondaryAction: Object.freeze({ surface: '#161A22', onSurface: '#9CCAFF', radius: 999 }),
+    settingsCard: Object.freeze({ surface: '#151922', onSurface: '#E0E5F0', radius: 20 }),
+    statusCard: Object.freeze({ surface: '#151922', onSurface: '#E0E5F0', radius: 18 }),
+    dialogSurface: Object.freeze({ surface: '#1C2029', onSurface: '#E0E5F0', radius: 28 })
   }),
   light: Object.freeze({
     shell: Object.freeze({ surface: '#FFFBFE', onSurface: '#1C1B1F', radius: 0 }),
     tabStrip: Object.freeze({ surface: '#F4EFF4', onSurface: '#49454F', radius: 18 }),
-    primaryAction: Object.freeze({ surface: '#6750A4', onSurface: '#FFFFFF', radius: 999 })
+    primaryAction: Object.freeze({ surface: '#6750A4', onSurface: '#FFFFFF', radius: 999 }),
+    secondaryAction: Object.freeze({ surface: '#FFFBFE', onSurface: '#6750A4', radius: 999 }),
+    settingsCard: Object.freeze({ surface: '#F4EFF4', onSurface: '#1C1B1F', radius: 20 }),
+    statusCard: Object.freeze({ surface: '#F4EFF4', onSurface: '#1C1B1F', radius: 18 }),
+    dialogSurface: Object.freeze({ surface: '#F4EFF4', onSurface: '#1C1B1F', radius: 28 })
   })
 });
 const FONT_FAMILY_CSS = Object.freeze({
@@ -292,6 +335,7 @@ const EMPTY_PERSONAL_VOCABULARY_COPY = Object.freeze({
   english: Object.freeze({}),
   cantonese: Object.freeze({})
 });
+let appearanceTargetReturnFocus = null;
 
 const FALLBACK_EXPERIENCE = Object.freeze({
   local: Object.freeze({ language: 'english', funnyLevels: Object.freeze({ english: 2, cantonese: 3 }), dialogEmoji: true, displayName: 'Minecraft Server Studio' }),
@@ -733,14 +777,38 @@ function appearanceTargetDefaults(target, settings = currentAppearanceSettings()
   return APPEARANCE_TARGET_DEFAULTS[effectiveAppearanceTheme(settings)][target] || APPEARANCE_TARGET_DEFAULTS.dark.shell;
 }
 
+function appearanceProfileForTarget(target, settings = currentAppearanceSettings()) {
+  const candidate = settings.elementOverrides?.[target];
+  return candidate && typeof candidate === 'object' ? candidate : emptyAppearanceProfile();
+}
+
+function appearanceBaseMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'standard';
+}
+
+function appearanceDensityValues(density) {
+  return {
+    compact: Object.freeze({ shellStart: '18px', shellEnd: '32px', gap: '8px', pad: '12px', controlHeight: '38px', controlPadding: '0 14px' }),
+    comfortable: Object.freeze({ shellStart: '28px', shellEnd: '48px', gap: '12px', pad: '18px', controlHeight: '42px', controlPadding: '0 18px' }),
+    spacious: Object.freeze({ shellStart: '40px', shellEnd: '64px', gap: '18px', pad: '24px', controlHeight: '48px', controlPadding: '0 22px' })
+  }[density] || { shellStart: '28px', shellEnd: '48px', gap: '12px', pad: '18px', controlHeight: '42px', controlPadding: '0 18px' };
+}
+
 function appearanceTargetValue(target, settings = currentAppearanceSettings()) {
   const fallback = appearanceTargetDefaults(target, settings);
-  const override = settings.elementOverrides?.[target] || {};
+  const override = appearanceProfileForTarget(target, settings);
+  const typography = settings.typography || DEFAULT_APPEARANCE_NAVIGATION.settings.typography;
   return {
     surface: override.surface || fallback.surface,
     onSurface: override.onSurface || fallback.onSurface,
     radius: override.radius ?? fallback.radius,
-    inherited: override.surface === null && override.onSurface === null && override.radius === null
+    fontFamily: override.fontFamily || typography.family || 'system-ui',
+    fontScale: override.fontScale ?? typography.scale ?? 1,
+    fontWeight: override.fontWeight ?? typography.weight ?? 400,
+    density: override.density || settings.density || 'comfortable',
+    motion: override.motion || appearanceBaseMotion(),
+    inherited: APPEARANCE_PROFILE_FIELDS.every((field) => override[field] === null),
+    inheritedFields: APPEARANCE_PROFILE_FIELDS.filter((field) => override[field] === null)
   };
 }
 
@@ -750,6 +818,27 @@ function setAppearanceCssValue(name, value) {
   else root.style.setProperty(name, String(value));
 }
 
+function applyAppearanceProfileCss(target, profile) {
+  const prefix = APPEARANCE_PROFILE_CSS_PREFIXES[target];
+  if (!prefix || !profile) return;
+  const density = appearanceDensityValues(profile.density);
+  setAppearanceCssValue(`--appearance-${prefix}-surface`, profile.surface);
+  setAppearanceCssValue(`--appearance-${prefix}-on-surface`, profile.onSurface);
+  setAppearanceCssValue(`--appearance-${prefix}-radius`, `${profile.radius}px`);
+  setAppearanceCssValue(`--appearance-${prefix}-font-family`, FONT_FAMILY_CSS[profile.fontFamily] || FONT_FAMILY_CSS['system-ui']);
+  setAppearanceCssValue(`--appearance-${prefix}-type-scale`, profile.fontScale);
+  setAppearanceCssValue(`--appearance-${prefix}-font-weight`, profile.fontWeight);
+  setAppearanceCssValue(`--appearance-${prefix}-gap`, density.gap);
+  setAppearanceCssValue(`--appearance-${prefix}-padding`, density.pad);
+  setAppearanceCssValue(`--appearance-${prefix}-control-height`, density.controlHeight);
+  setAppearanceCssValue(`--appearance-${prefix}-control-padding`, density.controlPadding);
+  setAppearanceCssValue(`--appearance-${prefix}-motion-duration`, profile.motion === 'reduced' ? '0ms' : '160ms');
+  if (target === 'shell') {
+    setAppearanceCssValue('--appearance-shell-workspace-start', density.shellStart);
+    setAppearanceCssValue('--appearance-shell-workspace-end', density.shellEnd);
+  }
+}
+
 function applyAppearanceNavigation() {
   const record = currentAppearanceNavigation();
   const settings = currentAppearanceSettings();
@@ -757,9 +846,6 @@ function applyAppearanceNavigation() {
   const editor = $('#server-editor');
   const navigation = $('#server-tab-navigation');
   const strip = $('#server-tab-strip');
-  const shell = appearanceTargetValue('shell', settings);
-  const tabStrip = appearanceTargetValue('tabStrip', settings);
-  const primaryAction = appearanceTargetValue('primaryAction', settings);
   const typography = settings.typography || DEFAULT_APPEARANCE_NAVIGATION.settings.typography;
   const tabs = settings.tabs || DEFAULT_APPEARANCE_NAVIGATION.settings.tabs;
 
@@ -769,15 +855,7 @@ function applyAppearanceNavigation() {
   setAppearanceCssValue('--appearance-font-family', FONT_FAMILY_CSS[typography.family] || FONT_FAMILY_CSS['system-ui']);
   setAppearanceCssValue('--appearance-type-scale', Number.isFinite(Number(typography.scale)) ? Number(typography.scale) : 1);
   setAppearanceCssValue('--appearance-font-weight', [400, 500, 600, 700].includes(Number(typography.weight)) ? Number(typography.weight) : 400);
-  setAppearanceCssValue('--appearance-shell-surface', shell.surface);
-  setAppearanceCssValue('--appearance-shell-on-surface', shell.onSurface);
-  setAppearanceCssValue('--appearance-shell-radius', `${shell.radius}px`);
-  setAppearanceCssValue('--appearance-tab-strip-surface', tabStrip.surface);
-  setAppearanceCssValue('--appearance-tab-strip-on-surface', tabStrip.onSurface);
-  setAppearanceCssValue('--appearance-tab-strip-radius', `${tabStrip.radius}px`);
-  setAppearanceCssValue('--appearance-primary-action-surface', primaryAction.surface);
-  setAppearanceCssValue('--appearance-primary-action-on-surface', primaryAction.onSurface);
-  setAppearanceCssValue('--appearance-primary-action-radius', `${primaryAction.radius}px`);
+  APPEARANCE_PROFILE_IDS.forEach((target) => applyAppearanceProfileCss(target, appearanceTargetValue(target, settings)));
 
   const dock = ['left', 'right', 'top', 'bottom'].includes(tabs.dock) ? tabs.dock : 'left';
   if (editor) editor.dataset.tabDock = dock;
@@ -1665,27 +1743,100 @@ function setAppearanceNavigationControlsDisabled(disabled) {
     '#appearance-theme', '#appearance-density', '#appearance-seed-color', '#appearance-font-family',
     '#appearance-font-scale', '#appearance-font-weight', '#tab-dock', '#save-appearance-navigation-button',
     '#appearance-target', '#appearance-target-surface', '#appearance-target-on-surface',
-    '#appearance-target-radius', '#reset-appearance-target-button'
+    '#appearance-target-radius', '#appearance-target-font-family', '#appearance-target-font-scale',
+    '#appearance-target-font-weight', '#appearance-target-density', '#appearance-target-motion',
+    '#reset-appearance-target-button'
   ].forEach((selector) => {
     const control = $(selector);
     if (control) control.disabled = disabled;
   });
 }
 
+function appearanceTargetMetadata(target) {
+  return APPEARANCE_PROFILE_TARGETS.find((candidate) => candidate.id === target) || APPEARANCE_PROFILE_TARGETS[0];
+}
+
+function populateAppearanceTargetPicker() {
+  const picker = $('#appearance-target');
+  if (!picker) return;
+  const selected = APPEARANCE_PROFILE_IDS.includes(picker.value) ? picker.value : 'shell';
+  picker.replaceChildren();
+  APPEARANCE_PROFILE_TARGETS.forEach((target) => {
+    const option = document.createElement('option');
+    option.value = target.id;
+    option.textContent = target.label;
+    picker.append(option);
+  });
+  picker.value = selected;
+}
+
+function appearanceProfileDraftFromControls() {
+  return {
+    surface: $('#appearance-target-surface')?.value || '',
+    onSurface: $('#appearance-target-on-surface')?.value || '',
+    radius: Number($('#appearance-target-radius')?.value),
+    fontFamily: $('#appearance-target-font-family')?.value || '',
+    fontScale: Number($('#appearance-target-font-scale')?.value),
+    fontWeight: Number($('#appearance-target-font-weight')?.value),
+    density: $('#appearance-target-density')?.value || '',
+    motion: $('#appearance-target-motion')?.value || ''
+  };
+}
+
+function appearanceProfileDraftIsValid(profile) {
+  return /^#[0-9a-f]{6}$/i.test(profile.surface)
+    && /^#[0-9a-f]{6}$/i.test(profile.onSurface)
+    && Number.isInteger(profile.radius) && profile.radius >= 0 && profile.radius <= 999
+    && Boolean(FONT_FAMILY_CSS[profile.fontFamily])
+    && Number.isFinite(profile.fontScale) && profile.fontScale >= 0.85 && profile.fontScale <= 1.25
+    && [400, 500, 600, 700].includes(profile.fontWeight)
+    && ['compact', 'comfortable', 'spacious'].includes(profile.density)
+    && ['standard', 'reduced'].includes(profile.motion);
+}
+
+function appearanceProfileFieldLabel(field) {
+  return ({
+    surface: 'surface color',
+    onSurface: 'text color',
+    radius: 'corner radius',
+    fontFamily: 'font family',
+    fontScale: 'type scale',
+    fontWeight: 'font weight',
+    density: 'density',
+    motion: 'motion'
+  })[field] || field;
+}
+
 function renderAppearanceTargetEditor() {
+  populateAppearanceTargetPicker();
   const target = $('#appearance-target')?.value || 'shell';
+  const metadata = appearanceTargetMetadata(target);
   const settings = currentAppearanceSettings();
-  const override = settings.elementOverrides?.[target] || { surface: null, onSurface: null, radius: null };
+  const override = appearanceProfileForTarget(target, settings);
   const effective = appearanceTargetValue(target, settings);
   const lock = toyLockForAppearanceTarget(target);
   const status = $('#appearance-target-status');
+  const provenance = $('#appearance-target-provenance');
+  const support = $('#appearance-target-support');
   const surface = $('#appearance-target-surface');
   const onSurface = $('#appearance-target-on-surface');
   const radius = $('#appearance-target-radius');
+  const fontFamily = $('#appearance-target-font-family');
+  const fontScale = $('#appearance-target-font-scale');
+  const fontWeight = $('#appearance-target-font-weight');
+  const density = $('#appearance-target-density');
+  const motion = $('#appearance-target-motion');
   if (surface) surface.value = effective.surface;
   if (onSurface) onSurface.value = effective.onSurface;
   if (radius) radius.value = String(effective.radius);
-  for (const control of [surface, onSurface, radius, $('#save-appearance-navigation-button'), $('#reset-appearance-target-button')]) {
+  if (fontFamily) fontFamily.value = effective.fontFamily;
+  if (fontScale) fontScale.value = String(effective.fontScale);
+  if ($('#appearance-target-font-scale-output')) $('#appearance-target-font-scale-output').textContent = `${Math.round(Number(effective.fontScale) * 100)}%`;
+  if (fontWeight) fontWeight.value = String(effective.fontWeight);
+  if (density) density.value = effective.density;
+  if (motion) motion.value = effective.motion;
+  const localFields = APPEARANCE_PROFILE_FIELDS.filter((field) => override[field] !== null);
+  for (const control of [surface, onSurface, radius, fontFamily, fontScale, fontWeight, density, motion, $('#save-appearance-navigation-button'), $('#reset-appearance-target-button')]) {
     if (control) control.disabled = !appearanceNavigationIsReady() || Boolean(lock);
   }
   const configure = $('#configure-appearance-toy-lock');
@@ -1696,23 +1847,30 @@ function renderAppearanceTargetEditor() {
     unlock.disabled = !lock;
   }
   if (status) {
-    const inherited = override.surface === null && override.onSurface === null && override.radius === null;
     status.dataset.state = appearanceNavigationIsReady() ? 'ready' : currentAppearanceNavigation().state || 'unavailable';
     status.textContent = appearanceNavigationIsReady()
-      ? (lock
-        ? `${lock.targetLabel} is locked. Unlock it with its independent credential before changing this target.`
-        : (inherited ? 'This target currently inherits the active theme values.' : 'This target has a local appearance override. Reset it to inherit the active theme again.'))
+      ? (localFields.length
+        ? `${metadata.label} has local overrides for ${localFields.map(appearanceProfileFieldLabel).join(', ')}.`
+        : `${metadata.label} currently inherits all profile values from the active theme and base appearance settings.`)
       : (currentAppearanceNavigation().detail || 'Appearance and tab-navigation settings are unavailable.');
+  }
+  if (provenance) {
+    provenance.textContent = appearanceNavigationIsReady()
+      ? (localFields.length
+        ? `Provenance: ${localFields.length} local profile value${localFields.length === 1 ? '' : 's'}; ${effective.inheritedFields.length} value${effective.inheritedFields.length === 1 ? '' : 's'} inherit from the active theme or base appearance settings.`
+        : 'Provenance: every profile value inherits from the active theme or base appearance settings.')
+      : 'Provenance: the local appearance record is unavailable, so the displayed defaults are not editable.';
+  }
+  if (support) {
+    support.textContent = `${metadata.description} Supported and rendered here: surface and text colors, corner radius, font family, type scale, font weight, density, and motion. Unsupported per-target properties remain explicit: gradients, borders, elevation, state or pseudo-state styling, installed-font discovery, word-processor text effects, and color-space translation.`;
   }
 }
 
 function previewSelectedAppearanceTarget() {
   const target = $('#appearance-target')?.value;
-  const surface = $('#appearance-target-surface')?.value;
-  const onSurface = $('#appearance-target-on-surface')?.value;
-  const radius = Number($('#appearance-target-radius')?.value);
+  const profile = appearanceProfileDraftFromControls();
   const status = $('#appearance-target-status');
-  if (!appearanceNavigationIsReady() || !target || !surface || !onSurface || !Number.isInteger(radius) || radius < 0 || radius > 999) return;
+  if (!appearanceNavigationIsReady() || !APPEARANCE_PROFILE_IDS.includes(target) || !appearanceProfileDraftIsValid(profile)) return;
   const lock = toyLockForAppearanceTarget(target);
   if (lock) {
     state.pendingToyLockAction = previewSelectedAppearanceTarget;
@@ -1720,14 +1878,11 @@ function previewSelectedAppearanceTarget() {
     toast(`${lock.targetLabel} is locked by its configured toy lock.`, 'info');
     return;
   }
-  const prefix = target === 'shell' ? 'shell' : target === 'tabStrip' ? 'tab-strip' : 'primary-action';
-  setAppearanceCssValue(`--appearance-${prefix}-surface`, surface);
-  setAppearanceCssValue(`--appearance-${prefix}-on-surface`, onSurface);
-  setAppearanceCssValue(`--appearance-${prefix}-radius`, `${radius}px`);
+  applyAppearanceProfileCss(target, profile);
   state.unsaved.appearance = true;
   if (status) {
     status.dataset.state = 'ready';
-    status.textContent = 'Preview applied to the selected target. Apply appearance and tabs to persist it.';
+    status.textContent = 'Preview applied to the selected target. Apply appearance and tabs to persist the full rendered profile.';
   }
 }
 
@@ -1744,6 +1899,7 @@ function hydrateAppearanceNavigationControls() {
   if ($('#appearance-font-scale-output')) $('#appearance-font-scale-output').textContent = `${Math.round(Number(typography.scale || 1) * 100)}%`;
   if ($('#appearance-font-weight')) $('#appearance-font-weight').value = String(typography.weight || 400);
   if ($('#tab-dock')) $('#tab-dock').value = tabs.dock || 'left';
+  populateAppearanceTargetPicker();
   setAppearanceNavigationControlsDisabled(record.state !== 'ready');
   renderAppearanceTargetEditor();
 }
@@ -1777,9 +1933,7 @@ async function saveAppearanceNavigation() {
     tabs: { ...settings.tabs, dock: $('#tab-dock').value, activeTab: state.activeTab },
     elementOverrides: {
       [target]: {
-        surface: $('#appearance-target-surface').value,
-        onSurface: $('#appearance-target-on-surface').value,
-        radius: Number($('#appearance-target-radius').value)
+        ...appearanceProfileDraftFromControls()
       }
     }
   }, 'Appearance and tab-navigation settings applied.');
@@ -1798,9 +1952,24 @@ async function resetAppearanceTarget() {
     return;
   }
   const snapshot = await persistAppearanceNavigation({
-    elementOverrides: { [target]: { surface: null, onSurface: null, radius: null } }
-  }, 'Selected appearance target now inherits the active theme.');
+    elementOverrides: { [target]: emptyAppearanceProfile() }
+  }, 'Selected appearance target now inherits the active theme and base appearance settings.');
   if (snapshot) state.unsaved.appearance = false;
+}
+
+function openAppearanceTargetEditor(target, opener = null) {
+  if (!APPEARANCE_PROFILE_IDS.includes(target)) return;
+  appearanceTargetReturnFocus = opener instanceof HTMLElement ? opener : null;
+  openExperienceSettings();
+  const picker = $('#appearance-target');
+  if (!picker) return;
+  picker.value = target;
+  renderAppearanceTargetEditor();
+  requestAnimationFrame(() => {
+    const editor = picker.closest('.appearance-target-editor');
+    editor?.scrollIntoView({ block: 'center', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    picker.focus({ preventScroll: true });
+  });
 }
 
 function persistActiveTab(tab) {
@@ -7317,6 +7486,7 @@ function handleTabContextAction(action) {
   if (action === 'pin') void toggleTabPin(tabId);
   else if (action === 'earlier') void moveTabInOrder(tabId, -1);
   else if (action === 'later') void moveTabInOrder(tabId, 1);
+  else if (action === 'appearance') openAppearanceTargetEditor('tabStrip', opener);
   else if (action === 'lock') configureToyLockForServerTab(tabId);
   else if (action === 'close') requestCloseWorkspaceTab(tabId);
 }
@@ -7361,6 +7531,11 @@ function handleServerTabKeydown(event) {
   if (event.ctrlKey && event.altKey && event.key.toLocaleLowerCase() === 'g') {
     event.preventDefault();
     openTabGroupPicker(tabId, event.currentTarget);
+    return;
+  }
+  if (event.ctrlKey && event.altKey && event.key.toLocaleLowerCase() === 'a') {
+    event.preventDefault();
+    openAppearanceTargetEditor('tabStrip', event.currentTarget);
     return;
   }
   if (event.ctrlKey && event.altKey && event.key.toLocaleLowerCase() === 'w') {
@@ -8732,10 +8907,14 @@ function bindEvents() {
     previewLogoPresentation();
   });
   $('#experience-settings-dialog').addEventListener('close', () => {
-    if (!state.unsaved.logoPresentation) return;
-    state.unsaved.logoPresentation = false;
-    hydrateLogoPresentationControls();
-    renderLogoPreview(effectiveLogo(), currentLogo().presentation || FALLBACK_LOGO.presentation);
+    if (state.unsaved.logoPresentation) {
+      state.unsaved.logoPresentation = false;
+      hydrateLogoPresentationControls();
+      renderLogoPreview(effectiveLogo(), currentLogo().presentation || FALLBACK_LOGO.presentation);
+    }
+    const returnFocus = appearanceTargetReturnFocus;
+    appearanceTargetReturnFocus = null;
+    if (returnFocus?.isConnected) requestAnimationFrame(() => returnFocus.focus());
   });
   $('#save-narrator-settings-button').addEventListener('click', saveNarratorSettings);
   $('#narrator-preview').addEventListener('click', speakNarratorPreview);
@@ -8777,6 +8956,14 @@ function bindEvents() {
   $('#appearance-target-surface').addEventListener('input', previewSelectedAppearanceTarget);
   $('#appearance-target-on-surface').addEventListener('input', previewSelectedAppearanceTarget);
   $('#appearance-target-radius').addEventListener('input', previewSelectedAppearanceTarget);
+  $('#appearance-target-font-family').addEventListener('change', previewSelectedAppearanceTarget);
+  $('#appearance-target-font-scale').addEventListener('input', () => {
+    $('#appearance-target-font-scale-output').textContent = `${Math.round(Number($('#appearance-target-font-scale').value) * 100)}%`;
+    previewSelectedAppearanceTarget();
+  });
+  $('#appearance-target-font-weight').addEventListener('change', previewSelectedAppearanceTarget);
+  $('#appearance-target-density').addEventListener('change', previewSelectedAppearanceTarget);
+  $('#appearance-target-motion').addEventListener('change', previewSelectedAppearanceTarget);
   $('#appearance-font-scale').addEventListener('input', () => {
     $('#appearance-font-scale-output').textContent = `${Math.round(Number($('#appearance-font-scale').value) * 100)}%`;
   });
@@ -9178,7 +9365,8 @@ function bindEvents() {
     button.addEventListener('keydown', handleServerTabKeydown);
     button.addEventListener('contextmenu', (event) => {
       event.preventDefault();
-      openTabContextMenu(button.dataset.tab, button, { x: event.clientX, y: event.clientY });
+      if (event.shiftKey) openAppearanceTargetEditor('tabStrip', button);
+      else openTabContextMenu(button.dataset.tab, button, { x: event.clientX, y: event.clientY });
     });
   });
   $('#settings-form').addEventListener('submit', saveSettings);

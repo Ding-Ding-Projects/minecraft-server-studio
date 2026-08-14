@@ -10,12 +10,33 @@ const THEME_MODES = Object.freeze(['system', 'light', 'dark']);
 const DENSITY_MODES = Object.freeze(['comfortable', 'compact', 'spacious']);
 const FONT_FAMILIES = Object.freeze(['system-ui', 'Segoe UI', 'Arial', 'Georgia', 'Consolas']);
 const FONT_WEIGHTS = Object.freeze([400, 500, 600, 700]);
+const MOTION_MODES = Object.freeze(['standard', 'reduced']);
 const TAB_DOCKS = Object.freeze(['left', 'right', 'top', 'bottom']);
 const TAB_IDS = Object.freeze([
   'general', 'world', 'gameplay', 'network', 'access', 'runtime', 'paper-cli', 'buildtools', 'backups',
   'live', 'commands', 'status', 'history', 'advanced', 'plugins', 'console'
 ]);
-const ELEMENT_TARGETS = Object.freeze(['shell', 'tabStrip', 'primaryAction']);
+const LEGACY_ELEMENT_TARGETS = Object.freeze(['shell', 'tabStrip', 'primaryAction']);
+const APPEARANCE_PROFILE_TARGETS = Object.freeze([
+  'shell',
+  'tabStrip',
+  'primaryAction',
+  'secondaryAction',
+  'settingsCard',
+  'statusCard',
+  'dialogSurface'
+]);
+const APPEARANCE_PROFILE_FIELDS = Object.freeze([
+  'surface',
+  'onSurface',
+  'radius',
+  'fontFamily',
+  'fontScale',
+  'fontWeight',
+  'density',
+  'motion'
+]);
+const ELEMENT_TARGETS = APPEARANCE_PROFILE_TARGETS;
 const MAX_TAB_GROUPS = 32;
 const MAX_TAB_GROUP_NAME_CHARS = 64;
 const TAB_GROUP_ID_PATTERN = /^group-[a-z0-9-]{1,40}$/;
@@ -164,18 +185,104 @@ function migrateTabsWithAccess(value) {
   return { ...value, order };
 }
 
-function normalizeElementOverride(value, target) {
-  assertExactKeys(value, ['surface', 'onSurface', 'radius'], `The ${target} appearance override is invalid.`);
+function defaultAppearanceProfile() {
   return {
+    surface: null,
+    onSurface: null,
+    radius: null,
+    fontFamily: null,
+    fontScale: null,
+    fontWeight: null,
+    density: null,
+    motion: null
+  };
+}
+
+function normalizeOptionalFontFamily(value, target) {
+  if (value === null) return null;
+  if (!FONT_FAMILIES.includes(value)) {
+    throw settingsError('APPEARANCE_NAVIGATION_INVALID_VALUE', `${target} font family is unsupported by this foundation.`);
+  }
+  return value;
+}
+
+function normalizeOptionalFontScale(value, target) {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.85 || value > 1.25) {
+    throw settingsError('APPEARANCE_NAVIGATION_INVALID_VALUE', `${target} font scale must be between 0.85 and 1.25, or inherit the theme value.`);
+  }
+  return Number(value.toFixed(2));
+}
+
+function normalizeOptionalFontWeight(value, target) {
+  if (value === null) return null;
+  if (!FONT_WEIGHTS.includes(value)) {
+    throw settingsError('APPEARANCE_NAVIGATION_INVALID_VALUE', `${target} font weight is unsupported.`);
+  }
+  return value;
+}
+
+function normalizeOptionalDensity(value, target) {
+  if (value === null) return null;
+  if (!DENSITY_MODES.includes(value)) {
+    throw settingsError('APPEARANCE_NAVIGATION_INVALID_VALUE', `${target} density is unsupported.`);
+  }
+  return value;
+}
+
+function normalizeOptionalMotion(value, target) {
+  if (value === null) return null;
+  if (!MOTION_MODES.includes(value)) {
+    throw settingsError('APPEARANCE_NAVIGATION_INVALID_VALUE', `${target} motion preference is unsupported.`);
+  }
+  return value;
+}
+
+function normalizeElementOverride(value, target, options = {}) {
+  const { legacy = false } = options;
+  const fields = legacy ? ['surface', 'onSurface', 'radius'] : APPEARANCE_PROFILE_FIELDS;
+  assertExactKeys(value, fields, `The ${target} appearance override is invalid.`);
+  const profile = {
     surface: normalizeColor(value.surface, `${target} surface color`, true),
     onSurface: normalizeColor(value.onSurface, `${target} text color`, true),
     radius: normalizeRadius(value.radius, `${target} corner radius`)
   };
+  if (legacy) return { ...defaultAppearanceProfile(), ...profile };
+  return {
+    ...profile,
+    fontFamily: normalizeOptionalFontFamily(value.fontFamily, target),
+    fontScale: normalizeOptionalFontScale(value.fontScale, target),
+    fontWeight: normalizeOptionalFontWeight(value.fontWeight, target),
+    density: normalizeOptionalDensity(value.density, target),
+    motion: normalizeOptionalMotion(value.motion, target)
+  };
 }
 
-function normalizeElementOverrides(value) {
-  assertExactKeys(value, ELEMENT_TARGETS, 'Element appearance overrides are invalid.');
-  return Object.fromEntries(ELEMENT_TARGETS.map((target) => [target, normalizeElementOverride(value[target], target)]));
+function hasLegacyElementOverrideShape(value) {
+  if (!isPlainRecord(value)) return false;
+  const targetKeys = Object.keys(value).sort();
+  const expectedTargetKeys = [...LEGACY_ELEMENT_TARGETS].sort();
+  if (targetKeys.length !== expectedTargetKeys.length || targetKeys.some((key, index) => key !== expectedTargetKeys[index])) return false;
+  return LEGACY_ELEMENT_TARGETS.every((target) => {
+    const override = value[target];
+    if (!isPlainRecord(override)) return false;
+    const fieldKeys = Object.keys(override).sort();
+    const expectedFieldKeys = ['surface', 'onSurface', 'radius'].sort();
+    return fieldKeys.length === expectedFieldKeys.length && fieldKeys.every((key, index) => key === expectedFieldKeys[index]);
+  });
+}
+
+function normalizeElementOverrides(value, schemaVersion) {
+  const legacy = schemaVersion === 1 || schemaVersion === 2
+    || (schemaVersion === APPEARANCE_NAVIGATION_VERSION && hasLegacyElementOverrideShape(value));
+  const targets = legacy ? LEGACY_ELEMENT_TARGETS : APPEARANCE_PROFILE_TARGETS;
+  assertExactKeys(value, targets, 'Element appearance overrides are invalid.');
+  return Object.fromEntries(APPEARANCE_PROFILE_TARGETS.map((target) => [
+    target,
+    legacy && !LEGACY_ELEMENT_TARGETS.includes(target)
+      ? defaultAppearanceProfile()
+      : normalizeElementOverride(value[target], target, { legacy })
+  ]));
 }
 
 function defaultAppearanceNavigationSettings() {
@@ -186,7 +293,7 @@ function defaultAppearanceNavigationSettings() {
     seedColor: '#6750A4',
     typography: { family: 'system-ui', scale: 1, weight: 400 },
     tabs: { dock: 'left', activeTab: 'general', order: [...TAB_IDS], pinned: [], groups: [], closed: [] },
-    elementOverrides: Object.fromEntries(ELEMENT_TARGETS.map((target) => [target, { surface: null, onSurface: null, radius: null }]))
+    elementOverrides: Object.fromEntries(APPEARANCE_PROFILE_TARGETS.map((target) => [target, defaultAppearanceProfile()]))
   };
 }
 
@@ -204,7 +311,7 @@ function normalizeAppearanceNavigationSettings(value) {
     seedColor: normalizeColor(value.seedColor, 'Seed color'),
     typography: normalizeTypography(value.typography),
     tabs: normalizeTabs(value.version === 2 ? migrateTabsWithAccess(value.tabs) : value.tabs, { legacy: value.version === 1 }),
-    elementOverrides: normalizeElementOverrides(value.elementOverrides)
+    elementOverrides: normalizeElementOverrides(value.elementOverrides, value.version)
   };
 }
 
@@ -216,15 +323,15 @@ function mergeNested(current, patch, key, allowed, message) {
 
 function mergeElementOverrides(current, patch) {
   if (patch.elementOverrides === undefined) return current.elementOverrides;
-  assertPatchKeys(patch.elementOverrides, ELEMENT_TARGETS, 'Element appearance overrides contain an unsupported target.');
+  assertPatchKeys(patch.elementOverrides, APPEARANCE_PROFILE_TARGETS, 'Element appearance overrides contain an unsupported target.');
   const next = {};
-  for (const target of ELEMENT_TARGETS) {
+  for (const target of APPEARANCE_PROFILE_TARGETS) {
     const requested = patch.elementOverrides[target];
     if (requested === undefined) {
       next[target] = current.elementOverrides[target];
       continue;
     }
-    assertPatchKeys(requested, ['surface', 'onSurface', 'radius'], `The ${target} appearance override contains an unsupported field.`);
+    assertPatchKeys(requested, APPEARANCE_PROFILE_FIELDS, `The ${target} appearance override contains an unsupported field.`);
     next[target] = { ...current.elementOverrides[target], ...requested };
   }
   return next;
@@ -339,11 +446,14 @@ class AppearanceNavigationSettings {
 
 module.exports = {
   APPEARANCE_NAVIGATION_VERSION,
+  APPEARANCE_PROFILE_FIELDS,
+  APPEARANCE_PROFILE_TARGETS,
   AppearanceNavigationSettings,
   DENSITY_MODES,
   ELEMENT_TARGETS,
   FONT_FAMILIES,
   FONT_WEIGHTS,
+  MOTION_MODES,
   TAB_DOCKS,
   TAB_IDS,
   THEME_MODES,
