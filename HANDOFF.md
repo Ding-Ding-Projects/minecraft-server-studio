@@ -839,10 +839,13 @@ repository commit route through a main-process user action; renderer code
 cannot supply a URL or filesystem path.
 
 `package.json` includes `CHANGELOG.md`. The package route creates an ignored
-package-local release-catalog snapshot from local tags, and recognizes the
-current Actions run tag/commit when those workflow values are available. The
-checked-in catalog remains the source baseline for development and failures
-before the generated snapshot exists.
+package-local release-catalog snapshot from the checked-in baseline plus valid
+local release tags, and recognizes the current Actions run tag/commit/date
+only when complete workflow metadata is available. `node
+scripts/generate-release-catalog.cjs --refresh-baseline`, run after `git fetch
+--tags`, updates the tracked fallback from the same local metadata. Both the
+generator and the viewer stop rather than silently dropping records beyond the
+documented 2,048-record capacity.
 
 ### Directly related paths
 

@@ -13,15 +13,15 @@ const path = require('node:path');
 
 const CHANGELOG_SCHEMA_VERSION = 1;
 const MAX_CHANGELOG_BYTES = 512 * 1024;
-const MAX_RELEASE_CATALOG_BYTES = 256 * 1024;
-const MAX_RECORDS = 128;
+const MAX_RELEASE_CATALOG_BYTES = 512 * 1024;
+const MAX_RECORDS = 2_048;
 const MAX_CATEGORIES_PER_RECORD = 24;
 const MAX_CHANGES_PER_CATEGORY = 128;
 const MAX_VERSION_LENGTH = 96;
 const MAX_DATE_LABEL_LENGTH = 96;
 const MAX_CATEGORY_LENGTH = 96;
 const MAX_CHANGE_LENGTH = 1_024;
-const MAX_EXPORT_BYTES = 2 * 1024 * 1024;
+const MAX_EXPORT_BYTES = 4 * 1024 * 1024;
 const CANONICAL_COMMIT_BASE_URL = 'https://github.com/Ding-Ding-Projects/minecraft-server-studio/commit/';
 
 class LocalChangelogLibrary {
@@ -200,7 +200,9 @@ function mergeRecords(records) {
     if (!version || seenVersions.has(version.toLocaleLowerCase())) continue;
     seenVersions.add(version.toLocaleLowerCase());
     unique.push(record);
-    if (unique.length >= MAX_RECORDS) break;
+  }
+  if (unique.length > MAX_RECORDS) {
+    throw new Error(`The bundled changelog has ${unique.length} unique records, exceeding its ${MAX_RECORDS}-record capacity.`);
   }
   return Object.freeze(unique.map((record, index) => freezeRecord(record, index + 1)));
 }
@@ -213,7 +215,9 @@ function parseChangelog(markdown) {
   for (const line of lines) {
     const versionHeading = line.match(/^##\s+(.+?)\s*$/);
     if (versionHeading) {
-      if (entries.length >= MAX_RECORDS) break;
+      if (entries.length >= MAX_RECORDS) {
+        throw new Error(`The bundled changelog has more than ${MAX_RECORDS} version headings.`);
+      }
       current = createRecord(versionHeading[1], entries.length + 1);
       currentCategory = null;
       if (current) entries.push(current);

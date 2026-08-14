@@ -57,6 +57,7 @@
 
 ### Fixed
 
+- Refresh the checked-in offline release catalog from all locally known release tags and retain that baseline in future package snapshots, with fail-closed record capacity and no runtime release lookup.
 - Derive a workflow-local stable Squirrel/Electron application version for every Actions run and attempt, inject it into packaged metadata without rewriting source `package.json`, and reject mismatched Setup, full-package, or `RELEASES` artifacts before immutable release publication.
 - Compare the packaged Electron runtime version with the strict validated Squirrel full-package version, select the newest full package independently of `RELEASES` row order, refuse rollback packages, pin the native updater to that validated release directory, and keep release provenance tags out of updater version selection.
 - Route CLI `command` and `stop` through a one-shot protected Electron gateway that fixes RCON to loopback, keeps the password out of CLI arguments, environment variables, registry JSON, and output, and fails closed to desktop configuration recovery.

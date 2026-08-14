@@ -236,10 +236,13 @@ The `changelog-viewer` row is independent from both the documentation browser
 and the local-history journal. It names a fixed bundled `CHANGELOG.md`, a
 bounded package-local release catalog, narrow IPC, local plain-text and regex
 search, typed date filtering, copy/export actions, and a validated
-user-initiated commit handoff. It does not prove that a release API was read,
-that an external commit opened, that a release was installed, or that every
-published version has runtime evidence. See [Offline changelog
-viewer](changelog-viewer.md) for its exact source and failure boundary.
+user-initiated commit handoff. The generator combines checked-in known release
+records with valid local release tags, and both the generator and viewer fail
+instead of silently trimming records beyond the documented capacity. It does
+not prove that a release API was read, that an external commit opened, that a
+release was installed, or that every published version has runtime evidence.
+See [Offline changelog viewer](changelog-viewer.md) for its exact source and
+failure boundary.
 
 ## Source and evidence boundaries
 

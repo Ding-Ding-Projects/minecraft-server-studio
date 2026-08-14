@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "source": "local-git-tag-metadata",
+  "source": "generated-local-release-metadata",
   "records": [
     {
       "tag": "v0.1.0-build.1.1",
@@ -386,6 +386,121 @@
       "tag": "v0.1.0-build.86.1",
       "date": "2026-08-13",
       "commit": "e1027e4cb59feb3c538ae5a4c5d4f329b6935322"
+    },
+    {
+      "tag": "v0.1.0-build.89.1",
+      "date": "2026-08-13",
+      "commit": "1c30b786235b398ccf1e75475bd3409befa3c961"
+    },
+    {
+      "tag": "v0.1.0-build.90.1",
+      "date": "2026-08-13",
+      "commit": "6b287d2087b8d7ad60506f0ead085fa4128ce5a9"
+    },
+    {
+      "tag": "v0.1.0-build.91.1",
+      "date": "2026-08-13",
+      "commit": "59f577922deea5ae427815757e6e8c32cfafda0e"
+    },
+    {
+      "tag": "v0.1.0-build.92.1",
+      "date": "2026-08-13",
+      "commit": "372e0d16bc65b0138637322bad6c88340b5b37d6"
+    },
+    {
+      "tag": "v0.1.0-build.93.1",
+      "date": "2026-08-13",
+      "commit": "a16dad332f4181ccd317e65c3eb908b9e07546c4"
+    },
+    {
+      "tag": "v0.1.0-build.94.1",
+      "date": "2026-08-13",
+      "commit": "4df5e4810d20a96e5cad19f3b25aee5ac1a67ac3"
+    },
+    {
+      "tag": "v0.1.0-build.95.1",
+      "date": "2026-08-13",
+      "commit": "133c859452abefaf9b74cd1c536ddd53f8374380"
+    },
+    {
+      "tag": "v0.1.0-build.97.1",
+      "date": "2026-08-13",
+      "commit": "74046c0be23e6d9263ab9dadaa39ef70cb462a62"
+    },
+    {
+      "tag": "v0.1.0-build.98.1",
+      "date": "2026-08-13",
+      "commit": "034ad5f3e4cd0184f374e93005ce825165f2299c"
+    },
+    {
+      "tag": "v0.1.0-build.99.1",
+      "date": "2026-08-13",
+      "commit": "7995dbdcc2373be3d2ffe05f5aab4646f6a21043"
+    },
+    {
+      "tag": "v0.1.0-build.100.1",
+      "date": "2026-08-13",
+      "commit": "e726cb0bb41d688f428318816b89e1894ac6e982"
+    },
+    {
+      "tag": "v0.1.0-build.101.1",
+      "date": "2026-08-13",
+      "commit": "c49a18471bfd2e8ebf1c8ca897486a1ea472b416"
+    },
+    {
+      "tag": "v0.1.0-build.102.1",
+      "date": "2026-08-13",
+      "commit": "ee80688a2ded6aa331d7c9d9172ae560a086a6dd"
+    },
+    {
+      "tag": "v0.1.0-build.104.1",
+      "date": "2026-08-13",
+      "commit": "371858e62b159c7519bb6b9736e3384705da88a3"
+    },
+    {
+      "tag": "v0.1.0-build.105.1",
+      "date": "2026-08-13",
+      "commit": "3ad97337eaf85e227e7b5ba5a30cb14f9d903c42"
+    },
+    {
+      "tag": "v0.1.0-build.106.1",
+      "date": "2026-08-13",
+      "commit": "6cd9588b5e9508517aa730ea9303b06e92d0cda6"
+    },
+    {
+      "tag": "v0.1.0-build.107.1",
+      "date": "2026-08-13",
+      "commit": "e0ef104a09db5f06aee0728141f0487cddbd64fe"
+    },
+    {
+      "tag": "v0.1.0-build.108.1",
+      "date": "2026-08-13",
+      "commit": "7720f37c2dba8a279f7362e45cb85248342dcd56"
+    },
+    {
+      "tag": "v0.1.0-build.111.1",
+      "date": "2026-08-13",
+      "commit": "6ebddd3c5747d1e84d08c94e3a240f63bb19580b"
+    },
+    {
+      "tag": "v0.1.0-build.112.1",
+      "date": "2026-08-13",
+      "commit": "6eaaa5701cd36664bd1dbeccf5080c73e43e36b4"
+    },
+    {
+      "tag": "v0.1.0-build.113.1",
+      "date": "2026-08-13",
+      "commit": "96a910db5ffab480385ec0012a0cc9e752c638a5"
+    },
+    {
+      "tag": "v0.1.0-build.114.1",
+      "date": "2026-08-13",
+      "commit": "20f3e3a3e084089a8e9e437a49e3674502a8db2a"
+    },
+    {
+      "tag": "v0.1.0-build.115.1",
+      "date": "2026-08-13",
+      "commit": "0e654e48b2a5c535c709d07323e28c950038b15a"
     }
   ]
 }
