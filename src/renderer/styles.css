@@ -381,7 +381,7 @@ dialog form { display: grid; gap: 20px; padding: 28px; }
 .range-output { display: inline-flex; align-items: center; width: max-content; min-height: 28px; padding: 3px 9px; border-radius: 999px; color: var(--primary); background: var(--primary-container); font-size: .8rem; }
 .school-mode-card { border-color: color-mix(in srgb, var(--primary) 50%, var(--outline-variant)); }
 .experience-status { padding: 12px; border: 1px solid var(--outline-variant); border-radius: 14px; color: var(--on-surface-variant); background: var(--surface-container); }
-.experience-status[data-state="missing"], .experience-status[data-state="invalid"], .experience-status[data-state="unavailable"] { border-color: var(--warning); color: var(--warning); }
+.experience-status[data-state="missing"], .experience-status[data-state="invalid"], .experience-status[data-state="unavailable"], .experience-status[data-state="failed"], .experience-status[data-state="credential-unavailable"] { border-color: var(--warning); color: var(--warning); }
 .experience-status[data-state="active"] { border-color: #4f9d75; color: var(--success); }
 .school-mode-actions { display: flex; flex-wrap: wrap; align-content: end; align-items: end; gap: 8px; }
 .credential-card { display: grid; gap: 16px; padding: 16px; border: 1px solid var(--outline-variant); border-radius: 16px; background: var(--surface-container); }

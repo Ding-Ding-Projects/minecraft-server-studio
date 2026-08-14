@@ -434,6 +434,10 @@ app.whenReady().then(async () => {
     onChange: publishExperienceSettings
   });
   studioSettings.initialize();
+  credentialVault = CredentialVault ? new CredentialVault({
+    dataDir: path.join(app.getPath('userData'), 'credential-vault'),
+    safeStorage
+  }) : null;
   externalEditor = new ExternalEditorService({
     dataDir: path.join(app.getPath('userData'), 'external-editor')
   });
@@ -451,10 +455,17 @@ app.whenReady().then(async () => {
   notificationCenter.initialize();
   narrationScheduleSettings = new NarrationScheduleSettingsService({
     dataDir: path.join(app.getPath('userData'), 'settings'),
+    credentialVault,
     onChange: publishExperienceSettings
   });
   narrationScheduleSettings.initialize();
-  scheduleTickTimer = setInterval(() => publishExperienceSettings(), 20_000);
+  scheduleTickTimer = setInterval(() => {
+    const service = narrationScheduleSettings;
+    if (!service) return;
+    void service.refreshDueExternalSources()
+      .catch(() => {})
+      .finally(() => publishExperienceSettings());
+  }, 20_000);
   scheduleTickTimer.unref?.();
   logoManager = new LogoManager({
     dataDir: path.join(app.getPath('userData'), 'logo-customization'),
@@ -561,6 +572,9 @@ app.whenReady().then(async () => {
     });
   }
   createWindow();
+  void narrationScheduleSettings.refreshDueExternalSources()
+    .catch(() => {})
+    .finally(() => publishExperienceSettings());
   ollamaSuite.refresh().catch(() => {});
   serverManager.revalidateManagedJavaInventory().catch((error) => {
     serverManager.emit({ type: 'dependency-output', dependency: 'java', message: 'The app-managed Java inventory could not be revalidated at startup: ' + String(error?.message || 'unknown error').slice(0, 512) });
@@ -579,6 +593,7 @@ app.on('before-quit', () => {
   totpPairingService?.dispose();
   studioSettings?.stopWatching();
   updateController?.shutdown();
+  narrationScheduleSettings?.stop();
   if (scheduleTickTimer) clearInterval(scheduleTickTimer);
   scheduleTickTimer = null;
 });
@@ -863,7 +878,7 @@ ipcMain.handle('studio:add-scheduled-setting', async (_event, draft) => {
     subject: 'presentation',
     subjectId: 'scheduled-setting',
     label: 'Scheduled presentation setting created',
-    detail: 'A local scheduled presentation setting was created. Exact values and sensitive data were omitted from history.'
+    detail: 'A local or externally evaluated scheduled presentation setting was created. Exact values, endpoints, and sensitive data were omitted from history.'
   });
   return experienceSnapshot();
 });
@@ -874,8 +889,45 @@ ipcMain.handle('studio:set-scheduled-setting-enabled', async (_event, id, enable
     subject: 'presentation',
     subjectId: 'scheduled-setting',
     label: 'Scheduled presentation setting changed',
-    detail: 'A local scheduled presentation setting changed. Exact values and sensitive data were omitted from history.'
+    detail: 'A scheduled presentation setting changed. Exact values, endpoints, and sensitive data were omitted from history.'
   });
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:update-schedule-source-configuration', async (_event, input) => {
+  requireNarrationScheduleSettings().updateExternalSourceConfiguration(input);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'presentation',
+    subjectId: 'schedule-source',
+    label: 'External schedule source configuration changed',
+    detail: 'A validated external schedule-source configuration changed. A changed destination identity removes its prior protected token. Endpoint values, entity identifiers, and sensitive data were omitted from history.'
+  });
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:save-schedule-source-credential', async (_event, input) => {
+  requireNarrationScheduleSettings().saveExternalSourceCredential(input);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'presentation',
+    subjectId: 'schedule-source-credential',
+    label: 'Protected external schedule-source token changed',
+    detail: 'A protected external schedule-source token changed. The token, endpoint, and other sensitive values were omitted from history.'
+  });
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:clear-schedule-source-credential', async (_event, sourceType) => {
+  requireNarrationScheduleSettings().clearExternalSourceCredential(sourceType);
+  await recordLocalHistory({
+    action: 'configuration-changed',
+    subject: 'presentation',
+    subjectId: 'schedule-source-credential',
+    label: 'Protected external schedule-source token removed',
+    detail: 'A protected external schedule-source token was removed. The token, endpoint, and other sensitive values were omitted from history.'
+  });
+  return experienceSnapshot();
+});
+ipcMain.handle('studio:refresh-schedule-sources', async () => {
+  await requireNarrationScheduleSettings().refreshExternalSources();
   return experienceSnapshot();
 });
 ipcMain.handle('studio:create-school-mode-record', async () => {

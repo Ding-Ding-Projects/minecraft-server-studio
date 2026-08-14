@@ -88,7 +88,6 @@ or any browser-local companion-site change.
 - `README.md`
 - `ROADMAP.md`
 - `CHANGELOG.md`
-- `HANDOFF.md`
 
 ### Verification boundary
 
@@ -212,6 +211,31 @@ This candidate does not claim every rendered element, installed-font discovery,
 Word-style text effects, gradients, borders, elevation, state/pseudo-state
 profiles, color-space translation, full per-property locks, or multi-window
 tab discovery.
+## External scheduled-language source documentation candidate
+
+The desktop documentation now describes the schema-version-2 scheduled-language foundation: a per-rule local calendar source, a configured validated HTTPS API source, and a configured Home Assistant boolean-entity source. The exact non-secret `sources` record keeps the HTTPS endpoint/loopback-development choice/refresh interval and the Home Assistant endpoint/loopback-development choice/entity/refresh interval. The external choices are restricted to language presentation only. A valid HTTPS response supplies one validated English, Cantonese, or bilingual result for its matching rule, while an `on` Home Assistant state activates that rule's stored language; neither can schedule theme, density, accent, typography, display name, or another appearance value.
+
+The documentation keeps the privilege boundary explicit. The Electron main process validates source configuration and owns every external request. It permits HTTPS, with an explicitly enabled numeric-loopback HTTP development exception only; it rejects URL credentials/query/fragment data and redirects, bounds DNS/IP resolution to prevent server-side request forgery, and accepts at most 64 KiB in 8 seconds. The HTTPS path accepts only `{"version":1,"settings":{"language":"english|cantonese|bilingual"}}`; the Home Assistant path makes only `GET api/states/<entityId>` for an exact configured `input_boolean` or `binary_sensor`, where only `on` activates the stored rule. Tokens and other credentials remain in protected operating-system storage and never enter the schedule document, renderer snapshot, local history, ordinary export, log, telemetry, screen capture, or public record. Missing configuration, an unavailable credential store, offline/network failure, an `off` state, a malformed response, or a rejected response does not overwrite the saved local base language or falsely report that an external value applied.
+
+### Directly related paths
+
+- `src/main/external-schedule-source-adapter.cjs`
+- `src/main/narration-schedule-settings.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/narrator-and-scheduled-settings.md`
+- `docs/features/local-status-and-completeness.md`
+- `README.md`
+- `CHANGELOG.md`
+- `ROADMAP.md`
+- `HANDOFF.md`
+
+### Verification boundary
+
+No tests, linting, independent review, build, package, runtime interaction, HTTPS request, Home Assistant request, deployment verification, or screenshots were run or claimed for this source-only fast-delivery documentation lane. The documentation records the intended source boundary; it is not evidence that an endpoint, credential, entity, response, or external language transition has worked in a packaged application.
 
 ## Browser-local history and safe-export documentation candidate
 
@@ -610,7 +634,7 @@ implementation lane.
 - `src/main/main.cjs` and `src/main/preload.cjs`: desktop process and safe IPC boundary for status, BuildTools planning, runtime inventory, protocol discovery, command planning, and update-state/restart requests.
 - `src/renderer/rcon-response-safety.js`, `src/main/main.cjs`, `src/main/preload.cjs`, and `src/renderer/renderer.js`: bounded RCON response envelope that redacts the current vault-only password and credential-shaped values before renderer-visible console or notifier state.
 - `src/main/studio-settings.cjs`, `src/main/main.cjs`, and `src/main/preload.cjs`: app-private presentation settings, a watched shared per-user School-mode record, protected shared unlock-credential boundary, and narrow renderer IPC.
-- `src/main/narration-schedule-settings.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/narrator.js`, and the preferences renderer: persisted optional event narration, platform-only voice enumeration, separate English/Cantonese voice/rate/pitch choices, serialized speech queue, screen-reader yield state, and bounded local-time scheduled language rules. HTTPS API and Home Assistant schedule options are visible but disabled because no validated privileged adapter is implemented.
+- `src/main/external-schedule-source-adapter.cjs`, `src/main/narration-schedule-settings.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/narrator.js`, and the preferences renderer: persisted optional event narration, platform-only voice enumeration, separate English/Cantonese voice/rate/pitch choices, serialized speech queue, screen-reader yield state, and schema-version-2 bounded local-time scheduled language rules. Local, validated HTTPS API, and Home Assistant boolean sources are selected per rule; external requests stay in the main process, accept only bounded documented response conditions, retain protected tokens outside renderer-visible state, and can affect only the matching schedule's language result. This source record does not claim that an external endpoint, token, request, or runtime language transition has worked.
 - `src/main/update-controller.cjs`, `src/renderer/index.html`, and `src/renderer/renderer.js`: approved-feed validation, Electron Squirrel update-state wiring, visible update status, and user-controlled restart handling.
 - `src/main/ollama-suite-manager.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/main/server-manager.cjs`, and the Local Ollama renderer destination: fixed-loopback main-process reads for local API version, installed-model, and running-model summaries, with bounded response validation and no cloud, token, or arbitrary-shell path.
 - `src/main/offline-docs.cjs`, `src/main/main.cjs`, `src/main/preload.cjs`, `src/renderer/markdown-renderer.js`, and the documentation destination: a fixed app-bundled feature-article inventory, package-time availability boundary, narrow reader IPC, escaped Markdown output, internal article-link routing, and local documentation search with a bounded regex-builder route.
