@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Generated from bounded local Git tag metadata immediately before packaging.
+src/main/release-catalog.generated.json

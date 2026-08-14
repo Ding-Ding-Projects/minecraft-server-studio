@@ -379,6 +379,49 @@ This is an ultra-speed candidate. Tests, lint, type checks, reviews, runtime int
 
 The management-protocol source now normalizes discovered method descriptors into an endpoint-bound, time-limited snapshot. A new client may restore only a matching, unexpired method allowlist before invocation. The generic WebSocket client deliberately does not transmit stored management credentials; the desktop reports an authentication-adapter-required state until a documented provider-specific adapter is implemented. This repair was delivered under the speed-delivery boundary; tests, runtime interaction, screenshots, and independent review remain unrun.
 
+## Offline changelog viewer
+
+The desktop now has a dedicated offline changelog destination that stays
+available without a selected server. `src/main/changelog-library.cjs` accepts
+only the package-local `CHANGELOG.md` and a versioned bounded release catalog.
+It parses version/date/category/change/commit records, retains missing dates
+and missing commits as visible states, and never queries a release API at
+runtime. The renderer supplies local plain-text search, a bounded adjacent
+regex builder, typed ISO/local-order date filters, filtered copy, and native
+Markdown/plain-text export. A recorded full SHA can open only the fixed
+repository commit route through a main-process user action; renderer code
+cannot supply a URL or filesystem path.
+
+`package.json` includes `CHANGELOG.md`. The package route creates an ignored
+package-local release-catalog snapshot from local tags, and recognizes the
+current Actions run tag/commit when those workflow values are available. The
+checked-in catalog remains the source baseline for development and failures
+before the generated snapshot exists.
+
+### Directly related paths
+
+- `src/main/changelog-library.cjs`
+- `src/main/release-catalog.json`
+- `scripts/generate-release-catalog.cjs`
+- `scripts/verify-offline-changelog-bundle.cjs`
+- `src/main/main.cjs`
+- `src/main/preload.cjs`
+- `src/renderer/experience-copy.js`
+- `src/renderer/index.html`
+- `src/renderer/renderer.js`
+- `src/renderer/styles.css`
+- `docs/features/changelog-viewer.md`
+- `docs/features/local-status-and-completeness.md`
+
+### Verification boundary
+
+This fast-delivery source lane did not run tests, linting, independent review,
+packaging, runtime interaction, or captures. The dedicated local completeness
+row keeps localization, test, capture, and complete evidence pending. The
+package-generated catalog mechanism is source wiring only; it is not proof of
+an installed app, a valid external commit page, or complete historical release
+coverage.
+
 ## Browser-local Ollama observer
 
 The public marketing page now owns a deliberately narrow browser-only local

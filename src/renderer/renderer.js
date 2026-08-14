@@ -20,10 +20,13 @@ const state = {
   paperRollbackPlan: null,
   offlineDocumentation: null,
   offlineDocument: null,
-  documentationOpen: false,
   documentationQuery: '',
   documentationRegex: { enabled: false, pattern: '', flags: '' },
   documentationPendingAnchor: '',
+  offlineChangelog: null,
+  changelogQuery: '',
+  changelogRegex: { enabled: false, pattern: '', flags: '' },
+  changelogFilterError: '',
   activeTab: 'general',
   pluginPath: '',
   experience: null,
@@ -1441,6 +1444,8 @@ function applyExperienceSnapshot(snapshot) {
   renderServers();
   renderEditor();
   renderConsole();
+  renderDocumentationDestination();
+  renderChangelogDestination();
 }
 
 function openExperienceSettings() {
@@ -2893,7 +2898,7 @@ function renderEditor() {
   const server = selectedServer();
   const editor = $('#server-editor');
   const empty = $('#empty-state');
-  if (state.documentationOpen) {
+  if (state.workspaceDestination === 'documentation' || state.workspaceDestination === 'changelog') {
     editor.classList.add('hidden');
     empty.classList.add('hidden');
     $('#authenticator-destination')?.classList.add('hidden');
@@ -3253,9 +3258,10 @@ function renderDocumentationArticleList() {
 function renderDocumentationDestination() {
   const destination = $('#documentation-destination');
   if (!destination) return;
-  destination.hidden = !state.documentationOpen;
-  document.body.classList.toggle('documentation-open', state.documentationOpen);
-  if (!state.documentationOpen) return;
+  const open = state.workspaceDestination === 'documentation';
+  destination.hidden = !open;
+  document.body.classList.toggle('documentation-open', open);
+  if (!open) return;
   renderDocumentationArticleList();
   renderDocumentationArticle();
 }
@@ -3279,15 +3285,14 @@ async function readOfflineDocument(id) {
 }
 
 async function openOfflineDocumentation() {
-  state.workspaceDestination = 'servers';
-  state.documentationOpen = true;
+  state.workspaceDestination = 'documentation';
   renderAll();
   if (!state.offlineDocumentation) await refreshOfflineDocumentation();
   $('#documentation-search')?.focus();
 }
 
 function closeOfflineDocumentation() {
-  state.documentationOpen = false;
+  state.workspaceDestination = 'servers';
   renderAll();
   $('#server-search')?.focus();
 }
@@ -3344,6 +3349,392 @@ function resetDocumentationRegex() {
   $('#documentation-regex-flag-m').checked = false;
   $('#documentation-regex-flag-s').checked = false;
   renderDocumentationArticleList();
+}
+
+const CHANGELOG_REGEX_TOKENS = Object.freeze({
+  literal: 'text',
+  class: '[A-Za-z]',
+  anchor: '^$',
+  group: '(pattern)',
+  alternation: 'left|right',
+  quantifier: '+'
+});
+
+function changelogRecords() {
+  return Array.isArray(state.offlineChangelog?.records) ? state.offlineChangelog.records : [];
+}
+
+function changelogSearchText(record) {
+  const categories = Array.isArray(record?.categories) ? record.categories : [];
+  return [
+    record?.version,
+    record?.dateLabel,
+    record?.commit?.sha,
+    ...categories.flatMap((category) => [category?.title, ...(Array.isArray(category?.changes) ? category.changes : [])])
+  ].filter((value) => typeof value === 'string').join('\n').slice(0, 32 * 1024);
+}
+
+function normalizedChangelogFlags(value) {
+  const flags = String(value || '').split('').filter((flag, index, source) => source.indexOf(flag) === index).join('');
+  return /^[ims]*$/.test(flags) ? flags.split('').sort().join('') : '';
+}
+
+function changelogRegexInput() {
+  const pattern = String($('#changelog-regex-pattern')?.value || state.changelogRegex.pattern || '').trim();
+  const flags = normalizedChangelogFlags([
+    $('#changelog-regex-flag-i')?.checked ? 'i' : '',
+    $('#changelog-regex-flag-m')?.checked ? 'm' : '',
+    $('#changelog-regex-flag-s')?.checked ? 's' : ''
+  ].join(''));
+  return { pattern, flags };
+}
+
+function changelogRegexSafetyIssue(pattern) {
+  if (!pattern) return 'Enter a pattern before enabling regex search.';
+  if (pattern.length > 256) return 'Regex patterns are limited to 256 characters.';
+  if (/[\u0000-\u001f\u007f]/.test(pattern)) return 'Regex patterns cannot contain control characters.';
+  if (/(?:\((?:[^()\\]|\\.){0,160}(?:[+*]|\{\d+(?:,\d*)?\})[^)]*\))(?:[+*]|\{\d+(?:,\d*)?\})/.test(pattern)) {
+    return 'Nested repeating groups are rejected to keep local search responsive.';
+  }
+  return '';
+}
+
+function createChangelogRegex(pattern, flags) {
+  const safetyIssue = changelogRegexSafetyIssue(pattern);
+  if (safetyIssue) return { regex: null, error: safetyIssue };
+  try {
+    return { regex: new RegExp(pattern, normalizedChangelogFlags(flags)), error: '' };
+  } catch (error) {
+    return { regex: null, error: `Regex syntax is invalid: ${String(error?.message || 'unknown error').slice(0, 180)}` };
+  }
+}
+
+function currentChangelogRegex() {
+  if (!state.changelogRegex.enabled) return { regex: null, error: '', enabled: false };
+  return { ...createChangelogRegex(state.changelogRegex.pattern, state.changelogRegex.flags), enabled: true };
+}
+
+function isoDate(year, month, day) {
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return '';
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function localNumericDateOrder() {
+  const probe = new Date(2006, 10, 22);
+  const parts = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(probe);
+  return parts
+    .filter((part) => ['year', 'month', 'day'].includes(part.type))
+    .map((part) => part.type);
+}
+
+function parseChangelogDate(value, label) {
+  const raw = String(value || '').trim();
+  if (!raw) return { raw, iso: '', error: '' };
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const parsed = isoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+    return parsed ? { raw, iso: parsed, error: '' } : { raw, iso: '', error: `${label} must be a real calendar date.` };
+  }
+  const values = raw.split(/[./-]/).map((part) => part.trim());
+  const order = localNumericDateOrder();
+  if (values.length !== 3 || values.some((part) => !/^\d{1,4}$/.test(part)) || order.length !== 3) {
+    return { raw, iso: '', error: `${label} must use YYYY-MM-DD or this computer's numeric date order.` };
+  }
+  const mapped = Object.fromEntries(order.map((part, index) => [part, Number(values[index])]));
+  if (String(values[order.indexOf('year')]).length !== 4) {
+    return { raw, iso: '', error: `${label} must include a four-digit year.` };
+  }
+  const parsed = isoDate(mapped.year, mapped.month, mapped.day);
+  return parsed ? { raw, iso: parsed, error: '' } : { raw, iso: '', error: `${label} must be a real calendar date.` };
+}
+
+function changelogDateFilter() {
+  const from = parseChangelogDate($('#changelog-from-date')?.value, 'Start date');
+  const to = parseChangelogDate($('#changelog-to-date')?.value, 'End date');
+  if (from.error || to.error) return { from, to, error: from.error || to.error };
+  if (from.iso && to.iso && from.iso > to.iso) return { from, to, error: 'Start date must be on or before end date.' };
+  return { from, to, error: '' };
+}
+
+function filteredChangelogRecords() {
+  const all = changelogRecords();
+  const regex = currentChangelogRegex();
+  const date = changelogDateFilter();
+  let records = all;
+  if (regex.enabled && !regex.error) records = records.filter((record) => regex.regex.test(changelogSearchText(record)));
+  if (!regex.enabled) {
+    const query = String(state.changelogQuery || '').trim().toLocaleLowerCase();
+    if (query) records = records.filter((record) => changelogSearchText(record).toLocaleLowerCase().includes(query));
+  }
+  let undatedOmitted = 0;
+  if (!date.error && (date.from.iso || date.to.iso)) {
+    records = records.filter((record) => {
+      if (!record?.dateIso) {
+        undatedOmitted += 1;
+        return false;
+      }
+      return (!date.from.iso || record.dateIso >= date.from.iso) && (!date.to.iso || record.dateIso <= date.to.iso);
+    });
+  }
+  return { records, regex, date, undatedOmitted };
+}
+
+function renderChangelogRegexStatus() {
+  const status = $('#changelog-regex-status');
+  if (!status) return;
+  const input = changelogRegexInput();
+  const result = createChangelogRegex(input.pattern, input.flags);
+  const sample = String($('#changelog-regex-sample')?.value || '').slice(0, 4096);
+  if (!state.changelogRegex.enabled) {
+    status.textContent = result.error && input.pattern ? result.error : copyText('changelog.regexInactive');
+    status.dataset.state = result.error && input.pattern ? 'invalid' : 'idle';
+    return;
+  }
+  if (result.error) {
+    status.textContent = result.error;
+    status.dataset.state = 'invalid';
+    return;
+  }
+  status.textContent = sample
+    ? (result.regex.test(sample) ? copyText('changelog.regexSampleMatch') : copyText('changelog.regexSampleNoMatch'))
+    : copyText('changelog.regexSamplePrompt');
+  status.dataset.state = 'active';
+}
+
+function changelogRecordCard(record) {
+  const card = document.createElement('article');
+  card.className = 'changelog-record-card';
+  const heading = document.createElement('header');
+  const title = document.createElement('h4');
+  title.textContent = record.version || copyText('changelog.versionNotRecorded');
+  const date = document.createElement('p');
+  date.className = 'muted';
+  date.textContent = record.dateLabel || copyText('changelog.dateNotRecorded');
+  heading.append(title, date);
+  card.append(heading);
+  const categories = Array.isArray(record.categories) ? record.categories : [];
+  if (!categories.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = copyText('changelog.noCategorizedChanges');
+    card.append(empty);
+  }
+  for (const category of categories) {
+    const section = document.createElement('section');
+    section.className = 'changelog-category';
+    const categoryTitle = document.createElement('h5');
+    categoryTitle.textContent = category.title || copyText('changelog.changes');
+    const list = document.createElement('ul');
+    for (const change of Array.isArray(category.changes) ? category.changes : []) {
+      const item = document.createElement('li');
+      item.textContent = change;
+      list.append(item);
+    }
+    section.append(categoryTitle, list);
+    card.append(section);
+  }
+  const commit = document.createElement('div');
+  commit.className = 'changelog-commit';
+  if (record.commit?.state === 'recorded' && record.commit.sha) {
+    const detail = document.createElement('span');
+    detail.textContent = copyText('changelog.recordedCommit', { sha: record.commit.sha.slice(0, 12) });
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'text-action';
+    open.textContent = copyText('changelog.openCommit');
+    open.title = record.commit.detail || 'Open the recorded commit in the configured browser.';
+    open.addEventListener('click', () => safely(() => window.studio.openChangelogCommit(record.commit.sha)));
+    commit.append(detail, open);
+  } else {
+    commit.textContent = record.commit?.detail || copyText('changelog.missingCommit');
+  }
+  card.append(commit);
+  return card;
+}
+
+function renderChangelogDestination() {
+  const destination = $('#changelog-destination');
+  if (!destination) return;
+  const open = state.workspaceDestination === 'changelog';
+  destination.hidden = !open;
+  document.body.classList.toggle('changelog-open', open);
+  if (!open) return;
+  const snapshot = state.offlineChangelog;
+  const stateLabel = $('#changelog-state');
+  const recordCount = $('#changelog-record-count');
+  const source = $('#changelog-source');
+  const boundary = $('#changelog-boundary');
+  const list = $('#changelog-records');
+  const error = $('#changelog-filter-error');
+  if (!snapshot) {
+    stateLabel.textContent = copyText('changelog.loading');
+    recordCount.textContent = copyText('changelog.notLoaded');
+    source.textContent = copyText('changelog.bundledFile');
+    boundary.textContent = copyText('changelog.loadingBoundary');
+    list.replaceChildren();
+    return;
+  }
+  const { records, regex, date, undatedOmitted } = filteredChangelogRecords();
+  const problems = [regex.enabled && regex.error ? regex.error : '', date.error].filter(Boolean);
+  state.changelogFilterError = problems.join(' ');
+  stateLabel.textContent = snapshot.state || 'Unknown';
+  recordCount.textContent = changelogRecords().length === 1
+    ? copyText('changelog.recordCountOne')
+    : copyText('changelog.recordCountMany', { count: changelogRecords().length });
+  source.textContent = snapshot.source === 'bundled-changelog-and-release-catalog'
+    ? copyText('changelog.bundledLocalRecords')
+    : copyText('changelog.bundledFile');
+  boundary.textContent = snapshot.boundary || 'This viewer reads only bundled local records.';
+  $('#changelog-match-count').textContent = records.length === 1
+    ? copyText('changelog.matchCountOne')
+    : copyText('changelog.matchCountMany', { count: records.length });
+  renderChangelogRegexStatus();
+  error.hidden = !state.changelogFilterError;
+  error.textContent = state.changelogFilterError;
+  list.replaceChildren();
+  if (problems.length) {
+    const notice = document.createElement('p');
+    notice.className = 'muted';
+    notice.textContent = copyText('changelog.fixFilter');
+    list.append(notice);
+  }
+  if (!records.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = snapshot.state === 'unavailable'
+      ? copyText('changelog.unavailableEmpty')
+      : date.from.iso || date.to.iso
+        ? copyText('changelog.dateEmpty')
+        : regex.enabled
+          ? copyText('changelog.regexEmpty')
+          : copyText('changelog.plainEmpty');
+    list.append(empty);
+  } else {
+    records.forEach((record) => list.append(changelogRecordCard(record)));
+  }
+  if (undatedOmitted) {
+    const omitted = document.createElement('p');
+    omitted.className = 'muted';
+    omitted.textContent = undatedOmitted === 1
+      ? copyText('changelog.undatedExcludedOne')
+      : copyText('changelog.undatedExcludedMany', { count: undatedOmitted });
+    list.append(omitted);
+  }
+  const exportDisabled = snapshot.state !== 'ready' || !records.length || problems.length > 0;
+  ['copy-changelog-button', 'export-changelog-markdown-button', 'export-changelog-text-button'].forEach((id) => { $(`#${id}`).disabled = exportDisabled; });
+}
+
+async function refreshOfflineChangelog() {
+  const snapshot = await safely(() => window.studio.offlineChangelog());
+  if (!snapshot) return;
+  state.offlineChangelog = snapshot;
+  renderChangelogDestination();
+}
+
+function serializedFilteredChangelog(records) {
+  const lines = ['Minecraft Server Studio changelog export', 'Source: bundled local records', `Records: ${records.length}`, ''];
+  for (const record of records) {
+    lines.push(`${record.version} — ${record.dateLabel}`);
+    for (const category of Array.isArray(record.categories) ? record.categories : []) {
+      lines.push(category.title || 'Changes');
+      for (const change of Array.isArray(category.changes) ? category.changes : []) lines.push(`- ${change}`);
+    }
+    lines.push(record.commit?.state === 'recorded' && record.commit?.url
+      ? `Commit link: ${record.commit.url}`
+      : 'Commit link: not recorded in the bundled changelog.');
+    lines.push('');
+  }
+  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
+}
+
+async function copyFilteredChangelog() {
+  const { records, regex, date } = filteredChangelogRecords();
+  if (!records.length || regex.error || date.error) return toast({ key: 'changelog.copyBeforeFilter' }, 'error');
+  try {
+    await navigator.clipboard.writeText(serializedFilteredChangelog(records));
+    $('#changelog-export-detail').textContent = `${records.length} filtered bundled record${records.length === 1 ? '' : 's'} copied to the clipboard.`;
+    toast({ key: 'changelog.copySuccess' }, 'success');
+  } catch {
+    toast({ key: 'changelog.clipboardUnavailable' }, 'error');
+  }
+}
+
+async function exportFilteredChangelog(format) {
+  const { records, regex, date } = filteredChangelogRecords();
+  if (!records.length || regex.error || date.error) return toast({ key: 'changelog.exportBeforeFilter' }, 'error');
+  const result = await safely(() => window.studio.exportOfflineChangelog({ format, ids: records.map((record) => record.id) }));
+  if (!result) return;
+  $('#changelog-export-detail').textContent = result.boundary || 'The changelog export finished.';
+  if (result.state === 'saved') toast(`${result.fileName || 'The selected file'} contains ${result.recordCount} filtered local changelog record${result.recordCount === 1 ? '' : 's'}.`, 'success');
+  else toast({ key: 'changelog.exportCancelled' }, 'info');
+}
+
+async function openOfflineChangelog() {
+  state.workspaceDestination = 'changelog';
+  renderAll();
+  if (!state.offlineChangelog) await refreshOfflineChangelog();
+  $('#changelog-search')?.focus();
+}
+
+function closeOfflineChangelog() {
+  state.workspaceDestination = 'servers';
+  renderAll();
+  $('#server-search')?.focus();
+}
+
+function openChangelogRegexBuilder() {
+  const builder = $('#changelog-regex-builder');
+  if (!builder) return;
+  builder.hidden = false;
+  $('#open-changelog-regex-button').setAttribute('aria-expanded', 'true');
+  $('#changelog-regex-pattern').value = state.changelogRegex.pattern;
+  $('#changelog-regex-flag-i').checked = state.changelogRegex.flags.includes('i');
+  $('#changelog-regex-flag-m').checked = state.changelogRegex.flags.includes('m');
+  $('#changelog-regex-flag-s').checked = state.changelogRegex.flags.includes('s');
+  renderChangelogRegexStatus();
+  $('#changelog-regex-pattern').focus();
+}
+
+function closeChangelogRegexBuilder() {
+  const builder = $('#changelog-regex-builder');
+  if (!builder) return;
+  builder.hidden = true;
+  $('#open-changelog-regex-button').setAttribute('aria-expanded', 'false');
+  $('#changelog-search').focus();
+}
+
+function insertChangelogRegexToken(token) {
+  const input = $('#changelog-regex-pattern');
+  const value = CHANGELOG_REGEX_TOKENS[token];
+  if (!input || !value) return;
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  input.value = `${input.value.slice(0, start)}${value}${input.value.slice(end)}`.slice(0, 256);
+  const cursor = Math.min(start + value.length, input.value.length);
+  input.setSelectionRange(cursor, cursor);
+  input.focus();
+  renderChangelogRegexStatus();
+}
+
+function applyChangelogRegex() {
+  const input = changelogRegexInput();
+  const result = createChangelogRegex(input.pattern, input.flags);
+  if (result.error) {
+    renderChangelogRegexStatus();
+    return toast(result.error, 'error');
+  }
+  state.changelogRegex = { enabled: true, pattern: input.pattern, flags: input.flags };
+  renderChangelogDestination();
+}
+
+function resetChangelogRegex() {
+  state.changelogRegex = { enabled: false, pattern: '', flags: '' };
+  $('#changelog-regex-pattern').value = '';
+  $('#changelog-regex-flag-i').checked = false;
+  $('#changelog-regex-flag-m').checked = false;
+  $('#changelog-regex-flag-s').checked = false;
+  renderChangelogDestination();
 }
 
 function authenticatorRegexConfig() {
@@ -3692,7 +4083,6 @@ async function copySupportTicketRecoveryFolder() {
 }
 
 async function openSupportTicketsDestination() {
-  state.documentationOpen = false;
   state.pendingAuthenticatorDestination = false;
   state.workspaceDestination = 'support-tickets';
   renderAll();
@@ -3722,7 +4112,6 @@ function activeToyLockForAuthenticatorTab() {
 }
 
 async function openAuthenticatorDestination() {
-  state.documentationOpen = false;
   await refreshToyLocks();
   const lock = activeToyLockForAuthenticatorTab();
   if (lock) {
@@ -4025,6 +4414,7 @@ function renderAll() {
   renderOllama();
   renderConverter();
   renderDocumentationDestination();
+  renderChangelogDestination();
   setActiveTab(state.activeTab);
 }
 
@@ -5580,8 +5970,10 @@ function bindEvents() {
   }));
   $('#refresh-button').addEventListener('click', () => { refreshServers(); refreshDependencies(); });
   $('#open-documentation-button').addEventListener('click', openOfflineDocumentation);
+  $('#open-changelog-button').addEventListener('click', openOfflineChangelog);
   $('#open-support-tickets-from-help').addEventListener('click', openSupportTicketsDestination);
   $('#close-documentation-button').addEventListener('click', closeOfflineDocumentation);
+  $('#close-changelog-button').addEventListener('click', closeOfflineChangelog);
   $('#documentation-search').addEventListener('input', () => {
     state.documentationQuery = $('#documentation-search').value.slice(0, 256);
     if (state.documentationRegex.enabled) state.documentationRegex = { enabled: false, pattern: '', flags: '' };
@@ -5599,6 +5991,34 @@ function bindEvents() {
   });
   $('#apply-documentation-regex-button').addEventListener('click', applyDocumentationRegex);
   $('#reset-documentation-regex-button').addEventListener('click', resetDocumentationRegex);
+  $('#changelog-search').addEventListener('input', () => {
+    state.changelogQuery = $('#changelog-search').value.slice(0, 256);
+    if (state.changelogRegex.enabled) state.changelogRegex = { enabled: false, pattern: '', flags: '' };
+    renderChangelogDestination();
+  });
+  ['changelog-from-date', 'changelog-to-date'].forEach((id) => {
+    $(`#${id}`).addEventListener('input', renderChangelogDestination);
+    $(`#${id}`).addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      renderChangelogDestination();
+    });
+  });
+  $('#open-changelog-regex-button').addEventListener('click', openChangelogRegexBuilder);
+  $('#close-changelog-regex-button').addEventListener('click', closeChangelogRegexBuilder);
+  $('#changelog-regex-pattern').addEventListener('input', renderChangelogRegexStatus);
+  $('#changelog-regex-sample').addEventListener('input', renderChangelogRegexStatus);
+  ['#changelog-regex-flag-i', '#changelog-regex-flag-m', '#changelog-regex-flag-s'].forEach((selector) => {
+    $(selector).addEventListener('change', renderChangelogRegexStatus);
+  });
+  $$('[data-changelog-regex-token]').forEach((button) => {
+    button.addEventListener('click', () => insertChangelogRegexToken(button.dataset.changelogRegexToken));
+  });
+  $('#apply-changelog-regex-button').addEventListener('click', applyChangelogRegex);
+  $('#reset-changelog-regex-button').addEventListener('click', resetChangelogRegex);
+  $('#copy-changelog-button').addEventListener('click', copyFilteredChangelog);
+  $('#export-changelog-markdown-button').addEventListener('click', () => exportFilteredChangelog('markdown'));
+  $('#export-changelog-text-button').addEventListener('click', () => exportFilteredChangelog('text'));
   $('#refresh-dependencies-button').addEventListener('click', refreshDependencies);
   $('#refresh-status-button').addEventListener('click', refreshLocalStatus);
   $('#refresh-local-history-button').addEventListener('click', refreshLocalHistory);
@@ -5801,7 +6221,7 @@ async function initialize() {
   if (experience) applyExperienceSnapshot(experience);
   const directory = await safely(() => window.studio.dataDirectory());
   if (directory) $('#data-directory').textContent = `Data: ${directory}`;
-  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
+  await Promise.all([refreshServers(), refreshDependencies(), refreshVersions(), refreshLocalStatus(), refreshLocalHistory(), refreshExternalEditor(), refreshStatusHubBridgeConfiguration(), refreshApplicationUpdate(), refreshOllama(), refreshConverter(), refreshOfflineDocumentation(), refreshOfflineChangelog(), refreshAuthenticator(), refreshToyLocks(), refreshSupportTickets(), refreshLogoSettings()]);
   renderCommandCenter();
   setInterval(() => {
     if (state.workspaceDestination === 'authenticator') refreshAuthenticator({ quiet: true });
