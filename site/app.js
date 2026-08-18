@@ -1,5 +1,6 @@
 import { validatePersonalVocabularyPayload } from "./vocabulary-loader.js";
 import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
+import { STATIC_CHANGELOG_CATALOG, STATIC_CHANGELOG_CATALOG_METADATA } from "./changelog-catalog.js";
 
 (function () {
   "use strict";
@@ -48,6 +49,11 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
   var historyUi = {
     selectedIds: new Set(),
     visibleIds: [],
+    message: ""
+  };
+  var changelogUi = {
+    selectedTags: new Set(),
+    visibleTags: [],
     message: ""
   };
   var notificationRuntime = {
@@ -2460,7 +2466,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     var groupDefinitions = [
       { id: "tab-group-workspace", label: "Workspace", color: "#3f7cff", tabs: ["feature-status", "feature-settings", "feature-docs"] },
       { id: "tab-group-local-tools", label: "Local tools", color: "#2f9a71", tabs: ["feature-converter", "feature-authenticator", "feature-ollama", "feature-history"] },
-      { id: "tab-group-release", label: "Release information", color: "#b97823", tabs: ["feature-notifications", "feature-downloads"] }
+      { id: "tab-group-release", label: "Release information", color: "#b97823", tabs: ["feature-changelog", "feature-notifications", "feature-downloads"] }
     ];
     var defaultGroupForTab = {};
     groupDefinitions.forEach(function (group) {
@@ -4799,6 +4805,322 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     });
   }
 
+  function changelogBuildOrdinal(tag) {
+    var match = /^v\d+\.\d+\.\d+-build\.(\d+)\.(\d+)$/.exec(String(tag || ""));
+    if (!match) return -1;
+    return (Number(match[1]) * 10000) + Number(match[2]);
+  }
+
+  function changelogCategory(summary) {
+    var value = String(summary || "").trim();
+    if (/^ci:/i.test(value)) return "Release workflow";
+    if (/^(?:fix:|fix\s)/i.test(value)) return "Fixed";
+    if (/^(?:feat:|add\s|build\s)/i.test(value)) return "Added";
+    if (/^docs:/i.test(value)) return "Documentation";
+    if (/^release:/i.test(value)) return "Release metadata";
+    if (/^merge:/i.test(value)) return "Integration";
+    return "Recorded change";
+  }
+
+  function committedChangelogRecords() {
+    return STATIC_CHANGELOG_CATALOG.map(function (source, index) {
+      var record = source && typeof source === "object" ? source : {};
+      var tag = typeof record.tag === "string" && /^v[0-9][A-Za-z0-9.-]{0,120}$/.test(record.tag) ? record.tag : "unavailable-release-" + (index + 1);
+      var date = typeof record.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(record.date) ? record.date : "";
+      var commit = typeof record.commit === "string" && /^[a-f0-9]{40}$/i.test(record.commit) ? record.commit.toLowerCase() : "";
+      var summary = typeof record.summary === "string" && record.summary.trim() ? record.summary.trim().slice(0, 360) : "Recorded change is unavailable in this committed catalog entry.";
+      return {
+        tag: tag,
+        date: date,
+        commit: commit,
+        summary: summary,
+        category: changelogCategory(summary),
+        ordinal: changelogBuildOrdinal(tag)
+      };
+    }).sort(function (left, right) {
+      return right.ordinal - left.ordinal || right.tag.localeCompare(left.tag);
+    });
+  }
+
+  function changelogRecordText(record) {
+    return [record.tag, record.date || "release date unavailable", record.category, record.summary, record.commit || "commit unavailable"].join(" ");
+  }
+
+  function changelogCommitUrl(commit) {
+    return "https://github.com/Ding-Ding-Projects/minecraft-server-studio/commit/" + encodeURIComponent(commit);
+  }
+
+  function changelogReleaseUrl(tag) {
+    return "https://github.com/Ding-Ding-Projects/minecraft-server-studio/releases/tag/" + encodeURIComponent(tag);
+  }
+
+  function changelogFilters(surface) {
+    var dateInput = one("[data-mss-changelog-date]", surface);
+    var search = one("[data-mss-changelog-search]", surface);
+    var date = String(dateInput && dateInput.value || "").trim();
+    var controller = search && search.__mssRegexController;
+    var controllerError = controller && controller.getError ? controller.getError() : "";
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { records: [], error: "The release-date filter must use a complete calendar date.", date: date };
+    }
+    if (controllerError) {
+      return { records: [], error: "The regular expression is invalid: " + controllerError, date: date };
+    }
+    var records = committedChangelogRecords().filter(function (record) {
+      if (date && record.date !== date) return false;
+      if (controller && controller.isActive && controller.isActive()) return controller.matches(changelogRecordText(record));
+      var query = String(search && search.value || "").trim().toLocaleLowerCase();
+      return !query || changelogRecordText(record).toLocaleLowerCase().indexOf(query) !== -1;
+    });
+    return { records: records, error: "", date: date };
+  }
+
+  function selectedChangelogRecords() {
+    return committedChangelogRecords().filter(function (record) { return changelogUi.selectedTags.has(record.tag); });
+  }
+
+  function changelogExportText(records, format) {
+    var source = Array.isArray(records) ? records : [];
+    var generatedAt = new Date().toISOString();
+    if (format === "markdown") {
+      var markdown = [
+        "# Minecraft Server Studio committed changelog selection",
+        "",
+        "- Catalog source: " + STATIC_CHANGELOG_CATALOG_METADATA.source,
+        "- Catalog source date: " + STATIC_CHANGELOG_CATALOG_METADATA.generatedForSourceDate,
+        "- Generated locally: " + generatedAt,
+        "- Selected record count: " + source.length,
+        "- Boundary: this export contains only static catalog records committed with this public-page source; it does not verify current release availability.",
+        ""
+      ];
+      if (!source.length) markdown.push("No committed release records were selected.");
+      source.forEach(function (record) {
+        markdown.push("## " + record.tag);
+        markdown.push("");
+        markdown.push("- Date: " + (record.date || "Not recorded"));
+        markdown.push("- Category: " + record.category);
+        markdown.push("- Recorded change: " + record.summary);
+        markdown.push("- Commit: " + (record.commit ? changelogCommitUrl(record.commit) : "Not recorded"));
+        markdown.push("- Release page: " + changelogReleaseUrl(record.tag));
+        markdown.push("");
+      });
+      return { text: markdown.join("\n") + "\n", mime: "text/markdown;charset=utf-8", extension: "md" };
+    }
+    var lines = [
+      "Minecraft Server Studio committed changelog selection",
+      "Catalog source: " + STATIC_CHANGELOG_CATALOG_METADATA.source,
+      "Catalog source date: " + STATIC_CHANGELOG_CATALOG_METADATA.generatedForSourceDate,
+      "Generated locally: " + generatedAt,
+      "Selected record count: " + source.length,
+      "Boundary: static source records only; current release availability is not checked.",
+      ""
+    ];
+    if (!source.length) lines.push("No committed release records were selected.");
+    source.forEach(function (record) {
+      lines.push(record.tag + " | " + (record.date || "Not recorded") + " | " + record.category);
+      lines.push("Recorded change: " + record.summary);
+      lines.push("Commit: " + (record.commit ? changelogCommitUrl(record.commit) : "Not recorded"));
+      lines.push("Release page: " + changelogReleaseUrl(record.tag));
+      lines.push("");
+    });
+    return { text: lines.join("\n") + "\n", mime: "text/plain;charset=utf-8", extension: "txt" };
+  }
+
+  function setChangelogMessage(message) {
+    changelogUi.message = String(message || "").slice(0, 600);
+  }
+
+  function renderChangelogViewer() {
+    var surface = one('[data-contract-surface="browser-local-changelog-viewer"]');
+    var list = surface && one("[data-mss-changelog-list]", surface);
+    if (!surface || !list) return;
+    var allRecords = committedChangelogRecords();
+    var available = new Set(allRecords.map(function (record) { return record.tag; }));
+    Array.from(changelogUi.selectedTags).forEach(function (tag) {
+      if (!available.has(tag)) changelogUi.selectedTags.delete(tag);
+    });
+    var filtered = changelogFilters(surface);
+    changelogUi.visibleTags = filtered.records.map(function (record) { return record.tag; });
+    var selectedCount = changelogUi.selectedTags.size;
+    var catalogCount = one("[data-mss-changelog-catalog-count]", surface);
+    if (catalogCount) catalogCount.textContent = allRecords.length + " committed release records";
+    var selectVisible = one("[data-mss-changelog-select-visible]", surface);
+    var clearSelection = one("[data-mss-changelog-clear-selection]", surface);
+    var copySelection = one("[data-mss-changelog-copy]", surface);
+    var exportSelection = one("[data-mss-changelog-export]", surface);
+    if (selectVisible) selectVisible.disabled = Boolean(filtered.error) || filtered.records.length === 0;
+    if (clearSelection) clearSelection.disabled = selectedCount === 0;
+    if (copySelection) copySelection.disabled = selectedCount === 0;
+    if (exportSelection) exportSelection.disabled = selectedCount === 0;
+    var status = one("[data-mss-changelog-status]", surface);
+    if (status) {
+      if (filtered.error) status.textContent = filtered.error;
+      else if (changelogUi.message) status.textContent = selectedCount + " committed release record" + (selectedCount === 1 ? " is" : "s are") + " selected. " + changelogUi.message;
+      else status.textContent = selectedCount + " committed release record" + (selectedCount === 1 ? " is" : "s are") + " selected from " + filtered.records.length + " visible record" + (filtered.records.length === 1 ? "." : "s.");
+    }
+    list.replaceChildren();
+    if (filtered.error || !filtered.records.length) {
+      var empty = made("li");
+      empty.className = "changelog-empty";
+      empty.textContent = filtered.error || "No committed release records match the active local filters. This page will not fetch a replacement catalog.";
+      list.appendChild(empty);
+      return;
+    }
+    filtered.records.forEach(function (record) {
+      var item = made("li");
+      item.className = "changelog-record";
+      item.setAttribute("data-mss-changelog-record", record.tag);
+      var selectLabel = made("label");
+      selectLabel.className = "changelog-record-selection";
+      var checkbox = made("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = changelogUi.selectedTags.has(record.tag);
+      checkbox.setAttribute("aria-label", "Select committed release record " + record.tag);
+      checkbox.addEventListener("change", function () {
+        if (checkbox.checked) changelogUi.selectedTags.add(record.tag);
+        else changelogUi.selectedTags.delete(record.tag);
+        setChangelogMessage("");
+        renderChangelogViewer();
+      });
+      selectLabel.append(checkbox, document.createTextNode(" Select"));
+      var content = made("div");
+      content.className = "changelog-record-content";
+      var heading = made("div");
+      heading.className = "changelog-record-header";
+      var title = made("h3");
+      title.textContent = record.tag;
+      var category = made("span");
+      category.className = "changelog-category";
+      category.textContent = record.category;
+      heading.append(title, category);
+      var summary = made("p");
+      summary.textContent = record.summary;
+      var metadata = made("div");
+      metadata.className = "changelog-record-meta";
+      var date = made("time");
+      if (record.date) date.dateTime = record.date;
+      date.textContent = record.date ? "Release date: " + record.date : "Release date: not recorded";
+      var commit = record.commit ? document.createElement("a") : made("span");
+      if (record.commit) {
+        commit.href = changelogCommitUrl(record.commit);
+        commit.rel = "noopener";
+        commit.textContent = "Commit " + record.commit.slice(0, 12);
+      } else {
+        commit.textContent = "Commit: not recorded";
+      }
+      var release = document.createElement("a");
+      release.href = changelogReleaseUrl(record.tag);
+      release.rel = "noopener";
+      release.textContent = "Release page";
+      metadata.append(date, commit, release);
+      content.append(heading, summary, metadata);
+      item.append(selectLabel, content);
+      list.appendChild(item);
+    });
+  }
+
+  function copyChangelogSelection(surface) {
+    var records = selectedChangelogRecords();
+    if (!records.length) {
+      setChangelogMessage("Select at least one committed release record before requesting a copy.");
+      renderChangelogViewer();
+      return;
+    }
+    var output = changelogExportText(records, "text");
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+      setChangelogMessage("Clipboard access is unavailable in this browser. The selected records were not copied.");
+      renderChangelogViewer();
+      return;
+    }
+    navigator.clipboard.writeText(output.text).then(function () {
+      setChangelogMessage(records.length + " selected committed release record" + (records.length === 1 ? " was" : "s were") + " copied locally as plain text.");
+      renderChangelogViewer();
+      live("Selected committed changelog records were copied locally. No release or server request was made.");
+    }).catch(function () {
+      setChangelogMessage("The browser did not allow the clipboard request. The selected records remain unchanged and were not copied.");
+      renderChangelogViewer();
+    });
+  }
+
+  function downloadChangelogSelection(surface) {
+    var records = selectedChangelogRecords();
+    var format = one("[data-mss-changelog-export-format]", surface);
+    if (!records.length || !format) {
+      setChangelogMessage("Select at least one committed release record before requesting a download.");
+      renderChangelogViewer();
+      return;
+    }
+    var mode = format.value === "markdown" ? "markdown" : "text";
+    var output = changelogExportText(records, mode);
+    downloadLocalText(output.text, output.mime, "minecraft-server-studio-committed-changelog-selection." + output.extension);
+    setChangelogMessage(records.length + " selected committed release record" + (records.length === 1 ? " was" : "s were") + " prepared as a " + (mode === "markdown" ? "Markdown" : "plain-text") + " browser download request. This page does not know a destination or completion result.");
+    renderChangelogViewer();
+    live("A selected committed changelog export was prepared locally. No release, server, or desktop action was requested.");
+  }
+
+  function installChangelogViewer() {
+    var surface = one('[data-contract-surface="browser-local-changelog-viewer"]');
+    if (!surface || surface.getAttribute("data-mss-changelog-ready") === "true") return;
+    surface.setAttribute("data-mss-changelog-ready", "true");
+    var date = one("[data-mss-changelog-date]", surface);
+    var search = one("[data-mss-changelog-search]", surface);
+    if (date) {
+      date.addEventListener("input", function () { setChangelogMessage(""); renderChangelogViewer(); });
+      date.addEventListener("change", function () { setChangelogMessage(""); renderChangelogViewer(); });
+    }
+    if (search) {
+      makeRegexBuilder(search, {
+        label: "committed changelog records",
+        scope: surface,
+        candidates: function () {
+          return committedChangelogRecords().map(function (record) {
+            var candidate = made("span");
+            candidate.textContent = changelogRecordText(record);
+            return candidate;
+          });
+        },
+        onRefresh: function () {
+          window.setTimeout(function () { renderChangelogViewer(); }, 0);
+        }
+      });
+      search.addEventListener("input", function () { setChangelogMessage(""); window.setTimeout(renderChangelogViewer, 0); });
+    }
+    var selectVisible = one("[data-mss-changelog-select-visible]", surface);
+    if (selectVisible) selectVisible.addEventListener("click", function () {
+      var filtered = changelogFilters(surface);
+      if (filtered.error) {
+        setChangelogMessage("Resolve the local filter before selecting visible records.");
+        renderChangelogViewer();
+        return;
+      }
+      filtered.records.forEach(function (record) { changelogUi.selectedTags.add(record.tag); });
+      setChangelogMessage(filtered.records.length ? "All currently visible committed release records are selected." : "No visible committed release records are available to select.");
+      renderChangelogViewer();
+    });
+    var clearSelection = one("[data-mss-changelog-clear-selection]", surface);
+    if (clearSelection) clearSelection.addEventListener("click", function () {
+      changelogUi.selectedTags.clear();
+      setChangelogMessage("The current-page changelog selection was cleared. No catalog record changed.");
+      renderChangelogViewer();
+    });
+    var copy = one("[data-mss-changelog-copy]", surface);
+    if (copy) copy.addEventListener("click", function () { copyChangelogSelection(surface); });
+    var exportButton = one("[data-mss-changelog-export]", surface);
+    if (exportButton) exportButton.addEventListener("click", function () { downloadChangelogSelection(surface); });
+    if (hasContractMethod("registerCommand")) safely(function () {
+      contract.registerCommand({
+        id: "browser-local-changelog-viewer",
+        title: "Browser-local changelog viewer",
+        description: "Filter the committed release catalog locally, select records, and copy or download safe text formats.",
+        group: "Browser-local controls",
+        elementId: "changelog-preview",
+        keywords: ["changelog", "release", "version", "commit", "catalog"],
+        action: function () { activate("changelog-preview"); }
+      });
+    });
+    renderChangelogViewer();
+  }
+
   function selectedHistoryRecords() {
     return state.history.filter(function (entry) { return historyUi.selectedIds.has(entry.id); }).map(function (entry) {
       return { id: entry.id, action: entry.action, target: entry.target || "", detail: entry.detail || "", createdAt: historyTime(entry) };
@@ -5368,6 +5690,23 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
       capture: "missing",
       captureDetail: "No real built-site capture is recorded."
     };
+    var browserLocalChangelog = {
+      implementation: "in-progress",
+      implementationReference: "site/index.html, site/app.js, site/changelog-catalog.js, and site/styles.css",
+      implementationDetail: "A committed static tag catalog is rendered with local date/plain-text/regex filtering, current-page selection, safe text copy, and browser-download preparation only.",
+      documentation: "verified",
+      documentationReference: "site/README.md, site/CONTRACT.md, and docs/features/browser-local-changelog-viewer.md",
+      localization: "missing",
+      localizationDetail: "This operational surface is English-first in the current delivery lane.",
+      persistence: "not-applicable",
+      persistenceReason: "The committed catalog, current-page filters, selection, copied text, and download request state are not written to browser storage.",
+      test: "missing",
+      testDetail: "The fast-delivery lane intentionally did not run tests.",
+      interaction: "missing",
+      interactionDetail: "No built-site interaction is recorded.",
+      capture: "missing",
+      captureDetail: "No real built-site capture is recorded."
+    };
     var surfaces = [
       { id: "marketing-shell", label: "Marketing landing shell", route: "#main-content", features: [
         inventoryFeature("marketing-copy", "Marketing content and immutable installer handoff boundary", "in-progress", "The page presents a fixed release manifest and start decision without inventing an installer URL or simulating a transfer.", staticHook),
@@ -5390,6 +5729,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
         inventoryFeature("ollama-privileged-boundary", "Unavailable browser-only Ollama actions", "in-progress", "Model Store, pull, chat, delete, copy, hardware-fit, and harness actions remain visibly unavailable because this static browser surface cannot safely implement them.", ollamaBrowserObserver)
       ] },
       { id: "history", label: "Local history preview", route: "#history-preview", features: [inventoryFeature("history-preview", "Browser-local audit preview", "in-progress", "The browser-local contract audit is not Git-backed desktop history.", localContract)] },
+      { id: "changelog", label: "Browser-local changelog viewer", route: "#changelog-preview", features: [inventoryFeature("browser-local-changelog-viewer", "Committed static changelog catalog", "in-progress", "The page renders every catalog entry committed with this source revision, filters it locally, and never fetches a release or repository record at runtime.", browserLocalChangelog)] },
       { id: "notifications", label: "Browser-local notification center", route: "#notifications-preview", features: [inventoryFeature("browser-local-notification-center", "Bounded browser-local notification center and page-local confirmation", "in-progress", "Notifications and their audit metadata remain local. Clearing records confirms only the exact page-local notification count and cannot affect a browser download, server, installed application, credential, file, or external system.", browserNotificationCenter)] },
       { id: "downloads", label: "Download and release states", route: "#downloads-preview", features: [inventoryFeature("browser-installer-handoff", "User-initiated immutable installer browser handoff", "in-progress", "A fixed embedded release manifest and start decision can hand the exact link to the browser. Transfer progress and completion remain explicitly unobservable.", browserInstallerHandoff)] }
     ];
@@ -5554,6 +5894,7 @@ import { initializeAuthenticatorAndToyLocks } from "./authenticator-locks.js";
     renderNotifications();
     installHistoryFilters();
     installHistorySearchBuilder();
+    installChangelogViewer();
     installExports();
     installVerifiedDownloadCtas();
     installSearches();

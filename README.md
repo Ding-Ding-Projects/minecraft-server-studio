@@ -116,6 +116,8 @@ The companion site also has a bounded browser-local notification center. Its not
 
 The companion site's installer handoff accepts only an embedded fixed, immutable release manifest and validates its exact tag, asset name, platform, release URL, asset URL, and unsigned state before enabling a real start decision. A visitor must choose the dialog's asset link to hand it to the browser. The page keeps progress and completion explicitly unknown after that point because it cannot inspect the browser's transfer or installation state. It creates only bounded browser-local handoff metadata, never a download record or an installer result. See [Browser-local installer download handoff](docs/features/browser-local-installer-download-handoff.md) for the full behavior, failure, security, and unrun-verification boundary.
 
+The companion site also includes a browser-local changelog viewer over a bounded committed static catalog. It combines local date and plain-text/explicit-regular-expression filtering with current-page selection, copy, and UTF-8 Markdown or plain-text browser-download requests. It makes no runtime release/tag/source-control request, persists no catalog or selection state, and cannot know whether a browser download was saved. See [Browser-local companion-site changelog viewer](docs/features/browser-local-changelog-viewer.md) for its scope, failure, privacy, and verification boundaries.
+
 ## Documentation
 
 - [Server lifecycle and Paper/Spigot setup](docs/features/server-orchestration.md)
@@ -145,6 +147,7 @@ The companion site's installer handoff accepts only an embedded fixed, immutable
 - [Browser-local history and safe exports](docs/features/browser-local-history-and-safe-exports.md)
 - [Browser-local notification center and destructive confirmation](docs/features/browser-local-notifications-and-confirmation.md)
 - [Browser-local installer download handoff](docs/features/browser-local-installer-download-handoff.md)
+- [Browser-local companion-site changelog viewer](docs/features/browser-local-changelog-viewer.md)
 - [External editor integration](docs/features/external-editor-integration.md)
 - [Local status and completeness](docs/features/local-status-and-completeness.md)
 - [Local history and safe exports](docs/features/local-history-and-safe-exports.md)

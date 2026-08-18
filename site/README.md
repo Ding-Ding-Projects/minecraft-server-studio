@@ -7,7 +7,7 @@ The landing page describes:
 - the Paper and Spigot server choices;
 - automatic Java and Git prerequisite setup performed by the installed desktop application;
 - local server planning, configuration, lifecycle, and plugin-management capabilities;
-- browser-local controls and product destinations such as settings, optional event narration, local schedules, companion-site logo customization, documentation, file conversion, authenticator and lock management, a deliberately narrow local Ollama observer, local history with bounded safe exports, notification center, and download states; and
+- browser-local controls and product destinations such as settings, optional event narration, local schedules, companion-site logo customization, documentation, file conversion, authenticator and lock management, a deliberately narrow local Ollama observer, local history with bounded safe exports, a static changelog viewer, notification center, and download states; and
 - the verified public installer availability boundary.
 
 ## Truthful static boundary
@@ -37,6 +37,7 @@ The visible destinations are:
 - Authenticator and toy locks
 - Browser-local Ollama observer
 - Local version history
+- Browser-local changelog viewer
 - Notification center
 - Download and release states
 
@@ -127,6 +128,24 @@ confirmation and affects no desktop, server, download, browser-history, or
 authenticator data. See
 [`docs/features/browser-local-history-and-safe-exports.md`](../docs/features/browser-local-history-and-safe-exports.md)
 for the full failure, privacy, reset, and verification boundary.
+
+## Browser-local changelog viewer
+
+The `changelog-preview` destination is an independent, browser-local view of a
+bounded committed catalog. It does not call a release API, inspect repository
+history, query Git tags, read the installed application, or persist a browser
+copy of the catalog. A later source update and Pages deployment are the only
+way its displayed catalog can change.
+
+The view combines a local date filter with plain-text search by default or an
+explicit bounded regular-expression route. Visitors can select the currently
+visible static rows and use **Copy current selection** or request UTF-8
+Markdown or plain-text browser downloads. The page does not know a browser
+download destination or completion state, and it does not offer JSON, CSV,
+archive, encrypted export, external-editor handoff, desktop import, or any
+network transfer from this surface. See
+[`docs/features/browser-local-changelog-viewer.md`](../docs/features/browser-local-changelog-viewer.md)
+for catalog, failure, privacy, and verification boundaries.
 
 ## Browser-local authenticator, pairing QR, and toy locks
 
@@ -294,6 +313,7 @@ This is a public-source inventory, not a claim that the installed application ha
 | Authenticator and locks | Browser-local TOTP, QR pairing reveal, toy-lock, and local Support Tickets source | This README, `CONTRACT.md`, and `../docs/features/browser-local-authenticator-and-toy-locks.md` | English-first; incomplete | Not run in fast-delivery lane | Missing |
 | Browser-local Ollama observer | Explicit fixed-loopback `GET` observer with a local last-success snapshot; catalog, pull, chat, delete, copy, hardware fit, and harness remain unavailable | This README, `CONTRACT.md`, and the [feature article](../docs/features/browser-local-ollama-observer.md) | Missing | Not run in fast-delivery lane | Missing |
 | Local version history and safe exports | Browser-local bounded audit browsing, local regex filtering, and selected-record UTF-8 export; no server/filesystem/credential history | This README, `CONTRACT.md`, and `../docs/features/browser-local-history-and-safe-exports.md` | Missing | Not run in fast-delivery lane | Missing |
+| Browser-local changelog viewer | Committed static catalog with bounded local date/plain-text/regex filtering, current-page selection, copy, and Markdown/plain-text browser-download request; no runtime fetch or persistence | This README, `CONTRACT.md`, and `../docs/features/browser-local-changelog-viewer.md` | Missing | Not run in fast-delivery lane | Missing |
 | Notification center | Bounded browser-local notices/audit entries, local plain-text/regex search, and a two-acknowledgement/full-slider flow that clears only page-local notification metadata | This README, `CONTRACT.md`, and `../docs/features/browser-local-notifications-and-confirmation.md` | English baseline; broader localization incomplete | Not run in fast-delivery lane | Missing |
 | Download and release states | Validated fixed manifest, real start decision, user-triggered immutable browser link, and bounded local handoff metadata; browser transfer and completion remain unobservable | This README, `CONTRACT.md`, and `docs/features/browser-local-installer-download-handoff.md` | English-first; incomplete | Not run in fast-delivery lane | Missing |
 
