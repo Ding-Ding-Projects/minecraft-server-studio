@@ -152,6 +152,24 @@
                 <div id="ollama-running-models" class="ollama-model-list" aria-live="polite"></div>
               </section>
             </div>
+
+            <section class="ollama-operation-card" aria-labelledby="ollama-operation-title">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">SELECTED INSTALLED-MODEL ACTIONS</p>
+                  <h4 id="ollama-operation-title">Maintain one observed local model</h4>
+                  <p class="muted">The picker contains only freshly observed installed model names. Re-pull and copy use named fixed-loopback requests; deletion opens the same two-confirmation authorization surface used for other irreversible app actions. No catalog, free-form pull, cloud endpoint, token, prompt, chat, or shell command is available here.</p>
+                </div>
+                <button id="ollama-cancel-operation-button" class="outlined-action" type="button" disabled>Cancel local operation</button>
+              </div>
+              <p id="ollama-operation-status" class="muted" role="status">Refresh the local inventory before selecting a local model action.</p>
+              <div class="ollama-operation-grid">
+                <label class="field" for="ollama-operation-model"><span>Observed installed model</span><select id="ollama-operation-model" disabled><option value="">Refresh local inventory first</option></select><small>The selection expires after a short local observation window. Refresh again if it becomes unavailable.</small></label>
+                <div class="ollama-operation-actions" aria-label="Selected local model actions"><button id="ollama-pull-model-button" class="outlined-action" type="button" disabled>Re-pull selected model</button><button id="ollama-delete-model-button" class="danger-action" type="button" disabled>Delete selected model</button></div>
+                <label class="field" for="ollama-copy-destination"><span>Copy destination name</span><input id="ollama-copy-destination" type="text" maxlength="160" autocomplete="off" spellcheck="false" placeholder="local-copy:tag" disabled><small>Use lowercase letters, numbers, dots, underscores, hyphens, optional namespaces, and an optional tag. The source stays the selected observed local model.</small></label>
+                <div class="ollama-operation-actions"><button id="ollama-copy-model-button" class="primary-action" type="button" disabled>Copy selected model</button></div>
+              </div>
+            </section>
           </section>
 
           <section id="ollama-panel-capabilities" class="ollama-panel" role="tabpanel" aria-labelledby="ollama-capabilities-tab" data-ollama-panel="capabilities" hidden>

@@ -10,7 +10,7 @@ An unavailable history store or export adapter must remain visible as unavailabl
 
 ## Local history boundary
 
-The history surface is for records owned by Minecraft Server Studio, such as app-managed presentation, narrator and schedule settings, shared-mode changes, server records, authenticator and toy-lock records, optional bridge configuration, and user-initiated history actions. It uses an app-private bounded append-only JSONL journal. It must remain local to the application-data area, must not create a `.git` directory, and must not use a Minecraft server folder as a history repository.
+The history surface is for records owned by Minecraft Server Studio, such as app-managed presentation, narrator and schedule settings, shared-mode changes, server records, authenticator and toy-lock records, optional bridge configuration, selected local Ollama model-operation outcomes, and user-initiated history actions. It uses an app-private bounded append-only JSONL journal. It must remain local to the application-data area, must not create a `.git` directory, and must not use a Minecraft server folder as a history repository.
 
 The intended record model is append-only:
 
@@ -42,6 +42,7 @@ History and export records must retain useful action facts without serializing s
 - RCON passwords, management-provider credentials, enrollment tokens, session keys, and other credential-vault material;
 - School-mode unlock material and any authenticator or one-time-password secret, code, URI, or QR payload;
 - local personal-vocabulary JSON content, mappings, cache content, source filename, source path, and replacement evidence;
+- Ollama model names, prompts, chat content, raw request or response bodies, operation payloads, and service error text;
 - raw Status Hub replies, response bodies, authorization headers, server console secrets, credential-shaped values, and local paths; and
 - unbounded document, world, log, or JAR content that the user did not expressly choose to export.
 

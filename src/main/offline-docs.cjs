@@ -44,7 +44,7 @@ const OFFLINE_DOCUMENTATION_INVENTORY = Object.freeze([
   entry('dim-sum-surprise', 'dim-sum-surprise.md', 'Dim sum startup surprise', 'Understand the non-blocking cached public-catalog surprise and its no-vendoring boundary.'),
   entry('narrator-and-scheduled-settings', 'narrator-and-scheduled-settings.md', 'Event narrator and scheduled language settings', 'Configure local platform narration and bounded local-time language schedules.'),
   entry('cli-rcon-gateway', 'cli-rcon-gateway.md', 'CLI RCON gateway', 'Use the protected one-shot CLI route for RCON commands.'),
-  entry('local-ollama-suite', 'local-ollama-suite.md', 'Local Ollama suite foundation', 'Inspect the bounded fixed-loopback local service inventory.'),
+  entry('local-ollama-suite', 'local-ollama-suite.md', 'Local Ollama suite', 'Inspect the bounded fixed-loopback local service inventory and maintain one freshly observed installed model.'),
   entry('browser-local-ollama-observer', 'browser-local-ollama-observer.md', 'Browser-local Ollama observer', 'Visitor-triggered browser-only observation of the fixed local Ollama API with bounded data handling and no remote-control bridge.'),
   entry('browser-local-file-converter', 'browser-local-file-converter.md', 'Browser-local companion-site file converter', 'Use bounded in-browser text, structured-data, and binary-encoding transformations without a desktop or server bridge.'),
   entry('browser-local-history-and-safe-exports', 'browser-local-history-and-safe-exports.md', 'Browser-local history and safe exports', 'Review bounded non-secret companion-site action metadata and export selected records without a desktop or server bridge.'),

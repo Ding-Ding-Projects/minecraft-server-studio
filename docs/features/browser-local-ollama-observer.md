@@ -65,6 +65,6 @@ This observer is not evidence that Ollama is installed, that browser CORS permit
 
 ## Suggested articles
 
-- [Local Ollama suite foundation](local-ollama-suite.md)
+- [Local Ollama suite](local-ollama-suite.md)
 - [Local status and desktop completeness](local-status-and-completeness.md)
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
