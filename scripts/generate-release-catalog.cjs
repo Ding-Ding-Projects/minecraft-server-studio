@@ -24,6 +24,11 @@ const MAX_RECORDS = 2_048;
 const REFRESH_BASELINE_ARGUMENT = '--refresh-baseline';
 
 function localTagRecords() {
+  // GitHub source archives deliberately omit .git. Packaging from one must
+  // retain the reviewed checked-in baseline rather than failing or inventing
+  // tag, date, or commit metadata. Real clones and linked worktrees have a
+  // .git directory or file and continue to enrich the baseline from tags.
+  if (!fs.existsSync(path.join(REPOSITORY_ROOT, '.git'))) return [];
   const output = gitText([
     '-C', REPOSITORY_ROOT,
     'for-each-ref',

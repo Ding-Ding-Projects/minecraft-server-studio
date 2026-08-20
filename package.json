@@ -8,6 +8,7 @@
   "scripts": {
     "start": "electron .",
     "start:cli": "node src/cli/mss.cjs",
+    "test:release-catalog-archive": "node scripts/test-release-catalog-archive.cjs",
     "package": "node scripts/generate-release-catalog.cjs && node scripts/verify-offline-docs-bundle.cjs && node scripts/verify-offline-changelog-bundle.cjs && electron-builder --win squirrel",
     "package:dir": "node scripts/generate-release-catalog.cjs && node scripts/verify-offline-docs-bundle.cjs && node scripts/verify-offline-changelog-bundle.cjs && electron-builder --dir"
   },

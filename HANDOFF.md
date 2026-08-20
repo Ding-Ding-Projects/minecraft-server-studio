@@ -1,5 +1,19 @@
 # Handoff
 
+## Archive-safe release catalog
+
+The package route now works when the source came from a GitHub archive, where
+`.git` is intentionally absent. In that state the generator uses only the
+checked-in release-catalog baseline; real clones and linked worktrees still
+enrich it from locally available tags. The focused archive test proves exact
+baseline retention without inventing commit metadata. Packaged runtime and
+installed-application lifecycle evidence remain separate and unverified.
+
+On 2026-08-20, `npm run test:release-catalog-archive` retained all 100
+checked-in records in a temporary non-Git source tree, and `npm run
+package:dir` produced `dist/win-unpacked/Minecraft Server Studio.exe` from the
+real checkout. The package was not installed or launched.
+
 ## Desktop dim-sum startup-surprise candidate
 
 The desktop source now has a main-process-only, cache-first dim-sum startup
