@@ -17,30 +17,46 @@ included in status events.
 
 The main process implements RFC 4226 dynamic truncation and RFC 6238 TOTP with
 SHA-1, SHA-256, or SHA-512; six through eight digits; and a bounded positive
-period. Entries can be created from either:
+period. Entries begin from either:
 
 - a manual Base32 secret; or
 - a standard `otpauth://totp/` URI containing bounded TOTP fields.
 
 The URI parser accepts only the TOTP scheme, `secret`, `issuer`, `algorithm`,
 `digits`, and `period` query fields. It rejects duplicate, unknown, malformed,
-or oversized fields instead of partially applying them. Local metadata stores
-the issuer, account, display label, group, algorithm, digits, period, and
-timestamps. The corresponding secret is stored only through the operating
-system protected credential route used by the application.
+or oversized fields instead of partially applying them. Before either input is
+stored, the main process normalizes it into a canonical standard
+`otpauth://totp/` record and opens an explicit, temporary pairing session.
+Local metadata stores the issuer, account, display label, group, algorithm,
+digits, period, and timestamps. The corresponding secret is stored only through
+the operating-system protected credential route after pairing confirmation
+succeeds.
 
 Current and next codes are computed only in the main process and are exposed to
 the renderer through a narrow code-snapshot IPC call. The copy action is
 user-initiated and copies only the code currently visible in the list.
 
-### QR boundary
+### Local QR pairing and confirmation
 
-QR pairing, QR-image import, clipboard QR import, and camera scanning are
-explicitly unavailable in this foundation. The application does not draw a
-placeholder QR code or pretend that a camera/clipboard parser exists. Those
-paths require a bundled in-process QR renderer and decoder with their own
-resource, privacy, and pairing-confirmation implementation before they can be
-enabled.
+An explicit **Reveal local QR pairing** action creates a main-process-only
+session for 60 seconds. The bundled renderer draws a bounded Version 10-L
+byte-mode QR code entirely in-process on a white canvas with a quiet zone; no
+web service, image URL, filesystem write, clipboard operation, or network
+request is involved. The canvas has a text alternative naming the issuer and
+account, and the matching Base32 value is visibly grouped alongside the exact
+algorithm, digits, and period for assistive and non-camera use.
+
+The QR encoder accepts canonical URI payloads up to 271 UTF-8 bytes. When a
+valid standard record exceeds that encoder bound, the temporary manual Base32
+reveal remains available and the UI states why no QR pixels are drawn. In all
+cases the user must enter a current code from their authenticator before a new
+entry is stored. A mismatch does not create an entry; the session clears after
+five failed confirmations, explicit cancellation, navigation away from the
+codes tab, or the 60-second expiry.
+
+QR image import, clipboard-image import, and camera scanning remain visibly
+unavailable. This build has no bundled decoder or capture route and does not
+pretend that those paths work.
 
 ### Clock boundary
 
@@ -57,7 +73,8 @@ computer. Each configured record has its own credential and one of two methods:
 
 - a password verified through an independently salted `scrypt` verifier stored
   in the protected credential vault; or
-- a manually supplied TOTP secret held only in the protected credential vault.
+- a TOTP secret held only in the protected credential vault after the same
+  explicit local QR/manual pairing and current-code confirmation.
 
 Metadata records the exact target type, target identifier, user-visible label,
 method, duration, and timestamps. It never stores a password, verifier, TOTP
@@ -71,10 +88,10 @@ New desktop locks can be created only for the fixed application-owned target
 catalog returned by the main process. The renderer does not accept a free-form
 target identifier or label: the service rejects an unknown target and rejects a
 label that does not exactly match the selected catalog record. The current
-catalog contains 20 targets:
+catalog contains 21 targets:
 
-- 16 tabs: the authenticator destination and the General, World, Gameplay,
-  Network, Runtime, Paper JAR CLI, BuildTools, Backups and updates, Live
+- 17 tabs: the authenticator destination and the General, World, Gameplay,
+  Network, Access records, Runtime, Paper JAR CLI, BuildTools, Backups and updates, Live
   management, Command Center, Local status, History and exports, Advanced,
   Plugins, and Console server-settings tabs;
 - three appearance targets: the app shell, settings-tab strip, and primary
@@ -127,8 +144,13 @@ that folder on the user's behalf.
   secret.
 - Secret-shaped values are not emitted through status events, notification
   payloads, renderer snapshots, ordinary exports, local history, or logs.
-- The current UI has no ordinary secret export, deletion workflow, QR workflow,
-  camera workflow, account sync, or external network path.
+- Pairing-session secrets and QR URI payloads are temporary only. The session
+  record discards them on expiry, cancellation, navigation away, or successful
+  confirmation; the renderer clears its QR canvas, visible Base32 value, and
+  typed confirmation code at the same boundaries. None are written to metadata,
+  local history, exports, logs, telemetry, or a network request.
+- The current UI has no ordinary secret export, deletion workflow, QR-image or
+  camera import workflow, account sync, or external network path.
 
 ## Verification state
 

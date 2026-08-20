@@ -268,3 +268,39 @@ footer { display: grid; grid-template-columns: minmax(210px, auto) 1fr auto; ali
   .auth-workspace-heading, .auth-search-controls { grid-template-columns: 1fr; display: grid; }
   .auth-search-controls > .auth-field, .auth-search-controls > button { grid-column: 1; }
 }
+
+/* Browser-local committed changelog viewer. */
+.changelog-preview { scroll-margin-top: 18px; }
+.changelog-toolbar { display: grid; grid-template-columns: minmax(156px, .36fr) minmax(0, 1fr); gap: 12px; align-items: end; margin-top: 20px; }
+.changelog-toolbar > label { display: grid; gap: 7px; min-width: 0; color: var(--text); font-size: .78rem; font-weight: 790; }
+.changelog-toolbar input[type="date"] { min-width: 0; min-height: 42px; padding: 0 10px; border: 1px solid var(--outline); border-radius: 10px; color: var(--text); background: var(--surface-strong); font: inherit; }
+.changelog-toolbar .preview-search { margin: 0; }
+.changelog-filter-help, .changelog-boundary { margin: 12px 0 0; color: var(--muted); font-size: .77rem; line-height: 1.5; }
+.changelog-boundary { padding: 12px; border-left: 4px solid var(--warning); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--warning) 8%, var(--surface)); }
+.changelog-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 9px; margin-top: 16px; }
+.changelog-actions button, .changelog-actions select { min-height: 38px; padding: 0 10px; border: 1px solid var(--outline); border-radius: 10px; color: var(--text); background: var(--surface-soft); cursor: pointer; font: inherit; font-size: .74rem; font-weight: 780; }
+.changelog-actions button:hover { color: var(--primary-ink); background: var(--primary); }
+.changelog-actions button:disabled { cursor: not-allowed; opacity: .54; }
+.changelog-actions label { display: grid; gap: 6px; min-width: 152px; color: var(--text); font-size: .72rem; font-weight: 800; }
+.changelog-actions select { min-width: 152px; background: var(--surface-strong); }
+.changelog-status { display: block; min-height: 1.4em; margin-top: 13px; padding: 10px 12px; border-left: 3px solid var(--primary); color: var(--muted); background: color-mix(in srgb, var(--primary) 7%, var(--surface)); font-size: .76rem; line-height: 1.45; }
+.changelog-record-list { display: grid; gap: 11px; max-height: min(64vh, 880px); overflow: auto; margin: 16px 0 0; padding: 0 2px 2px 0; list-style: none; }
+.changelog-record { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px; border: 1px solid var(--outline-soft); border-radius: 12px; background: color-mix(in srgb, var(--bg) 22%, transparent); }
+.changelog-record-selection { display: inline-flex; align-items: center; gap: 6px; min-height: 31px; color: var(--text); font-size: .73rem; font-weight: 780; }
+.changelog-record-selection input { width: 20px; height: 20px; accent-color: var(--primary); }
+.changelog-record-content { display: grid; gap: 8px; min-width: 0; }
+.changelog-record-header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.changelog-record-header h3 { margin: 0; overflow-wrap: anywhere; font-size: .88rem; }
+.changelog-category { padding: 4px 7px; border: 1px solid var(--outline); border-radius: 999px; color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); font-size: .65rem; font-weight: 840; letter-spacing: .025em; text-transform: uppercase; }
+.changelog-record-content p { margin: 0; color: var(--text); font-size: .78rem; line-height: 1.48; overflow-wrap: anywhere; }
+.changelog-record-meta { display: flex; flex-wrap: wrap; gap: 8px 13px; color: var(--muted); font-size: .71rem; line-height: 1.42; }
+.changelog-record-meta a { color: var(--primary); font-weight: 760; overflow-wrap: anywhere; }
+.changelog-empty { padding: 20px; border: 1px dashed var(--outline); border-radius: 11px; color: var(--muted); font-size: .79rem; line-height: 1.5; text-align: center; }
+.changelog-preview :is(input, select, button, a):focus-visible { outline: 3px solid color-mix(in srgb, var(--primary) 68%, white); outline-offset: 2px; }
+
+@media (max-width: 760px) {
+  .changelog-toolbar { grid-template-columns: 1fr; }
+  .changelog-actions > button { flex: 1 1 180px; }
+  .changelog-actions label, .changelog-actions select { width: 100%; }
+  .changelog-record { grid-template-columns: 1fr; }
+}

@@ -46,7 +46,7 @@ See [App-logo customization](app-logo-customization.md) for the format, cache, c
 
 The mode's default label is **School mode**, but the user can rename it. After a label is saved, the application renders the selected label in the mode controls instead of relying on the shipped label.
 
-When the shared record is ready and the mode is enabled, the desktop app applies English presentation and suppresses the language-mode and message-playfulness controls in the running preferences dialog. The renderer has a general suppression marker for future routes that must disappear in this mode; this foundation does not add a personal-vocabulary uploader or dim-sum feature route, so there is no such route to expose or hide in this release.
+When the shared record is ready and the mode is enabled, the desktop app applies English presentation and suppresses the language-mode and message-playfulness controls in the running preferences dialog. The personal-vocabulary setting is also hidden while this mode is active and its affected copy returns to original shipped wording; its bounded local-data behavior is documented separately. No dim-sum feature route is present in this release.
 
 The shared record is watched from the main process. A change written by another compatible local application, or a deletion/replacement observed by the watcher, is sent to the active renderer immediately. The desktop re-applies the effective language and hidden-control state without requiring a restart.
 
@@ -69,7 +69,7 @@ If the credential is lost, the preferences dialog displays the exact shared appl
 - The shared record has no network client, synchronization service, analytics, or telemetry behavior.
 - The service does not write settings into the repository, a server folder, an export, or a console log.
 - Missing or unreadable shared state fails closed to English safety presentation instead of pretending that the mode is disabled.
-- The current foundation does not implement a personal-vocabulary upload, a full every-element appearance editor, complete tab-management suite, complete regex coverage, or full universal-surface coverage. Local history and redacted exports, narrator, scheduled-language, authenticator, toy-lock, file-converter, local-model, bounded appearance/tab, and local logo foundations are documented separately and remain incomplete where their own articles say so.
+- The current foundation does not implement a full every-element appearance editor, complete tab-management suite, complete regex coverage, or full universal-surface coverage. The bounded local personal-vocabulary setting, local history and redacted exports, narrator, scheduled-language, authenticator, toy-lock, file-converter, local-model, bounded appearance/tab, and local logo foundations are documented separately and remain incomplete where their own articles say so.
 
 ## Verification status
 

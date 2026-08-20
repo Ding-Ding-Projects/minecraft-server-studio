@@ -52,13 +52,14 @@ The template includes these desktop surface rows:
 | `command-center` | Command center |
 | `plugins` | Plugin management |
 | `configuration` | Server configuration |
+| `server-access-records` | Local operators, allowlist, player-ban, and IP-ban records for controlled server roots |
 | `console-and-rcon` | Console and RCON |
 | `backups-and-updates` | Backup, restore, and Paper server-JAR update/rollback controls |
 | `application-updates` | Unsigned Squirrel application-update controls |
 | `settings-appearance-and-localization` | Settings, appearance, and localization |
 | `command-palette` | Bounded desktop command palette for local renderer destinations and non-secret controls |
 | `file-converter` | Local file converter |
-| `ollama` | Local Ollama service health plus bounded installed/running inventory; complete Model Store, pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
+| `ollama` | Local Ollama service health plus bounded installed/running inventory and selected-installed-model re-pull/copy/delete maintenance; complete Model Store, batch pulls, chat, fit assessment, and harness flows remain separate incomplete capability areas. |
 | `authenticator-and-toy-locks` | Authenticator and toy locks |
 | `docs-history-and-notifications` | Offline documentation, history, and notifications |
 | `notifications-and-destructive-confirmation` | App-private notification history and reusable irreversible-action confirmation |
@@ -67,6 +68,12 @@ The template includes these desktop surface rows:
 | `export` | Export |
 
 The dependency-bootstrap row explicitly covers automatic installation rather than a manual prerequisite handoff. Its implementation evidence should identify detection, automatic installation attempts, retry/recovery state, and the rich desktop controls that expose those states.
+
+## Server access-record inventory boundary
+
+The `server-access-records` row is independent from lifecycle control, the Command Center, RCON, protocol management, and configuration toggles. It names only the local typed models, fixed IPC, renderer tab, redacted history event, and documentation for the four fixed root-level files: `ops.json`, `whitelist.json`, `banned-players.json`, and `banned-ips.json`.
+
+It remains incomplete until localization, focused checks, accessible packaged interaction, and real captures are recorded. Source registration is not proof that a Minecraft process reloaded a file, recognized a player, applied an operator change, applied a ban or unban, or received a network or console command. See [local server access records](server-access-records.md) for the exact controlled-root, identity, atomic-write, and confirmation boundary.
 
 ## Command-palette inventory boundary
 
@@ -119,7 +126,7 @@ required proof record is verified; an application-update source record is not a
 substitute for backup, restore, localization, tests, built-artifact interaction,
 or capture evidence.
 
-The `settings-appearance-and-localization` row now names the implemented presentation-settings foundation: app-private persisted language modes, independent English/Cantonese message-playfulness values, dialog/message emoji preference, display-name label, a watched shared local School-mode record with a protected unlock-credential boundary, and a separate strict appearance/tab-navigation record. It also records narrator preferences, platform-only voice enumeration and serialized renderer queue, bounded local scheduled-language behavior, persisted theme/density/seed/bounded-typography controls, three direct appearance targets, and a one-window desktop tab workspace with dock selection, ordering, pinning, groups, overflow, three local search scopes, and protected bulk-close boundaries. HTTPS API and Home Assistant sources remain visible but disabled because no validated privileged adapter exists in this build. Its localization, test, capture, and complete-evidence fields remain intentionally incomplete because the broader settings, every-element appearance, multi-window tab-management, and universal-surface contract is not yet complete.
+The `settings-appearance-and-localization` row now names the implemented presentation-settings foundation: app-private persisted language modes, independent English/Cantonese message-playfulness values, dialog/message emoji preference, display-name label, a watched shared local School-mode record with a protected unlock-credential boundary, and a separate strict appearance/tab-navigation record. It also records narrator preferences, platform-only voice enumeration and serialized renderer queue, schema-version-2 bounded scheduled-language behavior, configured main-process-only validated HTTPS API/Home Assistant boolean source choices, persisted theme/density/seed/bounded-typography controls, seven canonical rendered appearance profiles with inherited-value provenance and tab-context routing, and a one-window desktop tab workspace with dock selection, ordering, pinning, groups, overflow, three local search scopes, and protected bulk-close boundaries. External source activation stays language-only, treats the HTTPS response and Home Assistant state as bounded validated conditions, and keeps tokens, raw responses, and external diagnostics outside renderer-visible settings state. Its localization, test, capture, runtime external-source behavior, and complete-evidence fields remain intentionally incomplete because the broader settings, every-element appearance, color-space translation, multi-window tab-management, and universal-surface contract is not yet complete.
 
 The update-controller record must distinguish an unconfigured runtime from an
 offline or invalid approved public feed, preserve the installed application when
@@ -134,8 +141,8 @@ The settings-appearance-and-localization record also includes the local app-logo
 
 ## Authenticator and toy-lock inventory boundary
 
-The `authenticator-and-toy-locks` row now includes a bounded registry of 20
-application-owned toy-lock targets: the authenticator destination, 15 server
+The `authenticator-and-toy-locks` row now includes a bounded registry of 21
+application-owned toy-lock targets: the authenticator destination, 16 server
 settings tabs, three direct appearance targets, and the authenticator-entry
 form. The main process is the authority for target type, identifier, and label;
 new lock creation fails closed for an unknown target or a label mismatch. The
@@ -163,32 +170,40 @@ records.
 
 The `ollama` row currently covers a narrow, main-process-only local foundation:
 the fixed `http://127.0.0.1:11434` service version, bounded installed-model
-inventory, and bounded running-model inventory. Its implementation never asks a
-renderer for an endpoint, cloud credential, proxy, shell command, model name, or
-raw API response. A healthy local version response is not proof that a model is
-installed, running, compatible, or ready for a requested task.
+inventory, bounded running-model inventory, and one-at-a-time maintenance of a
+freshly observed installed model. Named IPC methods can request a re-pull, copy,
+delete preview/delete, or cancellation; the renderer cannot select an endpoint,
+cloud credential, proxy, method, path, shell command, or arbitrary body. Every
+selected model name is revalidated against a short-lived local inventory before
+it becomes a request argument, and deletion also requires a selection-bound
+two-key/full-slider authority. Raw API responses remain outside renderer state,
+history, notifications, logs, exports, and status evidence. A healthy local
+version response is not proof that a model is installed, running, compatible, or
+ready for a requested task.
 
 This row remains incomplete until it independently receives its localized-copy,
 focused-test, built-artifact interaction, capture, and evidence records. It
 does not inherit proof from server setup, Java installation, the desktop status
 destination, or a future application feature. Complete catalog pagination,
-hardware-fit assessment, batch pulls, chat, attachments, harness registration,
-snapshots, rollback, and offline recovery each need their own implemented and
-documented records before they can be treated as available. See [Local Ollama
-suite foundation](local-ollama-suite.md) for the current scope and recovery
-states.
+arbitrary catalog selection, hardware-fit assessment, batch pulls with
+progress/resume, chat, attachments, harness registration, snapshots, rollback,
+and offline recovery each need their own implemented and documented records
+before they can be treated as available. See [Local Ollama suite](local-ollama-suite.md)
+for the current scope and recovery states.
 
 ## File-converter inventory boundary
 
-The `file-converter` row now names the registered source paths for the native
-source picker, bounded byte-inspection module, local queue skeleton, disabled
-adapter catalog, and renderer destination. That row remains incomplete: source
-registration is not evidence that a PDF, image, audio, video, archive,
-spreadsheet, text, or binary conversion ran. No output adapter is enabled until
-its exact bundled offline dependency, resource bounds, output validator,
-localization, tests, built-artifact interaction, and capture evidence are
-independently supplied. See [Local file-converter foundation](file-converter.md)
-for the present local-only boundary.
+The `file-converter` row now names the app-owned native picker, bounded
+in-process validation, available UTF-8/JSON/CSV/TSV/YAML-style/Base64/hex
+routes, native destination chooser, atomic output path, safe result records,
+and renderer destination. This is still incomplete universal-converter work:
+source registration and source-level routing are not evidence of a packaged or
+user-observed conversion. PDF, image, audio, video, archive, XML, and native
+workbook conversion remain unavailable until their exact bundled offline
+engine, resource bounds, output validator, localization, tests,
+built-artifact interaction, and capture evidence are independently supplied.
+See [Local app-owned file converter](file-converter.md) for the present
+local-only boundary.
 
 ## Offline-documentation inventory boundary
 
@@ -227,10 +242,13 @@ The `changelog-viewer` row is independent from both the documentation browser
 and the local-history journal. It names a fixed bundled `CHANGELOG.md`, a
 bounded package-local release catalog, narrow IPC, local plain-text and regex
 search, typed date filtering, copy/export actions, and a validated
-user-initiated commit handoff. It does not prove that a release API was read,
-that an external commit opened, that a release was installed, or that every
-published version has runtime evidence. See [Offline changelog
-viewer](changelog-viewer.md) for its exact source and failure boundary.
+user-initiated commit handoff. The generator combines checked-in known release
+records with valid local release tags, and both the generator and viewer fail
+instead of silently trimming records beyond the documented capacity. It does
+not prove that a release API was read, that an external commit opened, that a
+release was installed, or that every published version has runtime evidence.
+See [Offline changelog viewer](changelog-viewer.md) for its exact source and
+failure boundary.
 
 ## Source and evidence boundaries
 
@@ -253,7 +271,7 @@ This feature record was added during the active speed-delivery workflow. Tests, 
 - [Shared Status Hub bridge](shared-status-hub-bridge.md)
 - [Bounded backups and Paper updates](backups-and-paper-updates.md)
 - [Unsigned automatic updates](unsigned-automatic-updates.md)
-- [Local file-converter foundation](file-converter.md)
+- [Local app-owned file converter](file-converter.md)
 - [App-logo customization](app-logo-customization.md)
 - [Appearance and tab-navigation foundation](appearance-and-tabs.md)
 - [Desktop command palette foundation](desktop-command-palette.md)
