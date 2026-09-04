@@ -2,6 +2,12 @@
 
 ## 0.1.0 — Unreleased
 
+### Changed
+
+- Made package-local release-catalog generation safe for GitHub source
+  archives: when `.git` is absent, packaging retains the reviewed checked-in
+  records exactly and does not invent tag, date, or commit metadata.
+
 ### Added
 
 - Windows Electron control center for Paper and Spigot Minecraft servers.
